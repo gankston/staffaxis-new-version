@@ -21,8 +21,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
-        // Reemplazar con la URL de Railway una vez desplegado
-        buildConfigField("String", "BASE_URL", "\"https://TU-APP.up.railway.app/\"")
+        buildConfigField("String", "BASE_URL", "\"https://staffaxis-new-version-production.up.railway.app/\"")
     }
 
     signingConfigs {
