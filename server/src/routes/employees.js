@@ -15,9 +15,28 @@ function toDto(row) {
 
 export async function employeeRoutes(app) {
 
-  // GET /api/employees?sector_id=X
-  app.get('/api/employees', { preHandler: verifyDevice }, async (req, reply) => {
-    const sectorId = req.query.sector_id ?? req.device.sectorId;
+  // GET /api/employees?sector_id=X — acepta device JWT o admin token
+  app.get('/api/employees', async (req, reply) => {
+    const adminToken = req.headers['x-admin-token'];
+    if (adminToken) {
+      if (adminToken !== process.env.ADMIN_TOKEN) {
+        return reply.status(401).send({ error: 'Token de administrador inválido' });
+      }
+    } else {
+      // Validar device token
+      const auth = req.headers['authorization'];
+      if (!auth?.startsWith('Bearer ')) {
+        return reply.status(401).send({ error: 'No autorizado' });
+      }
+      try {
+        const jwt = await import('jsonwebtoken');
+        const payload = jwt.default.verify(auth.slice(7), process.env.JWT_SECRET);
+        req.device = payload;
+      } catch {
+        return reply.status(401).send({ error: 'Token inválido o expirado' });
+      }
+    }
+    const sectorId = req.query.sector_id ?? req.device?.sectorId;
     const result = await db.query(
       `SELECT id, sector_id, first_name, last_name, dni, is_active
        FROM employees WHERE sector_id = $1 ORDER BY first_name, last_name`,
