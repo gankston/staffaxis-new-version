@@ -1,0 +1,169 @@
+import { db } from '../db.js';
+import jwt from 'jsonwebtoken';
+import { v4 as uuid } from 'uuid';
+import { verifyAdmin } from '../middleware/auth.js';
+
+export async function adminRoutes(app) {
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Dispositivos
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // GET /api/admin/devices — lista todos los dispositivos
+  app.get('/api/admin/devices', { preHandler: verifyAdmin }, async (_req, reply) => {
+    const result = await db.query(
+      `SELECT d.id, d.device_id, d.encargado_name, d.approved,
+              d.created_at, s.name AS sector_name, s.id AS sector_id
+       FROM devices d
+       LEFT JOIN sectors s ON s.id = d.sector_id
+       ORDER BY d.created_at DESC`
+    );
+    return reply.send({ devices: result.rows });
+  });
+
+  // POST /api/admin/devices/:id/approve — aprueba un dispositivo y genera token
+  app.post('/api/admin/devices/:id/approve', { preHandler: verifyAdmin }, async (req, reply) => {
+    const device = await db.query('SELECT * FROM devices WHERE id = $1', [req.params.id]);
+    if (!device.rows[0]) return reply.status(404).send({ error: 'Dispositivo no encontrado' });
+
+    const d = device.rows[0];
+    const token = jwt.sign(
+      { deviceId: d.device_id, sectorId: d.sector_id, encargadoName: d.encargado_name },
+      process.env.JWT_SECRET,
+      { expiresIn: '10y' }
+    );
+
+    await db.query(
+      'UPDATE devices SET approved = true, token = $1 WHERE id = $2',
+      [token, d.id]
+    );
+    return reply.send({ ok: true, token });
+  });
+
+  // DELETE /api/admin/devices/:id — revoca acceso
+  app.delete('/api/admin/devices/:id', { preHandler: verifyAdmin }, async (req, reply) => {
+    await db.query('UPDATE devices SET approved = false, token = NULL WHERE id = $1', [req.params.id]);
+    return reply.send({ ok: true });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Sectores
+  // ──────────────────────────────────────────────────────────────────────────
+
+  app.get('/api/admin/sectors', { preHandler: verifyAdmin }, async (_req, reply) => {
+    const result = await db.query('SELECT * FROM sectors ORDER BY name');
+    return reply.send({ sectors: result.rows });
+  });
+
+  app.post('/api/admin/sectors', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { name, tipo_carga, encargado } = req.body ?? {};
+    if (!name) return reply.status(400).send({ error: 'Nombre requerido' });
+    const result = await db.query(
+      `INSERT INTO sectors (id, name, tipo_carga, encargado)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [uuid(), name, tipo_carga ?? 'importe', encargado ?? null]
+    );
+    return reply.status(201).send(result.rows[0]);
+  });
+
+  app.put('/api/admin/sectors/:id', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { name, tipo_carga, encargado } = req.body ?? {};
+    const result = await db.query(
+      `UPDATE sectors SET name = COALESCE($1, name),
+                          tipo_carga = COALESCE($2, tipo_carga),
+                          encargado  = COALESCE($3, encargado)
+       WHERE id = $4 RETURNING *`,
+      [name ?? null, tipo_carga ?? null, encargado ?? null, req.params.id]
+    );
+    if (!result.rows[0]) return reply.status(404).send({ error: 'Sector no encontrado' });
+    return reply.send(result.rows[0]);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Empleados (vista admin: todos los sectores)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  app.get('/api/admin/employees', { preHandler: verifyAdmin }, async (req, reply) => {
+    const sectorId = req.query.sector_id;
+    let query = `SELECT e.*, s.name AS sector_name
+                 FROM employees e JOIN sectors s ON s.id = e.sector_id`;
+    const params = [];
+    if (sectorId) { query += ' WHERE e.sector_id = $1'; params.push(sectorId); }
+    query += ' ORDER BY s.name, e.first_name, e.last_name';
+    const result = await db.query(query, params);
+    return reply.send({ employees: result.rows });
+  });
+
+  app.post('/api/admin/employees', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { first_name, last_name, dni, sector_id } = req.body ?? {};
+    if (!first_name || !sector_id) return reply.status(400).send({ error: 'Faltan campos' });
+    const result = await db.query(
+      `INSERT INTO employees (id, sector_id, first_name, last_name, dni)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [uuid(), sector_id, first_name, last_name ?? '', dni?.trim() || null]
+    );
+    return reply.status(201).send(result.rows[0]);
+  });
+
+  app.put('/api/admin/employees/:id', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { first_name, last_name, dni, is_active, sector_id } = req.body ?? {};
+    const fields = [], values = [];
+    let idx = 1;
+    if (first_name !== undefined) { fields.push(`first_name = $${idx++}`); values.push(first_name); }
+    if (last_name  !== undefined) { fields.push(`last_name  = $${idx++}`); values.push(last_name); }
+    if (dni        !== undefined) { fields.push(`dni        = $${idx++}`); values.push(dni || null); }
+    if (is_active  !== undefined) { fields.push(`is_active  = $${idx++}`); values.push(is_active); }
+    if (sector_id  !== undefined) { fields.push(`sector_id  = $${idx++}`); values.push(sector_id); }
+    if (!fields.length) return reply.status(400).send({ error: 'Nada para actualizar' });
+    values.push(req.params.id);
+    const result = await db.query(
+      `UPDATE employees SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
+    return reply.send(result.rows[0]);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Reportes (resumen por sector y fecha para StaffAdmin)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // GET /api/admin/report?sector_id=X&start_date=Y&end_date=Z
+  app.get('/api/admin/report', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { sector_id, start_date, end_date } = req.query;
+    if (!sector_id || !start_date || !end_date) {
+      return reply.status(400).send({ error: 'sector_id, start_date y end_date son requeridos' });
+    }
+    const result = await db.query(
+      `SELECT s.id AS submission_id, e.first_name, e.last_name, e.dni,
+              s.date, s.minutes_worked, s.notes
+       FROM submissions s
+       JOIN employees e ON e.id = s.employee_id
+       WHERE s.sector_id = $1
+         AND s.date BETWEEN $2 AND $3
+         AND NOT s.is_deleted
+       ORDER BY s.date, e.first_name, e.last_name`,
+      [sector_id, start_date, end_date]
+    );
+    return reply.send({ rows: result.rows });
+  });
+
+  // GET /api/admin/absences?sector_id=X&start_date=Y&end_date=Z
+  app.get('/api/admin/absences', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { sector_id, start_date, end_date } = req.query;
+    if (!sector_id) return reply.status(400).send({ error: 'sector_id requerido' });
+    let query = `
+      SELECT a.id, e.first_name, e.last_name, e.dni,
+             a.start_date, a.end_date, a.is_justified, a.observations
+      FROM absences a
+      JOIN employees e ON e.id = a.employee_id
+      WHERE e.sector_id = $1`;
+    const params = [sector_id];
+    let idx = 2;
+    if (start_date) { query += ` AND a.end_date >= $${idx++}`;   params.push(start_date); }
+    if (end_date)   { query += ` AND a.start_date <= $${idx++}`; params.push(end_date); }
+    query += ' ORDER BY a.start_date DESC';
+    const result = await db.query(query, params);
+    return reply.send({ absences: result.rows });
+  });
+}

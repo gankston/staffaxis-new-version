@@ -1,0 +1,21 @@
+# Android
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Node / server
+server/node_modules/
+server/.env
+
+# Schemas de Room (generados, se pueden ignorar o incluir — los incluimos)
+# app/schemas/

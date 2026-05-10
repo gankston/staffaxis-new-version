@@ -1,0 +1,457 @@
+package com.staffaxis.hsm.presentation.screens.empleados
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.staffaxis.hsm.presentation.components.ConfirmacionFlotante
+import com.staffaxis.hsm.presentation.components.EmpleadoCard
+import java.time.LocalDate
+import kotlin.math.roundToInt
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EmpleadosScreen(
+    onCambiarSector: () -> Unit = {},
+    onRecargarMain: () -> Unit = {},
+    viewModel: EmpleadosViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var sectorDropdownExpanded by remember { mutableStateOf(false) }
+    var sectorParaCambiar by remember { mutableStateOf<com.staffaxis.hsm.domain.model.Sector?>(null) }
+
+    LaunchedEffect(uiState.navegarACambiarSector) {
+        if (uiState.navegarACambiarSector) onCambiarSector()
+    }
+
+    LaunchedEffect(uiState.recargarMain) {
+        if (uiState.recargarMain) onRecargarMain()
+    }
+
+    sectorParaCambiar?.let { sector ->
+        val esNavegacionDirecta = sector.id == "__navigate__"
+        AlertDialog(
+            onDismissRequest = { sectorParaCambiar = null },
+            icon = { Icon(Icons.Default.SwapHoriz, null, tint = Color(0xFF26C6DA)) },
+            title = { Text("¿Cambiar de sector?") },
+            text = {
+                Text(
+                    if (esNavegacionDirecta) "Vas a ir al selector de sectores. Los datos locales no se borran."
+                    else "Vas a pasar al sector ${sector.name}. La app va a recargar los datos."
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    sectorParaCambiar = null
+                    if (esNavegacionDirecta) viewModel.navegarACambiarSector()
+                    else viewModel.cambiarSector(sector)
+                }) { Text("Cambiar") }
+            },
+            dismissButton = { TextButton(onClick = { sectorParaCambiar = null }) { Text("Cancelar") } }
+        )
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (uiState.isLoading && uiState.empleados.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFF26C6DA))
+                }
+            } else {
+                PullToRefreshBox(
+                    isRefreshing = uiState.isRefreshing,
+                    onRefresh = viewModel::refresh,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 120.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    item {
+                        Box {
+                            val puedeCambiarSector = uiState.allowedSectors.size > 1
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = if (puedeCambiarSector) Modifier.clickable { sectorDropdownExpanded = true } else Modifier
+                            ) {
+                                Text(
+                                    text = uiState.sectorName.ifBlank { "Empleados" },
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                if (puedeCambiarSector) {
+                                    Icon(
+                                        Icons.Default.ArrowDropDown,
+                                        contentDescription = "Cambiar sector",
+                                        tint = Color(0xFF26C6DA),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = sectorDropdownExpanded,
+                                onDismissRequest = { sectorDropdownExpanded = false },
+                                modifier = Modifier.background(Color(0xFF2A2A3E))
+                            ) {
+                                uiState.allowedSectors.forEach { sector ->
+                                    DropdownMenuItem(
+                                        text = { Text(sector.name, color = if (sector.id == uiState.sectorId) Color(0xFF26C6DA) else Color.White) },
+                                        onClick = { sectorDropdownExpanded = false; sectorParaCambiar = sector },
+                                        leadingIcon = if (sector.id == uiState.sectorId) ({
+                                            Icon(Icons.Default.Check, null, tint = Color(0xFF26C6DA), modifier = Modifier.size(16.dp))
+                                        }) else null
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = uiState.busqueda,
+                            onValueChange = viewModel::onBusquedaChanged,
+                            label = { Text("Buscar empleado") },
+                            leadingIcon = { Icon(Icons.Default.Search, null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "${uiState.empleadosFiltrados.size} empleados",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color(0xFF888888)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    }
+
+                    items(uiState.empleadosFiltrados, key = { it.id }) { empleado ->
+                        EmpleadoCard(
+                            empleado = empleado,
+                            tieneHorasHoy = uiState.empleadosConHorasHoy.contains(empleado.id),
+                            estaAusenteHoy = uiState.empleadosAusentesHoy.contains(empleado.id),
+                            onRelojClick = { viewModel.abrirDialogoHoras(empleado) },
+                            onEditarClick = { viewModel.abrirDialogoEditar(empleado) }
+                        )
+                    }
+                }
+                } // PullToRefreshBox
+            }
+        }
+
+        FloatingActionButton(
+            onClick = viewModel::abrirDialogoNuevo,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            containerColor = MaterialTheme.colorScheme.primary
+        ) { Icon(Icons.Default.Add, "Agregar empleado") }
+
+        if (uiState.mostrarDialogoHoras && uiState.empleadoSeleccionado != null) {
+            HorasDialog(
+                uiState = uiState,
+                onDismiss = viewModel::cerrarDialogoHoras,
+                onFechaChanged = viewModel::onFechaChanged,
+                onHorasChanged = viewModel::onHorasChanged,
+                onCosechaChanged = viewModel::onCosechaChanged,
+                onImporteChanged = viewModel::onImporteChanged,
+                onObservacionesChanged = viewModel::onObservacionesChanged,
+                onConfirm = viewModel::guardarHoras
+            )
+        }
+
+        if (uiState.mostrarDialogoEditar && uiState.empleadoParaEditar != null) {
+            EditarEmpleadoDialog(
+                uiState = uiState,
+                onDismiss = viewModel::cerrarDialogoEditar,
+                onNombreChanged = viewModel::onEditNombreChanged,
+                onApellidoChanged = viewModel::onEditApellidoChanged,
+                onDniChanged = viewModel::onEditDniChanged,
+                onObservacionChanged = viewModel::onEditObservacionChanged,
+                onGuardar = viewModel::guardarEdicion,
+                onOcultar = { viewModel.ocultarEmpleado(uiState.empleadoParaEditar!!) }
+            )
+        }
+
+        if (uiState.mostrarDialogoNuevo) {
+            NuevoEmpleadoDialog(
+                uiState = uiState,
+                onDismiss = viewModel::cerrarDialogoNuevo,
+                onDniChanged = viewModel::onNuevoDniChanged,
+                onNombreChanged = viewModel::onNuevoNombreChanged,
+                onApellidoChanged = viewModel::onNuevoApellidoChanged,
+                onCrear = viewModel::crearEmpleado,
+                onConfirmarTransferencia = viewModel::confirmarTransferencia,
+                onCancelarTransferencia = viewModel::cancelarTransferencia
+            )
+        }
+
+        uiState.mensajeExito?.let {
+            ConfirmacionFlotante(
+                mensajePrincipal = "✓ Listo",
+                mensajeSecundario = it,
+                icono = Icons.Default.CheckCircle,
+                colorFondo = Color(0xFF4CAF50),
+                onDismiss = viewModel::clearMensajeExito
+            )
+        }
+
+        uiState.mensajeError?.let {
+            ConfirmacionFlotante(
+                mensajePrincipal = "Error",
+                mensajeSecundario = it,
+                icono = Icons.Default.Warning,
+                colorFondo = Color(0xFFD32F2F),
+                onDismiss = viewModel::clearMensajeError
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HorasDialog(
+    uiState: EmpleadosUiState,
+    onDismiss: () -> Unit,
+    onFechaChanged: (LocalDate) -> Unit,
+    onHorasChanged: (Int) -> Unit,
+    onCosechaChanged: (Boolean) -> Unit,
+    onImporteChanged: (String) -> Unit,
+    onObservacionesChanged: (String) -> Unit,
+    onConfirm: () -> Unit
+) {
+    val empleado = uiState.empleadoSeleccionado ?: return
+    val today = LocalDate.now()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Registrar Horas", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                    Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                        Text(empleado.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("DNI: ${empleado.dni ?: "Sin datos"}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                Text("Fecha", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(2L to "Anteayer", 1L to "Ayer", 0L to "Hoy").forEach { (daysBack, label) ->
+                        val fecha = today.minusDays(daysBack)
+                        FilterChip(
+                            selected = uiState.fechaSeleccionada == fecha,
+                            onClick = { onFechaChanged(fecha) },
+                            label = { Text(label) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Column {
+                    val displayValue = when {
+                        uiState.cargaPorCosecha -> "Cosecha (C)"
+                        uiState.importeMonto.isNotBlank() -> "$${uiState.importeMonto}"
+                        else -> "${uiState.horasSeleccionadas}h"
+                    }
+                    Text(displayValue, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally))
+                    Slider(
+                        value = uiState.horasSeleccionadas.toFloat(),
+                        onValueChange = { onHorasChanged(it.roundToInt().coerceIn(0, 16)) },
+                        valueRange = 0f..16f,
+                        steps = 15,
+                        enabled = !uiState.cargaPorCosecha && uiState.importeMonto.isBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("0h", style = MaterialTheme.typography.bodySmall, color = Color(0xFF888888))
+                        Text("16h", style = MaterialTheme.typography.bodySmall, color = Color(0xFF888888))
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onCosechaChanged(!uiState.cargaPorCosecha) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = uiState.cargaPorCosecha, onCheckedChange = onCosechaChanged)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Carga por cosecha", fontWeight = FontWeight.SemiBold)
+                }
+
+                OutlinedTextField(
+                    value = uiState.importeMonto,
+                    onValueChange = onImporteChanged,
+                    label = { Text("Carga por importe (opcional)") },
+                    prefix = { Text("$ ") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.cargaPorCosecha,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = uiState.observaciones,
+                    onValueChange = onObservacionesChanged,
+                    label = { Text("Observaciones (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 2
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Icon(Icons.Default.Save, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Guardar")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+@Composable
+private fun EditarEmpleadoDialog(
+    uiState: EmpleadosUiState,
+    onDismiss: () -> Unit,
+    onNombreChanged: (String) -> Unit,
+    onApellidoChanged: (String) -> Unit,
+    onDniChanged: (String) -> Unit,
+    onObservacionChanged: (String) -> Unit,
+    onGuardar: () -> Unit,
+    onOcultar: () -> Unit
+) {
+    var confirmarOcultar by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Editar Empleado") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(value = uiState.editNombre, onValueChange = onNombreChanged, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text))
+                OutlinedTextField(value = uiState.editApellido, onValueChange = onApellidoChanged, label = { Text("Apellido") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text))
+                OutlinedTextField(value = uiState.editDni, onValueChange = onDniChanged, label = { Text("DNI") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                OutlinedTextField(value = uiState.editObservacion, onValueChange = onObservacionChanged, label = { Text("Observación") }, modifier = Modifier.fillMaxWidth(), maxLines = 2)
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { confirmarOcultar = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Default.VisibilityOff, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Quitar de la lista")
+                }
+            }
+        },
+        confirmButton = { Button(onClick = onGuardar, enabled = uiState.editNombre.isNotBlank() && uiState.editApellido.isNotBlank()) { Text("Guardar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+
+    if (confirmarOcultar) {
+        AlertDialog(
+            onDismissRequest = { confirmarOcultar = false },
+            icon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("¿Quitar de la lista?") },
+            text = { Text("El empleado no se borrará, solo dejará de aparecer en la lista. Podés reactivarlo desde StaffAdmin.") },
+            confirmButton = { Button(onClick = onOcultar, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Sí, quitar") } },
+            dismissButton = { TextButton(onClick = { confirmarOcultar = false }) { Text("Cancelar") } }
+        )
+    }
+}
+
+@Composable
+private fun NuevoEmpleadoDialog(
+    uiState: EmpleadosUiState,
+    onDismiss: () -> Unit,
+    onDniChanged: (String) -> Unit,
+    onNombreChanged: (String) -> Unit,
+    onApellidoChanged: (String) -> Unit,
+    onCrear: () -> Unit,
+    onConfirmarTransferencia: () -> Unit,
+    onCancelarTransferencia: () -> Unit
+) {
+    if (uiState.pedirConfirmTransferencia) {
+        AlertDialog(
+            onDismissRequest = onCancelarTransferencia,
+            icon = { Icon(Icons.Default.SwapHoriz, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Empleado en otro sector") },
+            text = {
+                val nombreCompleto = "${uiState.nuevoNombre.trim()} ${uiState.nuevoApellido.trim()}".trim()
+                Text("$nombreCompleto (DNI ${uiState.nuevoDni}) ya está registrado en otro sector. ¿Querés transferirlo a ${uiState.sectorName}?")
+            },
+            confirmButton = {
+                Button(onClick = onConfirmarTransferencia, enabled = !uiState.isLoading) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    } else {
+                        Text("Sí, transferir")
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = onCancelarTransferencia) { Text("Cancelar") } }
+        )
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Agregar Empleado") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = uiState.nuevoDni,
+                        onValueChange = onDniChanged,
+                        label = { Text("DNI *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        isError = uiState.nuevoDni.isBlank()
+                    )
+                    OutlinedTextField(
+                        value = uiState.nuevoNombre,
+                        onValueChange = onNombreChanged,
+                        label = { Text("Nombre *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        isError = uiState.nuevoNombre.isBlank()
+                    )
+                    OutlinedTextField(
+                        value = uiState.nuevoApellido,
+                        onValueChange = onApellidoChanged,
+                        label = { Text("Apellido *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        isError = uiState.nuevoApellido.isBlank()
+                    )
+                    Text("Sector: ${uiState.sectorName}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF888888))
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = onCrear,
+                    enabled = uiState.nuevoDni.isNotBlank() && uiState.nuevoNombre.isNotBlank() && uiState.nuevoApellido.isNotBlank() && !uiState.isLoading
+                ) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    } else {
+                        Text("Crear")
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+        )
+    }
+}

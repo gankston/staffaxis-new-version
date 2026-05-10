@@ -1,0 +1,6 @@
+-keep class com.staffaxis.hsm.data.remote.dto.** { *; }
+-keep class com.staffaxis.hsm.data.local.entity.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn okhttp3.**
+-dontwarn retrofit2.**
