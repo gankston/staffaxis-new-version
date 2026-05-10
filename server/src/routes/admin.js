@@ -149,7 +149,8 @@ export async function adminRoutes(app) {
       return reply.status(400).send({ error: 'sector_id, start_date y end_date son requeridos' });
     }
     const result = await db.query(
-      `SELECT s.id AS submission_id, e.first_name, e.last_name, e.dni,
+      `SELECT s.id AS submission_id, s.employee_id,
+              e.first_name, e.last_name, e.dni,
               s.date, s.minutes_worked, s.notes
        FROM submissions s
        JOIN employees e ON e.id = s.employee_id
