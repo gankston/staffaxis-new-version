@@ -46,6 +46,15 @@ export async function adminRoutes(app) {
     return reply.send({ ok: true });
   });
 
+  // POST /api/admin/login — valida el ADMIN_TOKEN y devuelve ok
+  app.post('/api/admin/login', async (req, reply) => {
+    const { password } = req.body ?? {};
+    if (!password || password !== process.env.ADMIN_TOKEN) {
+      return reply.status(401).send({ success: false, error: 'Credenciales incorrectas' });
+    }
+    return reply.send({ success: true, token: process.env.ADMIN_TOKEN, user: { username: 'Admin' } });
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   // Sectores
   // ──────────────────────────────────────────────────────────────────────────
@@ -64,6 +73,11 @@ export async function adminRoutes(app) {
       [uuid(), name, tipo_carga ?? 'importe', encargado ?? null]
     );
     return reply.status(201).send(result.rows[0]);
+  });
+
+  app.delete('/api/admin/sectors/:id', { preHandler: verifyAdmin }, async (req, reply) => {
+    await db.query('DELETE FROM sectors WHERE id = $1', [req.params.id]);
+    return reply.send({ ok: true });
   });
 
   app.put('/api/admin/sectors/:id', { preHandler: verifyAdmin }, async (req, reply) => {
