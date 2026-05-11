@@ -8,6 +8,7 @@ import com.staffaxis.hsm.domain.model.AppResult
 import com.staffaxis.hsm.domain.model.Sector
 import com.staffaxis.hsm.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 class AuthRepositoryImpl @Inject constructor(
@@ -61,14 +62,30 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun getAllowedSectors(): AppResult<List<Sector>> {
         return try {
-            val response = api.getAllowedSectors()
-            if (response.isSuccessful) {
-                val sectors = (response.body()?.allowedSectors ?: emptyList())
-                    .map { Sector(it.id, it.name, "importe") }
-                AppResult.Success(sectors)
+            val currentSectorId = prefs.activeSectorId.first() ?: return AppResult.Error("Sin sector")
+
+            // Traer todos los sectores públicos (incluyen campo encargado cargado en la BD)
+            val response = sectorsApi.getSectors()
+            if (!response.isSuccessful) return AppResult.Error("Error ${response.code()}")
+
+            val allSectors = response.body()?.sectors ?: emptyList()
+
+            // Encontrar el sector actual para obtener su encargado
+            val currentSector = allSectors.find { it.id == currentSectorId }
+            val encargado = currentSector?.encargado?.trim()
+
+            // Si el sector tiene encargado, mostrar todos los sectores de ese mismo encargado
+            val sectors = if (!encargado.isNullOrBlank()) {
+                allSectors
+                    .filter { it.encargado?.trim().equals(encargado, ignoreCase = true) }
+                    .map { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado) }
+                    .sortedBy { it.name }
             } else {
-                AppResult.Error("Error ${response.code()}")
+                // Sin encargado → solo su propio sector
+                listOfNotNull(currentSector?.let { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado) })
             }
+
+            AppResult.Success(sectors)
         } catch (e: Exception) {
             AppResult.Error("Sin conexión", e)
         }
