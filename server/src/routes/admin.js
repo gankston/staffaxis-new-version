@@ -181,4 +181,28 @@ export async function adminRoutes(app) {
     const result = await db.query(query, params);
     return reply.send({ absences: result.rows });
   });
+
+  // GET /api/admin/transfers?sector_id=X&start_date=Y&end_date=Z
+  // Devuelve traslados que involucran este sector (salientes y entrantes) en el período
+  app.get('/api/admin/transfers', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { sector_id, start_date, end_date } = req.query;
+    if (!sector_id) return reply.status(400).send({ error: 'sector_id requerido' });
+
+    const result = await db.query(
+      `SELECT t.id, t.employee_id, t.from_sector_id, t.to_sector_id, t.transferred_at,
+              e.first_name, e.last_name, e.dni,
+              sf.name AS from_sector_name,
+              st.name AS to_sector_name
+       FROM transfers t
+       JOIN employees e  ON e.id  = t.employee_id
+       LEFT JOIN sectors sf ON sf.id = t.from_sector_id
+       LEFT JOIN sectors st ON st.id = t.to_sector_id
+       WHERE (t.from_sector_id = $1 OR t.to_sector_id = $1)
+         AND ($2::date IS NULL OR t.transferred_at::date >= $2::date)
+         AND ($3::date IS NULL OR t.transferred_at::date <= $3::date)
+       ORDER BY t.transferred_at DESC`,
+      [sector_id, start_date ?? null, end_date ?? null]
+    );
+    return reply.send({ transfers: result.rows });
+  });
 }

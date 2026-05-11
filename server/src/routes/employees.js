@@ -74,11 +74,18 @@ export async function employeeRoutes(app) {
       }
       if (other.rows[0] && force_transfer) {
         // Transferencia: mover al nuevo sector
+        const fromSectorId = other.rows[0].sector_id;
         const updated = await db.query(
           `UPDATE employees SET sector_id = $1, updated_at = NOW()
            WHERE id = $2 RETURNING id, sector_id, first_name, last_name, dni, is_active`,
           [sector_id, other.rows[0].id]
         );
+        // Registrar el traslado para que el export muestre "Se fue a X" / "Viene de Y"
+        await db.query(
+          `INSERT INTO transfers (employee_id, from_sector_id, to_sector_id)
+           VALUES ($1, $2, $3)`,
+          [other.rows[0].id, fromSectorId, sector_id]
+        ).catch(() => {}); // no rompe el traslado si falla el log
         return reply.send(toDto(updated.rows[0]));
       }
     }
