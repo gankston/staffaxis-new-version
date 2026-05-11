@@ -46,13 +46,52 @@ export async function adminRoutes(app) {
     return reply.send({ ok: true });
   });
 
-  // POST /api/admin/login — valida el ADMIN_TOKEN y devuelve ok
+  // POST /api/admin/login — valida el ADMIN_TOKEN y devuelve ok (legacy)
   app.post('/api/admin/login', async (req, reply) => {
     const { password } = req.body ?? {};
     if (!password || password !== process.env.ADMIN_TOKEN) {
       return reply.status(401).send({ success: false, error: 'Credenciales incorrectas' });
     }
     return reply.send({ success: true, token: process.env.ADMIN_TOKEN, user: { username: 'Admin' } });
+  });
+
+  // POST /api/admin/google-auth — intercambia código Google por ADMIN_TOKEN
+  app.post('/api/admin/google-auth', async (req, reply) => {
+    const { code, redirect_uri } = req.body ?? {};
+    if (!code || !redirect_uri) {
+      return reply.status(400).send({ error: 'code y redirect_uri requeridos' });
+    }
+    try {
+      // Intercambiar código por tokens
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
+          redirect_uri,
+          grant_type: 'authorization_code',
+        }).toString(),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenData.access_token) {
+        return reply.status(401).send({ error: 'Google rechazó el código', detail: tokenData.error });
+      }
+      // Obtener info del usuario
+      const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      const userInfo = await userRes.json();
+      // Todos los usuarios de Google tienen acceso — devolvemos ADMIN_TOKEN
+      return reply.send({
+        success: true,
+        token: process.env.ADMIN_TOKEN,
+        user: { email: userInfo.email, name: userInfo.name, picture: userInfo.picture },
+      });
+    } catch (err) {
+      return reply.status(500).send({ error: 'Error interno', detail: String(err) });
+    }
   });
 
   // ──────────────────────────────────────────────────────────────────────────
