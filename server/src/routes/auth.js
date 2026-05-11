@@ -62,7 +62,7 @@ export async function authRoutes(app) {
     const { sectorId } = req.device;
     // Buscar el sector actual del dispositivo
     const own = await db.query(
-      'SELECT id, name, tipo_carga, encargado FROM sectors WHERE id = $1',
+      'SELECT id, name, tipo_carga, encargado, sector_group FROM sectors WHERE id = $1',
       [sectorId]
     );
     if (!own.rows[0]) return reply.send({ ok: false, allowedSectors: [] });
@@ -70,12 +70,11 @@ export async function authRoutes(app) {
     const s = own.rows[0];
     let sectors = [s];
 
-    // Si el sector tiene encargado, buscar todos los sectores con el mismo encargado
-    // (mismo encargado = puede cambiar entre esos sectores)
-    if (s.encargado) {
+    // Usar sector_group para determinar qué sectores puede cambiar este encargado
+    if (s.sector_group) {
       const grouped = await db.query(
-        'SELECT id, name, tipo_carga, encargado FROM sectors WHERE encargado = $1 ORDER BY name',
-        [s.encargado]
+        'SELECT id, name, tipo_carga, encargado FROM sectors WHERE sector_group = $1 ORDER BY name',
+        [s.sector_group]
       );
       if (grouped.rows.length > 1) sectors = grouped.rows;
     }
