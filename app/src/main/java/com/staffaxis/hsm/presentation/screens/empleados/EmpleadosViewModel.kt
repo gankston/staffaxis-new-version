@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.staffaxis.hsm.data.local.preferences.AppPreferences
 import com.staffaxis.hsm.domain.model.AppResult
 import com.staffaxis.hsm.domain.model.Employee
+import com.staffaxis.hsm.domain.model.OutboxSubmission
 import com.staffaxis.hsm.domain.model.Sector
 import com.staffaxis.hsm.domain.repository.AbsenceRepository
 import com.staffaxis.hsm.domain.repository.AuthRepository
@@ -44,6 +45,12 @@ data class EmpleadosUiState(
     val editApellido: String = "",
     val editDni: String = "",
     val editObservacion: String = "",
+    val registrosParaEditar: List<OutboxSubmission> = emptyList(),
+    // Edición de un registro de horas
+    val registroEnEdicion: OutboxSubmission? = null,
+    val horasEdicion: Int = 8,
+    val horasEdicionPorCosecha: Boolean = false,
+    val horasEdicionPorImporte: String = "",
     // Dialog nuevo empleado
     val mostrarDialogoNuevo: Boolean = false,
     val nuevoDni: String = "",
@@ -186,12 +193,54 @@ class EmpleadosViewModel @Inject constructor(
                 editNombre = parts[0],
                 editApellido = parts.getOrElse(1) { "" },
                 editDni = empleado.dni ?: "",
-                editObservacion = empleado.observacion ?: ""
+                editObservacion = empleado.observacion ?: "",
+                registrosParaEditar = emptyList()
+            )
+        }
+        viewModelScope.launch {
+            val registros = submissionRepository.getSubmissionsForEmployee(empleado.id)
+            _uiState.update { it.copy(registrosParaEditar = registros) }
+        }
+    }
+
+    fun cerrarDialogoEditar() = _uiState.update {
+        it.copy(mostrarDialogoEditar = false, empleadoParaEditar = null, registrosParaEditar = emptyList(), registroEnEdicion = null)
+    }
+
+    fun abrirEdicionRegistro(registro: OutboxSubmission) {
+        val horas = registro.minutesWorked?.toIntOrNull() ?: 8
+        val esCosecha = registro.minutesWorked == "C"
+        val esImporte = registro.minutesWorked?.startsWith("$") == true
+        _uiState.update {
+            it.copy(
+                registroEnEdicion = registro,
+                horasEdicion = if (esCosecha || esImporte) 8 else horas,
+                horasEdicionPorCosecha = esCosecha,
+                horasEdicionPorImporte = if (esImporte) registro.minutesWorked!!.removePrefix("$") else ""
             )
         }
     }
 
-    fun cerrarDialogoEditar() = _uiState.update { it.copy(mostrarDialogoEditar = false, empleadoParaEditar = null) }
+    fun cerrarEdicionRegistro() = _uiState.update { it.copy(registroEnEdicion = null) }
+    fun onHorasEdicionChanged(h: Int) = _uiState.update { it.copy(horasEdicion = h) }
+    fun onHorasEdicionPorCosechaChanged(v: Boolean) = _uiState.update { it.copy(horasEdicionPorCosecha = v, horasEdicionPorImporte = "") }
+    fun onHorasEdicionPorImporteChanged(v: String) = _uiState.update { it.copy(horasEdicionPorImporte = v) }
+
+    fun guardarEdicionRegistro() {
+        val state = _uiState.value
+        val registro = state.registroEnEdicion ?: return
+        val nuevasHoras: String? = when {
+            state.horasEdicionPorCosecha -> "C"
+            state.horasEdicionPorImporte.isNotBlank() -> "$${state.horasEdicionPorImporte}"
+            else -> state.horasEdicion.toString()
+        }
+        viewModelScope.launch {
+            submissionRepository.updateHoras(registro.id, nuevasHoras)
+            // Refrescar la lista de registros
+            val registros = submissionRepository.getSubmissionsForEmployee(registro.employeeId)
+            _uiState.update { it.copy(registroEnEdicion = null, registrosParaEditar = registros, mensajeExito = "Registro actualizado") }
+        }
+    }
     fun onEditNombreChanged(v: String) = _uiState.update { it.copy(editNombre = v) }
     fun onEditApellidoChanged(v: String) = _uiState.update { it.copy(editApellido = v) }
     fun onEditDniChanged(v: String) = _uiState.update { it.copy(editDni = v) }

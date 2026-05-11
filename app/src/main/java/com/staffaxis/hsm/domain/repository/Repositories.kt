@@ -33,7 +33,8 @@ interface SubmissionRepository {
         minutesWorked: String?,
         notes: String?
     ): AppResult<Unit>
-    suspend fun updateHoras(submissionId: String, minutesWorked: String?, notes: String?): AppResult<Unit>
+    suspend fun updateHoras(submissionId: String, minutesWorked: String?): AppResult<Unit>
+    suspend fun getSubmissionsForEmployee(employeeId: String): List<OutboxSubmission>
     suspend fun pushPendingToServer(): AppResult<Int>
     suspend fun getSubmissionsForDate(date: String, sectorId: String): List<OutboxSubmission>
     suspend fun getAllActiveForDate(date: String, sectorId: String): List<OutboxSubmission>

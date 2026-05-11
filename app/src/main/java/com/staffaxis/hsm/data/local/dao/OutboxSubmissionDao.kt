@@ -42,6 +42,12 @@ interface OutboxSubmissionDao {
     @Query("DELETE FROM outbox_submissions WHERE status = 'sent' AND createdAt < :before")
     suspend fun cleanOldSent(before: Long)
 
+    @Query("SELECT * FROM outbox_submissions WHERE employeeId = :employeeId AND status != 'failed_permanent' ORDER BY date DESC LIMIT 60")
+    suspend fun getByEmployee(employeeId: String): List<OutboxSubmissionEntity>
+
+    @Query("UPDATE outbox_submissions SET minutesWorked = :minutesWorked, status = 'pending', attempts = 0 WHERE id = :id")
+    suspend fun updateMinutesWorked(id: String, minutesWorked: String?)
+
     // Convierte registros en minutos (>16 y divisible por 60) a horas
     @Query("""
         UPDATE outbox_submissions

@@ -5,7 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -21,6 +23,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.staffaxis.hsm.presentation.components.ConfirmacionFlotante
 import com.staffaxis.hsm.presentation.components.EmpleadoCard
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -180,7 +184,13 @@ fun EmpleadosScreen(
                 onDniChanged = viewModel::onEditDniChanged,
                 onObservacionChanged = viewModel::onEditObservacionChanged,
                 onGuardar = viewModel::guardarEdicion,
-                onOcultar = { viewModel.ocultarEmpleado(uiState.empleadoParaEditar!!) }
+                onOcultar = { viewModel.ocultarEmpleado(uiState.empleadoParaEditar!!) },
+                onEditarRegistro = viewModel::abrirEdicionRegistro,
+                onCerrarEdicionRegistro = viewModel::cerrarEdicionRegistro,
+                onHorasEdicionChanged = viewModel::onHorasEdicionChanged,
+                onHorasEdicionPorCosechaChanged = viewModel::onHorasEdicionPorCosechaChanged,
+                onHorasEdicionPorImporteChanged = viewModel::onHorasEdicionPorImporteChanged,
+                onGuardarEdicionRegistro = viewModel::guardarEdicionRegistro
             )
         }
 
@@ -246,17 +256,57 @@ private fun HorasDialog(
                     }
                 }
 
-                Text("Fecha", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(2L to "Anteayer", 1L to "Ayer", 0L to "Hoy").forEach { (daysBack, label) ->
-                        val fecha = today.minusDays(daysBack)
-                        FilterChip(
-                            selected = uiState.fechaSeleccionada == fecha,
-                            onClick = { onFechaChanged(fecha) },
-                            label = { Text(label) },
-                            modifier = Modifier.weight(1f)
-                        )
+                // DatePicker — calendario completo
+                var showDatePicker by remember { mutableStateOf(false) }
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = uiState.fechaSeleccionada
+                        .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+                    selectableDates = object : SelectableDates {
+                        override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                            // No permitir fechas futuras
+                            val selectedDay = java.time.Instant.ofEpochMilli(utcTimeMillis)
+                                .atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                            return !selectedDay.isAfter(today)
+                        }
                     }
+                )
+
+                if (showDatePicker) {
+                    DatePickerDialog(
+                        onDismissRequest = { showDatePicker = false },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                datePickerState.selectedDateMillis?.let { millis ->
+                                    val selected = java.time.Instant.ofEpochMilli(millis)
+                                        .atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                                    onFechaChanged(selected)
+                                }
+                                showDatePicker = false
+                            }) { Text("Confirmar") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") }
+                        }
+                    ) {
+                        DatePicker(state = datePickerState)
+                    }
+                }
+
+                val labelFecha = when (uiState.fechaSeleccionada) {
+                    today -> "Hoy"
+                    today.minusDays(1) -> "Ayer"
+                    today.minusDays(2) -> "Anteayer"
+                    else -> uiState.fechaSeleccionada.format(
+                        DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es"))
+                    )
+                }
+                OutlinedButton(
+                    onClick = { showDatePicker = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(labelFecha)
                 }
 
                 Column {
@@ -331,20 +381,89 @@ private fun EditarEmpleadoDialog(
     onDniChanged: (String) -> Unit,
     onObservacionChanged: (String) -> Unit,
     onGuardar: () -> Unit,
-    onOcultar: () -> Unit
+    onOcultar: () -> Unit,
+    onEditarRegistro: (com.staffaxis.hsm.domain.model.OutboxSubmission) -> Unit,
+    onCerrarEdicionRegistro: () -> Unit,
+    onHorasEdicionChanged: (Int) -> Unit,
+    onHorasEdicionPorCosechaChanged: (Boolean) -> Unit,
+    onHorasEdicionPorImporteChanged: (String) -> Unit,
+    onGuardarEdicionRegistro: () -> Unit
 ) {
     var confirmarOcultar by remember { mutableStateOf(false) }
+    var expandido by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("dd/MM/yyyy") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Editar Empleado") },
+        title = { Text("Editar Empleado", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedTextField(value = uiState.editNombre, onValueChange = onNombreChanged, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text))
                 OutlinedTextField(value = uiState.editApellido, onValueChange = onApellidoChanged, label = { Text("Apellido") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text))
                 OutlinedTextField(value = uiState.editDni, onValueChange = onDniChanged, label = { Text("DNI") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 OutlinedTextField(value = uiState.editObservacion, onValueChange = onObservacionChanged, label = { Text("Observación") }, modifier = Modifier.fillMaxWidth(), maxLines = 2)
-                Spacer(Modifier.height(8.dp))
+
+                // Historial de horas
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Text("Horas cargadas", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
+                if (uiState.registrosParaEditar.isEmpty()) {
+                    Text(
+                        "No hay horas registradas",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    val registrosVisibles = if (expandido) uiState.registrosParaEditar else uiState.registrosParaEditar.take(5)
+                    val hayMas = uiState.registrosParaEditar.size > 5
+
+                    registrosVisibles.forEach { registro ->
+                        val fechaFormato = try {
+                            LocalDate.parse(registro.date).format(dateFormatter)
+                        } catch (_: Exception) { registro.date }
+                        val displayValue = when {
+                            registro.minutesWorked == "C" -> "Cosecha"
+                            registro.minutesWorked?.startsWith("$") == true -> registro.minutesWorked
+                            else -> "${registro.minutesWorked ?: "?"}h"
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(fechaFormato, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    displayValue,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                            IconButton(
+                                onClick = { onEditarRegistro(registro) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(Icons.Default.Edit, "Editar", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+
+                    if (hayMas) {
+                        TextButton(onClick = { expandido = !expandido }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (expandido) "Ver menos" else "Ver todas (${uiState.registrosParaEditar.size - 5} más)")
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
                 Button(
                     onClick = { confirmarOcultar = true },
                     modifier = Modifier.fillMaxWidth(),
@@ -359,6 +478,62 @@ private fun EditarEmpleadoDialog(
         confirmButton = { Button(onClick = onGuardar, enabled = uiState.editNombre.isNotBlank() && uiState.editApellido.isNotBlank()) { Text("Guardar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
+
+    // Dialog de edición de un registro individual
+    if (uiState.registroEnEdicion != null) {
+        AlertDialog(
+            onDismissRequest = onCerrarEdicionRegistro,
+            title = { Text("Editar Horas", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    val fechaFormato = try {
+                        LocalDate.parse(uiState.registroEnEdicion.date).format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                    } catch (_: Exception) { uiState.registroEnEdicion.date }
+                    Text("Fecha: $fechaFormato", style = MaterialTheme.typography.bodyMedium)
+
+                    val displayValue = when {
+                        uiState.horasEdicionPorCosecha -> "Cosecha (C)"
+                        uiState.horasEdicionPorImporte.isNotBlank() -> "$${uiState.horasEdicionPorImporte}"
+                        else -> "${uiState.horasEdicion}h"
+                    }
+                    Text(displayValue, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+                    Slider(
+                        value = uiState.horasEdicion.toFloat(),
+                        onValueChange = { onHorasEdicionChanged(it.roundToInt().coerceIn(0, 16)) },
+                        valueRange = 0f..16f,
+                        steps = 15,
+                        enabled = !uiState.horasEdicionPorCosecha && uiState.horasEdicionPorImporte.isBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCosechaChanged(!uiState.horasEdicionPorCosecha) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = uiState.horasEdicionPorCosecha, onCheckedChange = onHorasEdicionPorCosechaChanged)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Carga por cosecha", fontWeight = FontWeight.SemiBold)
+                    }
+
+                    OutlinedTextField(
+                        value = uiState.horasEdicionPorImporte,
+                        onValueChange = onHorasEdicionPorImporteChanged,
+                        label = { Text("Carga por importe (opcional)") },
+                        prefix = { Text("$ ") },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.horasEdicionPorCosecha,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = { Button(onClick = onGuardarEdicionRegistro) { Text("Guardar") } },
+            dismissButton = { TextButton(onClick = onCerrarEdicionRegistro) { Text("Cancelar") } }
+        )
+    }
 
     if (confirmarOcultar) {
         AlertDialog(

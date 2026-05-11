@@ -38,6 +38,7 @@ class EmployeeRepositoryImpl @Inject constructor(
                     EmployeeEntity(
                         id = it.id,
                         nombre = "${it.firstName} ${it.lastName}".trim(),
+                        apellido = it.lastName.trim(),
                         dni = it.dni,
                         sectorId = it.sectorId,
                         sectorName = sectorName,
@@ -81,6 +82,7 @@ class EmployeeRepositoryImpl @Inject constructor(
                     val entity = EmployeeEntity(
                         id = dto.id,
                         nombre = "${dto.firstName} ${dto.lastName}".trim(),
+                        apellido = dto.lastName.trim(),
                         dni = dto.dni,
                         sectorId = dto.sectorId,
                         sectorName = sectorName,
@@ -143,5 +145,5 @@ class EmployeeRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun EmployeeEntity.toDomain() = Employee(id, nombre, dni, sectorId, sectorName, activo, observacion, fechaIngreso)
+    private fun EmployeeEntity.toDomain() = Employee(id, nombre, apellido, dni, sectorId, sectorName, activo, observacion, fechaIngreso)
 }

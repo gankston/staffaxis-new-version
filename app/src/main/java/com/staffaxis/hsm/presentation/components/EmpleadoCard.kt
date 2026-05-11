@@ -56,8 +56,12 @@ fun EmpleadoCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    val displayNombre = if (empleado.apellido.isNotBlank()) {
+                        val primerNombre = empleado.nombre.removeSuffix(" ${empleado.apellido}").trim()
+                        "${empleado.apellido} $primerNombre".trim()
+                    } else empleado.nombre
                     Text(
-                        text = empleado.nombre,
+                        text = displayNombre,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,

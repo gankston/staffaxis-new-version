@@ -12,6 +12,7 @@ data class Sector(
 data class Employee(
     val id: String,
     val nombre: String,
+    val apellido: String = "",
     val dni: String?,
     val sectorId: String,
     val sectorName: String,

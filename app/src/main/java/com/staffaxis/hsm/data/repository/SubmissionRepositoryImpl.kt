@@ -45,9 +45,19 @@ class SubmissionRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun updateHoras(submissionId: String, minutesWorked: String?, notes: String?): AppResult<Unit> {
-        return AppResult.Success(Unit)
+    override suspend fun updateHoras(submissionId: String, minutesWorked: String?): AppResult<Unit> {
+        return try {
+            dao.updateMinutesWorked(submissionId, minutesWorked)
+            AppResult.Success(Unit)
+        } catch (e: Exception) {
+            AppResult.Error("Error al actualizar", e)
+        }
     }
+
+    override suspend fun getSubmissionsForEmployee(employeeId: String): List<OutboxSubmission> =
+        dao.getByEmployee(employeeId).map {
+            OutboxSubmission(it.id, it.employeeId, it.sectorId, it.date, it.minutesWorked, it.notes, it.status)
+        }
 
     private fun toApiMinutes(minutesWorked: String?): String? {
         if (minutesWorked == null || minutesWorked == "C" || minutesWorked.startsWith("$")) return minutesWorked
