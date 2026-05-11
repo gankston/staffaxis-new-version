@@ -151,9 +151,12 @@ export async function adminRoutes(app) {
     const result = await db.query(
       `SELECT s.id AS submission_id, s.employee_id,
               e.first_name, e.last_name, e.dni,
+              e.sector_id AS current_sector_id,
+              cs.name     AS current_sector_name,
               s.date, s.minutes_worked, s.notes
        FROM submissions s
-       JOIN employees e ON e.id = s.employee_id
+       JOIN employees e  ON e.id  = s.employee_id
+       LEFT JOIN sectors cs ON cs.id = e.sector_id
        WHERE s.sector_id = $1
          AND s.date BETWEEN $2 AND $3
          AND NOT s.is_deleted
