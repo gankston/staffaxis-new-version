@@ -39,7 +39,7 @@ export async function employeeRoutes(app) {
     const sectorId = req.query.sector_id ?? req.device?.sectorId;
     const result = await db.query(
       `SELECT id, sector_id, first_name, last_name, dni, is_active
-       FROM employees WHERE sector_id = $1 ORDER BY first_name, last_name`,
+       FROM employees WHERE sector_id = $1 ORDER BY last_name, first_name`,
       [sectorId]
     );
     return reply.send({ employees: result.rows.map(toDto) });
