@@ -60,22 +60,33 @@ export async function authRoutes(app) {
   // GET /api/auth/device/allowed-sectors
   app.get('/api/auth/device/allowed-sectors', { preHandler: verifyDevice }, async (req, reply) => {
     const { sectorId } = req.device;
-    const result = await db.query(
-      'SELECT id, name, tipo_carga, encargado FROM sectors WHERE id = $1',
+    // Buscar el sector actual del dispositivo
+    const own = await db.query(
+      'SELECT id, name, tipo_carga, encargado, sector_group FROM sectors WHERE id = $1',
       [sectorId]
     );
-    if (!result.rows[0]) {
-      return reply.send({ ok: false, allowedSectors: [] });
+    if (!own.rows[0]) return reply.send({ ok: false, allowedSectors: [] });
+
+    const s = own.rows[0];
+    let sectors = [s];
+
+    // Si el sector pertenece a un grupo, devolver todos los sectores del grupo
+    if (s.sector_group) {
+      const grouped = await db.query(
+        'SELECT id, name, tipo_carga, encargado, sector_group FROM sectors WHERE sector_group = $1 ORDER BY name',
+        [s.sector_group]
+      );
+      sectors = grouped.rows;
     }
-    const s = result.rows[0];
+
     return reply.send({
       ok: true,
-      allowedSectors: [{
-        id: s.id,
-        name: s.name,
-        tipoCarga: s.tipo_carga,
-        encargado: s.encargado ?? null,
-      }],
+      allowedSectors: sectors.map(sec => ({
+        id: sec.id,
+        name: sec.name,
+        tipoCarga: sec.tipo_carga,
+        encargado: sec.encargado ?? null,
+      })),
     });
   });
 }
