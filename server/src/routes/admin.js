@@ -122,6 +122,27 @@ export async function adminRoutes(app) {
   // Empleados (vista admin: todos los sectores)
   // ──────────────────────────────────────────────────────────────────────────
 
+  // GET /api/admin/employees/search?q=texto — búsqueda global entre sectores
+  app.get('/api/admin/employees/search', { preHandler: verifyAdmin }, async (req, reply) => {
+    const q = String(req.query.q ?? '').trim();
+    if (q.length < 2) return reply.send({ employees: [] });
+    const result = await db.query(
+      `SELECT e.id, e.first_name, e.last_name, e.dni, e.is_active, e.sector_id,
+              s.name AS sector_name
+       FROM employees e
+       JOIN sectors s ON s.id = e.sector_id
+       WHERE e.is_active = true
+         AND (e.first_name ILIKE $1
+              OR e.last_name  ILIKE $1
+              OR CONCAT(e.first_name, ' ', e.last_name) ILIKE $1
+              OR e.dni::text  ILIKE $1)
+       ORDER BY e.last_name, e.first_name
+       LIMIT 20`,
+      [`%${q}%`]
+    );
+    return reply.send({ employees: result.rows });
+  });
+
   app.get('/api/admin/employees', { preHandler: verifyAdmin }, async (req, reply) => {
     const sectorId = req.query.sector_id;
     let query = `SELECT e.*, s.name AS sector_name
