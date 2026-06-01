@@ -21,7 +21,8 @@ interface EmployeeRepository {
     suspend fun syncEmployeesFromApi(sectorId: String, sectorName: String = ""): AppResult<List<Employee>>
     suspend fun createEmployee(nombre: String, dni: String, sectorId: String, sectorName: String = "", forceTransfer: Boolean = false): AppResult<Employee>
     suspend fun hideEmployee(id: String): AppResult<Unit>
-    suspend fun updateEmployee(id: String, nombre: String, dni: String?, observacion: String?): AppResult<Unit>
+    suspend fun reactivateEmployee(id: String): AppResult<Unit>
+    suspend fun updateEmployee(id: String, firstName: String, lastName: String, dni: String?, observacion: String?): AppResult<Unit>
     fun getTransfersForDate(sectorId: String, date: String): Flow<List<EmployeeTransfer>>
 }
 

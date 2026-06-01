@@ -203,7 +203,9 @@ fun EmpleadosScreen(
                 onApellidoChanged = viewModel::onNuevoApellidoChanged,
                 onCrear = viewModel::crearEmpleado,
                 onConfirmarTransferencia = viewModel::confirmarTransferencia,
-                onCancelarTransferencia = viewModel::cancelarTransferencia
+                onCancelarTransferencia = viewModel::cancelarTransferencia,
+                onConfirmarReactivar = viewModel::confirmarReactivar,
+                onCancelarReactivar = viewModel::cancelarReactivar
             )
         }
 
@@ -556,9 +558,28 @@ private fun NuevoEmpleadoDialog(
     onApellidoChanged: (String) -> Unit,
     onCrear: () -> Unit,
     onConfirmarTransferencia: () -> Unit,
-    onCancelarTransferencia: () -> Unit
+    onCancelarTransferencia: () -> Unit,
+    onConfirmarReactivar: () -> Unit,
+    onCancelarReactivar: () -> Unit
 ) {
-    if (uiState.pedirConfirmTransferencia) {
+    if (uiState.pedirConfirmReactivar) {
+        AlertDialog(
+            onDismissRequest = onCancelarReactivar,
+            icon = { Icon(Icons.Default.PersonAdd, null, tint = Color(0xFF26C6DA)) },
+            title = { Text("Empleado oculto") },
+            text = { Text("${uiState.empleadoInactivoNombre} ya estaba en la lista pero fue quitado. ¿Querés volver a listarlo?") },
+            confirmButton = {
+                Button(onClick = onConfirmarReactivar, enabled = !uiState.isLoading) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    } else {
+                        Text("Sí, volver a listar")
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = onCancelarReactivar) { Text("Cancelar") } }
+        )
+    } else if (uiState.pedirConfirmTransferencia) {
         AlertDialog(
             onDismissRequest = onCancelarTransferencia,
             icon = { Icon(Icons.Default.SwapHoriz, null, tint = MaterialTheme.colorScheme.primary) },

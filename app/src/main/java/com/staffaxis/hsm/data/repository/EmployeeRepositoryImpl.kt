@@ -61,8 +61,13 @@ class EmployeeRepositoryImpl @Inject constructor(
     override suspend fun createEmployee(nombre: String, dni: String, sectorId: String, sectorName: String, forceTransfer: Boolean): AppResult<Employee> {
         // Solo chequeamos localmente si el empleado ya está en ESTE sector
         if (!forceTransfer && dni.isNotBlank()) {
-            if (dao.getByDniAndSector(dni, sectorId) != null) {
-                return AppResult.Error("EXISTS_SAME_SECTOR")
+            val existing = dao.getByDniAndSector(dni, sectorId)
+            if (existing != null) {
+                return if (!existing.activo) {
+                    AppResult.Error("EXISTS_INACTIVE:${existing.id}:${existing.nombre}")
+                } else {
+                    AppResult.Error("EXISTS_SAME_SECTOR")
+                }
             }
         }
 
@@ -131,16 +136,25 @@ class EmployeeRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun updateEmployee(id: String, nombre: String, dni: String?, observacion: String?): AppResult<Unit> {
+    override suspend fun reactivateEmployee(id: String): AppResult<Unit> {
         return try {
-            val nameParts = nombre.trim().split(" ", limit = 2)
-            val firstName = nameParts[0]
-            val lastName = nameParts.getOrElse(1) { null }
-            api.updateEmployee(id, UpdateEmployeeRequestDto(firstName = firstName, lastName = lastName, dni = dni?.ifBlank { null }))
-            dao.updateNombreObservacion(id, nombre, dni?.ifBlank { null }, observacion)
+            api.updateEmployee(id, UpdateEmployeeRequestDto(isActive = true))
+            dao.updateActivo(id, true)
             AppResult.Success(Unit)
         } catch (e: Exception) {
-            dao.updateNombreObservacion(id, nombre, dni?.ifBlank { null }, observacion)
+            dao.updateActivo(id, true)
+            AppResult.Success(Unit)
+        }
+    }
+
+    override suspend fun updateEmployee(id: String, firstName: String, lastName: String, dni: String?, observacion: String?): AppResult<Unit> {
+        val nombreCompleto = if (lastName.isBlank()) firstName.trim() else "${firstName.trim()} ${lastName.trim()}"
+        return try {
+            api.updateEmployee(id, UpdateEmployeeRequestDto(firstName = firstName.trim(), lastName = lastName.trim().ifBlank { null }, dni = dni?.ifBlank { null }))
+            dao.updateNombreObservacion(id, nombreCompleto, dni?.ifBlank { null }, observacion)
+            AppResult.Success(Unit)
+        } catch (e: Exception) {
+            dao.updateNombreObservacion(id, nombreCompleto, dni?.ifBlank { null }, observacion)
             AppResult.Success(Unit)
         }
     }

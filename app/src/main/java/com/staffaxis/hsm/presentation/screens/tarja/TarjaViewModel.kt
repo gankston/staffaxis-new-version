@@ -32,6 +32,8 @@ data class TarjaUiState(
     val ausentesHoy: Int = 0,
     val horasTarjadas: Float = 0f,
     val pendingCount: Int = 0,
+    val cosechaDelDia: Int = 0,
+    val montoDelDia: Float = 0f,
     val transfers: List<EmployeeTransfer> = emptyList(),
     val error: String? = null,
     val mensajeExito: String? = null,
@@ -90,9 +92,14 @@ class TarjaViewModel @Inject constructor(
                         else -> 0
                     }
                 }.toFloat()
+                val cosechaDelDia = submissions.count { it.minutesWorked == "C" }
+                val montoDelDia = submissions
+                    .filter { it.minutesWorked?.startsWith("$") == true }
+                    .sumOf { it.minutesWorked!!.substring(1).toDoubleOrNull() ?: 0.0 }
+                    .toFloat()
 
-                Quad(status, empleados.size, ausentesHoy, tarjados, horas, pending, transfers)
-            }.collect { (status, total, ausentes, tarjados, horas, pending, transfers) ->
+                Quad(status, empleados.size, ausentesHoy, tarjados, horas, pending, transfers, cosechaDelDia, montoDelDia)
+            }.collect { (status, total, ausentes, tarjados, horas, pending, transfers, cosecha, monto) ->
                 _uiState.update { state ->
                     state.copy(
                         tarjaStatus = status,
@@ -101,6 +108,8 @@ class TarjaViewModel @Inject constructor(
                         ausentesHoy = ausentes,
                         horasTarjadas = status?.horasTarjadas ?: horas,
                         pendingCount = pending,
+                        cosechaDelDia = cosecha,
+                        montoDelDia = monto,
                         transfers = transfers,
                         isLoading = false
                     )
@@ -167,5 +176,7 @@ private data class Quad(
     val tarjados: Int,
     val horas: Float,
     val pending: Int,
-    val transfers: List<EmployeeTransfer>
+    val transfers: List<EmployeeTransfer>,
+    val cosechaDelDia: Int,
+    val montoDelDia: Float
 )

@@ -164,6 +164,14 @@ fun TarjaScreen(
                                 GradientStat(formatHoras(uiState.horasTarjadas), "Horas")
                                 GradientStat("${uiState.ausentesHoy}", "Ausentes")
                             }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceAround
+                            ) {
+                                GradientStat("${uiState.cosechaDelDia}", "Cosecha")
+                                GradientStat(formatMonto(uiState.montoDelDia), "Monto")
+                            }
                         }
                     }
                 }
@@ -432,4 +440,10 @@ private fun formatHoras(horas: Float): String {
     val h = horas.toInt()
     val m = ((horas - h) * 60).toInt()
     return if (m == 0) "${h}h" else "${h}h${m}m"
+}
+
+private fun formatMonto(monto: Float): String {
+    return if (monto == 0f) "$0"
+    else if (monto == monto.toLong().toFloat()) "$${monto.toLong()}"
+    else "$${"%.2f".format(monto)}"
 }

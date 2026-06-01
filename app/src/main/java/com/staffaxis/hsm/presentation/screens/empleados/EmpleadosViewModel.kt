@@ -57,6 +57,9 @@ data class EmpleadosUiState(
     val nuevoNombre: String = "",
     val nuevoApellido: String = "",
     val pedirConfirmTransferencia: Boolean = false,
+    val pedirConfirmReactivar: Boolean = false,
+    val empleadoInactivoId: String = "",
+    val empleadoInactivoNombre: String = "",
     // Mensajes
     val mensajeExito: String? = null,
     val mensajeError: String? = null,
@@ -185,13 +188,15 @@ class EmpleadosViewModel @Inject constructor(
     }
 
     fun abrirDialogoEditar(empleado: Employee) {
-        val parts = empleado.nombre.trim().split(" ", limit = 2)
+        val apellido = empleado.apellido.trim()
+        val nombre = empleado.nombre.trim()
+        val firstName = if (apellido.isNotEmpty()) nombre.removeSuffix(apellido).trim() else nombre
         _uiState.update {
             it.copy(
                 mostrarDialogoEditar = true,
                 empleadoParaEditar = empleado,
-                editNombre = parts[0],
-                editApellido = parts.getOrElse(1) { "" },
+                editNombre = firstName,
+                editApellido = apellido,
                 editDni = empleado.dni ?: "",
                 editObservacion = empleado.observacion ?: "",
                 registrosParaEditar = emptyList()
@@ -249,9 +254,14 @@ class EmpleadosViewModel @Inject constructor(
     fun guardarEdicion() {
         val state = _uiState.value
         val empleado = state.empleadoParaEditar ?: return
-        val nombreCompleto = "${state.editNombre.trim()} ${state.editApellido.trim()}".trim()
         viewModelScope.launch {
-            employeeRepository.updateEmployee(empleado.id, nombreCompleto, state.editDni.ifBlank { null }, state.editObservacion.ifBlank { null })
+            employeeRepository.updateEmployee(
+                empleado.id,
+                state.editNombre.trim(),
+                state.editApellido.trim(),
+                state.editDni.ifBlank { null },
+                state.editObservacion.ifBlank { null }
+            )
             _uiState.update { it.copy(mostrarDialogoEditar = false, empleadoParaEditar = null, mensajeExito = "Empleado actualizado") }
         }
     }
@@ -285,8 +295,15 @@ class EmpleadosViewModel @Inject constructor(
                     "EXISTS_OTHER_SECTOR" -> _uiState.update {
                         it.copy(isLoading = false, mostrarDialogoNuevo = true, pedirConfirmTransferencia = true)
                     }
-                    else -> _uiState.update {
-                        it.copy(isLoading = false, mostrarDialogoNuevo = false, mensajeError = result.message)
+                    else -> if (result.message.startsWith("EXISTS_INACTIVE")) {
+                        val parts = result.message.split(":", limit = 3)
+                        _uiState.update {
+                            it.copy(isLoading = false, mostrarDialogoNuevo = true, pedirConfirmReactivar = true, empleadoInactivoId = parts.getOrElse(1) { "" }, empleadoInactivoNombre = parts.getOrElse(2) { "" })
+                        }
+                    } else {
+                        _uiState.update {
+                            it.copy(isLoading = false, mostrarDialogoNuevo = false, mensajeError = result.message)
+                        }
                     }
                 }
             }
@@ -310,6 +327,23 @@ class EmpleadosViewModel @Inject constructor(
     }
 
     fun cancelarTransferencia() = _uiState.update { it.copy(pedirConfirmTransferencia = false, isLoading = false) }
+
+    fun confirmarReactivar() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            when (employeeRepository.reactivateEmployee(state.empleadoInactivoId)) {
+                is AppResult.Success -> _uiState.update {
+                    it.copy(isLoading = false, mostrarDialogoNuevo = false, pedirConfirmReactivar = false, empleadoInactivoId = "", empleadoInactivoNombre = "", mensajeExito = "${state.empleadoInactivoNombre} vuelve a estar en la lista")
+                }
+                is AppResult.Error -> _uiState.update {
+                    it.copy(isLoading = false, mostrarDialogoNuevo = false, pedirConfirmReactivar = false, mensajeError = "No se pudo reactivar el empleado")
+                }
+            }
+        }
+    }
+
+    fun cancelarReactivar() = _uiState.update { it.copy(pedirConfirmReactivar = false, empleadoInactivoId = "", empleadoInactivoNombre = "") }
 
     fun clearMensajeExito() = _uiState.update { it.copy(mensajeExito = null) }
     fun clearMensajeError() = _uiState.update { it.copy(mensajeError = null) }
