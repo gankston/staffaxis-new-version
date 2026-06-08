@@ -218,6 +218,7 @@ export async function adminRoutes(app) {
        WHERE s.sector_id = $1
          AND s.date BETWEEN $2 AND $3
          AND NOT s.is_deleted
+         AND e.is_active = true
        ORDER BY s.date, e.first_name, e.last_name`,
       [sector_id, start_date, end_date]
     );
