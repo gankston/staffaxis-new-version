@@ -184,6 +184,18 @@ export async function adminRoutes(app) {
     return reply.send(result.rows[0]);
   });
 
+  // DELETE /api/admin/employees/:id — elimina permanentemente el empleado y sus registros
+  app.delete('/api/admin/employees/:id', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { id } = req.params;
+    const emp = await db.query('SELECT id FROM employees WHERE id = $1', [id]);
+    if (!emp.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
+    await db.query('DELETE FROM submissions WHERE employee_id = $1', [id]);
+    await db.query('DELETE FROM absences WHERE employee_id = $1', [id]);
+    await db.query('DELETE FROM transfers WHERE employee_id = $1', [id]).catch(() => {});
+    await db.query('DELETE FROM employees WHERE id = $1', [id]);
+    return reply.send({ ok: true });
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   // Reportes (resumen por sector y fecha para StaffAdmin)
   // ──────────────────────────────────────────────────────────────────────────
