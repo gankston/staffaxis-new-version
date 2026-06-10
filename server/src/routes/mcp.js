@@ -465,6 +465,79 @@ function buildServer() {
     }
   );
 
+  // ── COMPARATIVA EMPLEADOS MENSUAL ──────────────────────────────────────────
+  server.tool(
+    'comparativa_empleados_mensual',
+    'Compara la cantidad de empleados activos entre el mes anterior y el mes actual, mostrando altas y bajas por sector.',
+    {
+      sector: z.string().optional().describe('Filtrar por sector específico'),
+    },
+    async ({ sector }) => {
+      const hoy = new Date();
+      const inicioEsteMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0, 10);
+      const inicioMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1).toISOString().slice(0, 10);
+      const finMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth(), 0).toISOString().slice(0, 10);
+
+      const params = [inicioEsteMes, inicioMesAnterior, finMesAnterior];
+      const cond = sector ? (params.push(`%${sector}%`), `AND s.name ILIKE $${params.length}`) : '';
+
+      const r = await db.query(`
+        SELECT
+          s.name AS sector,
+          COUNT(*) FILTER (WHERE e.is_active)                                        AS activos_hoy,
+          COUNT(*) FILTER (WHERE e.created_at < $1 AND (e.is_active OR e.updated_at > $3)) AS activos_mes_anterior,
+          COUNT(*) FILTER (WHERE e.created_at >= $1)                                 AS altas_este_mes,
+          COUNT(*) FILTER (WHERE NOT e.is_active AND e.updated_at >= $1)             AS bajas_este_mes,
+          COUNT(*) FILTER (WHERE e.created_at BETWEEN $2 AND $3)                     AS altas_mes_anterior,
+          COUNT(*) FILTER (WHERE NOT e.is_active AND e.updated_at BETWEEN $2 AND $3) AS bajas_mes_anterior
+        FROM employees e
+        JOIN sectors s ON s.id = e.sector_id
+        WHERE 1=1 ${cond}
+        GROUP BY s.id, s.name
+        HAVING COUNT(*) > 0
+        ORDER BY s.name
+      `, params);
+
+      const mesAnteriorNombre = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)
+        .toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+      const estesMesNombre = hoy.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+
+      const totales = r.rows.reduce((acc, row) => ({
+        activos_hoy: acc.activos_hoy + +row.activos_hoy,
+        activos_mes_anterior: acc.activos_mes_anterior + +row.activos_mes_anterior,
+        altas_este_mes: acc.altas_este_mes + +row.altas_este_mes,
+        bajas_este_mes: acc.bajas_este_mes + +row.bajas_este_mes,
+        altas_mes_anterior: acc.altas_mes_anterior + +row.altas_mes_anterior,
+        bajas_mes_anterior: acc.bajas_mes_anterior + +row.bajas_mes_anterior,
+      }), { activos_hoy: 0, activos_mes_anterior: 0, altas_este_mes: 0, bajas_este_mes: 0, altas_mes_anterior: 0, bajas_mes_anterior: 0 });
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            mes_anterior: mesAnteriorNombre,
+            mes_actual: estesMesNombre,
+            totales_generales: {
+              activos_mes_anterior: totales.activos_mes_anterior,
+              activos_este_mes: totales.activos_hoy,
+              variacion: totales.activos_hoy - totales.activos_mes_anterior,
+              altas_mes_anterior: totales.altas_mes_anterior,
+              bajas_mes_anterior: totales.bajas_mes_anterior,
+              altas_este_mes: totales.altas_este_mes,
+              bajas_este_mes: totales.bajas_este_mes,
+            },
+            por_sector: r.rows.map(row => ({
+              sector: row.sector,
+              mes_anterior: { activos: +row.activos_mes_anterior, altas: +row.altas_mes_anterior, bajas: +row.bajas_mes_anterior },
+              este_mes: { activos: +row.activos_hoy, altas: +row.altas_este_mes, bajas: +row.bajas_este_mes },
+              variacion: +row.activos_hoy - +row.activos_mes_anterior,
+            })),
+          }, null, 2),
+        }],
+      };
+    }
+  );
+
   return server;
 }
 
