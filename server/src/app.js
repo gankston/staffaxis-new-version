@@ -9,6 +9,7 @@ import { employeeRoutes }   from './routes/employees.js';
 import { submissionRoutes } from './routes/submissions.js';
 import { absenceRoutes }    from './routes/absences.js';
 import { adminRoutes }      from './routes/admin.js';
+import { mcpRoutes }        from './routes/mcp.js';
 
 // Migraciones automáticas al arrancar
 async function runMigrations() {
@@ -28,6 +29,7 @@ const start = async () => {
   await app.register(submissionRoutes);
   await app.register(absenceRoutes);
   await app.register(adminRoutes);
+  await app.register(mcpRoutes);
 
   app.get('/health', async () => ({ ok: true }));
 
