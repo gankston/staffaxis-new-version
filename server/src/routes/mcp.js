@@ -7,6 +7,11 @@ function horas(minutos) {
   return Math.round(Number(minutos ?? 0) / 60 * 10) / 10;
 }
 
+// SQL para limpiar minutes_worked y castearlo a NUMERIC (excluye "C" de cosecha)
+const CAST_MW = `CAST(NULLIF(REPLACE(REGEXP_REPLACE(NULLIF(sub.minutes_worked,'C'), '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)`;
+// Cuenta días cosecha (minutes_worked = 'C')
+const COUNT_COSECHA = `COUNT(sub.id) FILTER (WHERE sub.minutes_worked = 'C')`;
+
 function buildServer() {
   const server = new McpServer({
     name: 'staffaxis-stats',
@@ -97,32 +102,38 @@ function buildServer() {
       const cond = sector ? (params.push(`%${sector}%`), `AND s.name ILIKE $3`) : '';
       const r = await db.query(`
         SELECT s.name AS sector, s.tipo_carga, s.encargado,
-          COUNT(DISTINCT sub.employee_id) AS empleados,
-          COUNT(DISTINCT sub.date)        AS dias_activos,
-          COUNT(sub.id)                   AS total_registros,
-          SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
+          COUNT(DISTINCT sub.employee_id)                    AS empleados,
+          COUNT(DISTINCT sub.date)                           AS dias_activos,
+          COUNT(sub.id)                                      AS total_registros,
+          ${COUNT_COSECHA}                                   AS dias_cosecha,
+          SUM(${CAST_MW})                                    AS total_valor
         FROM submissions sub
         JOIN sectors s ON s.id = sub.sector_id
         WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${cond}
         GROUP BY s.id, s.name, s.tipo_carga, s.encargado
-        ORDER BY total_valor DESC NULLS LAST
+        ORDER BY COALESCE(SUM(${CAST_MW}), 0) + ${COUNT_COSECHA} DESC
       `, params);
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
             periodo: { desde, hasta },
-            sectores: r.rows.map(row => ({
-              sector: row.sector,
-              encargado: row.encargado,
-              tipo: row.tipo_carga,
-              empleados_con_registro: +row.empleados,
-              dias_activos: +row.dias_activos,
-              total_registros: +row.total_registros,
-              ...(row.tipo_carga === 'horas'
-                ? { horas_totales: horas(row.total_valor) }
-                : { importe_total: +(+row.total_valor ?? 0).toFixed(2) }),
-            })),
+            sectores: r.rows.map(row => {
+              const obj = {
+                sector: row.sector,
+                encargado: row.encargado,
+                empleados_con_registro: +row.empleados,
+                dias_activos: +row.dias_activos,
+                total_registros: +row.total_registros,
+              };
+              if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
+              const val = +(+row.total_valor ?? 0);
+              if (val > 0) {
+                obj.horas_totales = horas(val);
+                obj.importe_total = +val.toFixed(2);
+              }
+              return obj;
+            }),
           }, null, 2),
         }],
       };
@@ -192,15 +203,16 @@ function buildServer() {
       const cond = sector ? (params.push(`%${sector}%`), `AND s.name ILIKE $4`) : '';
       const r = await db.query(`
         SELECT e.first_name||' '||e.last_name AS empleado, e.dni,
-               s.name AS sector, s.tipo_carga,
-               COUNT(sub.id) AS dias_trabajados,
-               SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
+               s.name AS sector,
+               COUNT(sub.id)       AS dias_trabajados,
+               ${COUNT_COSECHA}    AS dias_cosecha,
+               SUM(${CAST_MW})     AS total_valor
         FROM submissions sub
         JOIN employees e ON e.id = sub.employee_id
         JOIN sectors s ON s.id = sub.sector_id
         WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${cond}
-        GROUP BY e.id, e.first_name, e.last_name, e.dni, s.name, s.tipo_carga
-        ORDER BY total_valor DESC NULLS LAST
+        GROUP BY e.id, e.first_name, e.last_name, e.dni, s.name
+        ORDER BY COALESCE(SUM(${CAST_MW}), 0) + ${COUNT_COSECHA} DESC
         LIMIT $3
       `, params);
       return {
@@ -208,16 +220,22 @@ function buildServer() {
           type: 'text',
           text: JSON.stringify({
             periodo: { desde, hasta },
-            ranking: r.rows.map((row, i) => ({
-              posicion: i + 1,
-              empleado: row.empleado,
-              dni: row.dni,
-              sector: row.sector,
-              dias_trabajados: +row.dias_trabajados,
-              ...(row.tipo_carga === 'horas'
-                ? { horas_totales: horas(row.total_valor) }
-                : { importe_total: +(+row.total_valor ?? 0).toFixed(2) }),
-            })),
+            ranking: r.rows.map((row, i) => {
+              const obj = {
+                posicion: i + 1,
+                empleado: row.empleado,
+                dni: row.dni,
+                sector: row.sector,
+                dias_trabajados: +row.dias_trabajados,
+              };
+              if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
+              const val = +(+row.total_valor ?? 0);
+              if (val > 0) {
+                obj.horas_totales = horas(val);
+                obj.importe_total = +val.toFixed(2);
+              }
+              return obj;
+            }),
           }, null, 2),
         }],
       };
@@ -237,7 +255,8 @@ function buildServer() {
         db.query(`
           SELECT s.name AS sector, s.tipo_carga, s.encargado,
             COUNT(DISTINCT sub.employee_id) AS empleados,
-            SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
+            ${COUNT_COSECHA} AS dias_cosecha,
+            SUM(${CAST_MW})  AS total_valor
           FROM submissions sub JOIN sectors s ON s.id = sub.sector_id
           WHERE sub.date = $1 AND NOT sub.is_deleted
           GROUP BY s.id, s.name, s.tipo_carga, s.encargado ORDER BY s.name
@@ -254,15 +273,13 @@ function buildServer() {
             fecha: dia,
             ausencias: { total: +abs.rows[0].total, con_certificado: +abs.rows[0].con_certificado },
             sectores_con_actividad: subs.rows.length,
-            actividad: subs.rows.map(row => ({
-              sector: row.sector,
-              encargado: row.encargado,
-              tipo: row.tipo_carga,
-              empleados_registrados: +row.empleados,
-              ...(row.tipo_carga === 'horas'
-                ? { horas_totales: horas(row.total_valor) }
-                : { importe_total: +(+row.total_valor ?? 0).toFixed(2) }),
-            })),
+            actividad: subs.rows.map(row => {
+              const obj = { sector: row.sector, encargado: row.encargado, empleados_registrados: +row.empleados };
+              if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
+              const val = +(+row.total_valor ?? 0);
+              if (val > 0) { obj.horas_totales = horas(val); obj.importe_total = +val.toFixed(2); }
+              return obj;
+            }),
           }, null, 2),
         }],
       };
@@ -289,26 +306,28 @@ function buildServer() {
 
       const [sectores, top10, abs] = await Promise.all([
         db.query(`
-          SELECT s.name AS sector, s.encargado, s.tipo_carga,
+          SELECT s.name AS sector, s.encargado,
             COUNT(DISTINCT sub.date)        AS dias_activos,
             COUNT(DISTINCT sub.employee_id) AS empleados_unicos,
             COUNT(sub.id)                   AS registros,
-            SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
+            ${COUNT_COSECHA}                AS dias_cosecha,
+            SUM(${CAST_MW})                 AS total_valor
           FROM submissions sub JOIN sectors s ON s.id = sub.sector_id
           WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${cond}
-          GROUP BY s.id, s.name, s.encargado, s.tipo_carga
-          ORDER BY total_valor DESC NULLS LAST
+          GROUP BY s.id, s.name, s.encargado
+          ORDER BY COALESCE(SUM(${CAST_MW}), 0) + ${COUNT_COSECHA} DESC
         `, params),
         db.query(`
-          SELECT e.first_name||' '||e.last_name AS empleado, s.name AS sector, s.tipo_carga,
-            COUNT(sub.id) AS dias,
-            SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
+          SELECT e.first_name||' '||e.last_name AS empleado, s.name AS sector,
+            COUNT(sub.id)    AS dias,
+            ${COUNT_COSECHA} AS dias_cosecha,
+            SUM(${CAST_MW})  AS total_valor
           FROM submissions sub
           JOIN employees e ON e.id = sub.employee_id
           JOIN sectors s ON s.id = sub.sector_id
           WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${cond}
-          GROUP BY e.id, e.first_name, e.last_name, s.name, s.tipo_carga
-          ORDER BY total_valor DESC NULLS LAST LIMIT 10
+          GROUP BY e.id, e.first_name, e.last_name, s.name
+          ORDER BY COALESCE(SUM(${CAST_MW}), 0) + ${COUNT_COSECHA} DESC LIMIT 10
         `, params),
         db.query(`
           SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE is_justified) AS con_certificado
@@ -322,26 +341,20 @@ function buildServer() {
           text: JSON.stringify({
             periodo: { año: y, mes: m, desde, hasta },
             ausencias: { total: +abs.rows[0].total, con_certificado: +abs.rows[0].con_certificado },
-            sectores: sectores.rows.map(row => ({
-              sector: row.sector,
-              encargado: row.encargado,
-              tipo: row.tipo_carga,
-              dias_activos: +row.dias_activos,
-              empleados_unicos: +row.empleados_unicos,
-              registros: +row.registros,
-              ...(row.tipo_carga === 'horas'
-                ? { horas_totales: horas(row.total_valor) }
-                : { importe_total: +(+row.total_valor ?? 0).toFixed(2) }),
-            })),
-            top_10_empleados: top10.rows.map((row, i) => ({
-              posicion: i + 1,
-              empleado: row.empleado,
-              sector: row.sector,
-              dias: +row.dias,
-              ...(row.tipo_carga === 'horas'
-                ? { horas: horas(row.total_valor) }
-                : { importe: +(+row.total_valor ?? 0).toFixed(2) }),
-            })),
+            sectores: sectores.rows.map(row => {
+              const obj = { sector: row.sector, encargado: row.encargado, dias_activos: +row.dias_activos, empleados_unicos: +row.empleados_unicos, registros: +row.registros };
+              if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
+              const val = +(+row.total_valor ?? 0);
+              if (val > 0) { obj.horas_totales = horas(val); obj.importe_total = +val.toFixed(2); }
+              return obj;
+            }),
+            top_10_empleados: top10.rows.map((row, i) => {
+              const obj = { posicion: i + 1, empleado: row.empleado, sector: row.sector, dias: +row.dias };
+              if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
+              const val = +(+row.total_valor ?? 0);
+              if (val > 0) { obj.horas_totales = horas(val); obj.importe_total = +val.toFixed(2); }
+              return obj;
+            }),
           }, null, 2),
         }],
       };
@@ -422,43 +435,44 @@ function buildServer() {
       const params = [desde, hasta];
       const cond = tipo_carga ? (params.push(tipo_carga), `AND s.tipo_carga = $3`) : '';
       const r = await db.query(`
-        SELECT s.name AS sector, s.encargado, s.tipo_carga,
-          COUNT(DISTINCT e.id) FILTER (WHERE e.is_active)  AS empleados_activos,
-          COUNT(DISTINCT sub.date)                          AS dias_activos,
-          COUNT(DISTINCT sub.employee_id)                   AS empleados_con_registro,
-          COUNT(sub.id)                                     AS total_registros,
-          SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor,
-          AVG(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS promedio_por_registro
+        SELECT s.name AS sector, s.encargado,
+          COUNT(DISTINCT e.id) FILTER (WHERE e.is_active) AS empleados_activos,
+          COUNT(DISTINCT sub.date)                         AS dias_activos,
+          COUNT(DISTINCT sub.employee_id)                  AS empleados_con_registro,
+          COUNT(sub.id)                                    AS total_registros,
+          ${COUNT_COSECHA}                                 AS dias_cosecha,
+          SUM(${CAST_MW})                                  AS total_valor,
+          AVG(${CAST_MW})                                  AS promedio_por_registro
         FROM sectors s
         LEFT JOIN employees e ON e.sector_id = s.id
         LEFT JOIN submissions sub ON sub.sector_id = s.id
           AND sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted
         WHERE 1=1 ${cond}
-        GROUP BY s.id, s.name, s.encargado, s.tipo_carga
-        ORDER BY total_valor DESC NULLS LAST
+        GROUP BY s.id, s.name, s.encargado
+        ORDER BY COALESCE(SUM(${CAST_MW}), 0) + COALESCE(${COUNT_COSECHA}, 0) DESC
       `, params);
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
             periodo: { desde, hasta },
-            sectores: r.rows.map(row => ({
-              sector: row.sector,
-              encargado: row.encargado,
-              tipo: row.tipo_carga,
-              empleados_activos: +row.empleados_activos,
-              dias_activos_en_periodo: +(row.dias_activos ?? 0),
-              empleados_con_registro: +(row.empleados_con_registro ?? 0),
-              ...(row.tipo_carga === 'horas'
-                ? {
-                    horas_totales: horas(row.total_valor),
-                    promedio_horas_por_registro: horas(row.promedio_por_registro),
-                  }
-                : {
-                    importe_total: +(+row.total_valor ?? 0).toFixed(2),
-                    promedio_por_registro: +(+row.promedio_por_registro ?? 0).toFixed(2),
-                  }),
-            })),
+            sectores: r.rows.map(row => {
+              const obj = {
+                sector: row.sector,
+                encargado: row.encargado,
+                empleados_activos: +row.empleados_activos,
+                dias_activos_en_periodo: +(row.dias_activos ?? 0),
+                empleados_con_registro: +(row.empleados_con_registro ?? 0),
+              };
+              if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
+              const val = +(+row.total_valor ?? 0);
+              if (val > 0) {
+                obj.horas_totales = horas(val);
+                obj.importe_total = +val.toFixed(2);
+                obj.promedio_por_registro = +(+row.promedio_por_registro ?? 0).toFixed(2);
+              }
+              return obj;
+            }),
           }, null, 2),
         }],
       };
