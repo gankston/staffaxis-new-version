@@ -66,7 +66,7 @@ function meta(desde, hasta, extra = {}) {
   return {
     periodo: { desde, hasta },
     fuente: 'StaffAxis',
-    campos_no_disponibles: ['legajo','puesto','categoria','supervisor_directo','fecha_ingreso_real','tipo_ausencia'],
+    campos_no_disponibles: ['legajo','puesto','categoria','supervisor_directo'],
     ...extra,
   };
 }
@@ -981,7 +981,7 @@ function buildServer() {
           promedio_mensual_historico: +promMes.toFixed(2),
           tendencia_vs_historico_pct: promMes > 0 ? +((valorActual - promMes)/promMes*100).toFixed(1) : null,
         },
-        metadata: meta(desde, hasta, { empleado_id: e.id, campos_no_disponibles: ['legajo','puesto','categoria','fecha_ingreso_real'] }),
+        metadata: meta(desde, hasta, { empleado_id: e.id }),
       }, null, 2) }] };
     }
   );
@@ -1139,8 +1139,9 @@ function buildServer() {
       ],
       periodos_predefinidos: ['hoy','ayer','semana_actual','semana_anterior','mes_actual','mes_anterior','ultimos_7_dias','ultimos_30_dias','ultimos_90_dias'],
       dimensiones: {
-        empleado: ['empleado_id (UUID estable)','nombre','dni','activo','sector','encargado','created_at'],
+        empleado: ['empleado_id (UUID estable)','nombre','dni','activo','fecha_ingreso (= created_at, fecha en que se cargó al sistema)','sector','encargado'],
         sector:   ['sector_id (UUID estable)','name','encargado','tipo_carga'],
+        ausencia: ['con_certificado (boolean) — único tipo disponible: true = con certificado médico, false = sin certificado'],
       },
       metricas: {
         dias_trabajados: 'Cantidad de registros en submissions en el período',
@@ -1156,7 +1157,11 @@ function buildServer() {
         tipo_carga:             'Todos los sectores tienen tipo_carga = "importe" en DB (campo no discrimina horas vs monto)',
         ausencias_tipo:         'Solo se distingue con_certificado (boolean), no hay categorías de ausencia',
       },
-      campos_no_disponibles: ['legajo','puesto','categoria','supervisor_directo','fecha_ingreso_real','tipo_ausencia_categorizado'],
+      campos_no_disponibles: ['legajo','puesto','categoria','supervisor_directo'],
+      aclaraciones: {
+        fecha_ingreso: 'Equivale al campo created_at del empleado — es la fecha en que fue cargado al sistema',
+        tipo_ausencia: 'No hay categorías de ausencia. El único campo disponible es con_certificado (boolean)',
+      },
     }, null, 2) }] })
   );
 
