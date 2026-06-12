@@ -100,7 +100,7 @@ function buildServer() {
           COUNT(DISTINCT sub.employee_id) AS empleados,
           COUNT(DISTINCT sub.date)        AS dias_activos,
           COUNT(sub.id)                   AS total_registros,
-          SUM(CAST(NULLIF(sub.minutes_worked,'') AS NUMERIC)) AS total_valor
+          SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
         FROM submissions sub
         JOIN sectors s ON s.id = sub.sector_id
         WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${cond}
@@ -194,7 +194,7 @@ function buildServer() {
         SELECT e.first_name||' '||e.last_name AS empleado, e.dni,
                s.name AS sector, s.tipo_carga,
                COUNT(sub.id) AS dias_trabajados,
-               SUM(CAST(NULLIF(sub.minutes_worked,'') AS NUMERIC)) AS total_valor
+               SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
         FROM submissions sub
         JOIN employees e ON e.id = sub.employee_id
         JOIN sectors s ON s.id = sub.sector_id
@@ -237,7 +237,7 @@ function buildServer() {
         db.query(`
           SELECT s.name AS sector, s.tipo_carga, s.encargado,
             COUNT(DISTINCT sub.employee_id) AS empleados,
-            SUM(CAST(NULLIF(sub.minutes_worked,'') AS NUMERIC)) AS total_valor
+            SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
           FROM submissions sub JOIN sectors s ON s.id = sub.sector_id
           WHERE sub.date = $1 AND NOT sub.is_deleted
           GROUP BY s.id, s.name, s.tipo_carga, s.encargado ORDER BY s.name
@@ -293,7 +293,7 @@ function buildServer() {
             COUNT(DISTINCT sub.date)        AS dias_activos,
             COUNT(DISTINCT sub.employee_id) AS empleados_unicos,
             COUNT(sub.id)                   AS registros,
-            SUM(CAST(NULLIF(sub.minutes_worked,'') AS NUMERIC)) AS total_valor
+            SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
           FROM submissions sub JOIN sectors s ON s.id = sub.sector_id
           WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${cond}
           GROUP BY s.id, s.name, s.encargado, s.tipo_carga
@@ -302,7 +302,7 @@ function buildServer() {
         db.query(`
           SELECT e.first_name||' '||e.last_name AS empleado, s.name AS sector, s.tipo_carga,
             COUNT(sub.id) AS dias,
-            SUM(CAST(NULLIF(sub.minutes_worked,'') AS NUMERIC)) AS total_valor
+            SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor
           FROM submissions sub
           JOIN employees e ON e.id = sub.employee_id
           JOIN sectors s ON s.id = sub.sector_id
@@ -427,8 +427,8 @@ function buildServer() {
           COUNT(DISTINCT sub.date)                          AS dias_activos,
           COUNT(DISTINCT sub.employee_id)                   AS empleados_con_registro,
           COUNT(sub.id)                                     AS total_registros,
-          SUM(CAST(NULLIF(sub.minutes_worked,'') AS NUMERIC)) AS total_valor,
-          AVG(CAST(NULLIF(sub.minutes_worked,'') AS NUMERIC)) AS promedio_por_registro
+          SUM(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS total_valor,
+          AVG(CAST(NULLIF(REPLACE(REGEXP_REPLACE(sub.minutes_worked, '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)) AS promedio_por_registro
         FROM sectors s
         LEFT JOIN employees e ON e.sector_id = s.id
         LEFT JOIN submissions sub ON sub.sector_id = s.id
