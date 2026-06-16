@@ -146,9 +146,10 @@ export async function adminRoutes(app) {
   app.get('/api/admin/employees', { preHandler: verifyAdmin }, async (req, reply) => {
     const sectorId = req.query.sector_id;
     let query = `SELECT e.*, s.name AS sector_name
-                 FROM employees e JOIN sectors s ON s.id = e.sector_id`;
+                 FROM employees e JOIN sectors s ON s.id = e.sector_id
+                 WHERE e.is_active = true`;
     const params = [];
-    if (sectorId) { query += ' WHERE e.sector_id = $1'; params.push(sectorId); }
+    if (sectorId) { query += ' AND e.sector_id = $1'; params.push(sectorId); }
     query += ' ORDER BY s.name, e.first_name, e.last_name';
     const result = await db.query(query, params);
     return reply.send({ employees: result.rows });
@@ -234,7 +235,7 @@ export async function adminRoutes(app) {
              a.start_date, a.end_date, a.is_justified, a.observations
       FROM absences a
       JOIN employees e ON e.id = a.employee_id
-      WHERE e.sector_id = $1`;
+      WHERE e.sector_id = $1 AND e.is_active = true`;
     const params = [sector_id];
     let idx = 2;
     if (start_date) { query += ` AND a.end_date >= $${idx++}`;   params.push(start_date); }
