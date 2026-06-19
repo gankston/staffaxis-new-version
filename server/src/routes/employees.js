@@ -10,6 +10,8 @@ function toDto(row) {
     last_name: row.last_name,
     dni: row.dni ?? null,
     is_active: row.is_active,
+    tiene_foto_frente: !!row.dni_foto_frente,
+    tiene_foto_dorso: !!row.dni_foto_dorso,
   };
 }
 
@@ -38,7 +40,7 @@ export async function employeeRoutes(app) {
     }
     const sectorId = req.query.sector_id ?? req.device?.sectorId;
     const result = await db.query(
-      `SELECT id, sector_id, first_name, last_name, dni, is_active
+      `SELECT id, sector_id, first_name, last_name, dni, is_active, dni_foto_frente, dni_foto_dorso
        FROM employees WHERE sector_id = $1 ORDER BY last_name, first_name`,
       [sectorId]
     );
@@ -77,7 +79,7 @@ export async function employeeRoutes(app) {
         const fromSectorId = other.rows[0].sector_id;
         const updated = await db.query(
           `UPDATE employees SET sector_id = $1, updated_at = NOW()
-           WHERE id = $2 RETURNING id, sector_id, first_name, last_name, dni, is_active`,
+           WHERE id = $2 RETURNING id, sector_id, first_name, last_name, dni, is_active, dni_foto_frente, dni_foto_dorso`,
           [sector_id, other.rows[0].id]
         );
         // Registrar el traslado para que el export muestre "Se fue a X" / "Viene de Y"
@@ -93,7 +95,7 @@ export async function employeeRoutes(app) {
     const result = await db.query(
       `INSERT INTO employees (id, sector_id, first_name, last_name, dni)
        VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, sector_id, first_name, last_name, dni, is_active`,
+       RETURNING id, sector_id, first_name, last_name, dni, is_active, dni_foto_frente, dni_foto_dorso`,
       [uuid(), sector_id, first_name, last_name ?? '', dniValue]
     );
     return reply.status(201).send(toDto(result.rows[0]));
@@ -118,7 +120,7 @@ export async function employeeRoutes(app) {
     values.push(id);
     const result = await db.query(
       `UPDATE employees SET ${fields.join(', ')}
-       WHERE id = $${idx} RETURNING id, sector_id, first_name, last_name, dni, is_active`,
+       WHERE id = $${idx} RETURNING id, sector_id, first_name, last_name, dni, is_active, dni_foto_frente, dni_foto_dorso`,
       values
     );
     if (!result.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
