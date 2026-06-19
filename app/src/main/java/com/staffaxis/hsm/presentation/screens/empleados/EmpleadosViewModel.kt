@@ -138,7 +138,7 @@ class EmpleadosViewModel @Inject constructor(
     private fun filtrarEmpleados(lista: List<Employee>, q: String): List<Employee> {
         if (q.isBlank()) return lista
         val lower = q.lowercase()
-        return lista.filter { it.nombre.lowercase().contains(lower) || it.dni?.contains(lower) == true }
+        return lista.filter { it.apellido.lowercase().contains(lower) }
     }
 
     fun abrirDialogoHoras(empleado: Employee) {

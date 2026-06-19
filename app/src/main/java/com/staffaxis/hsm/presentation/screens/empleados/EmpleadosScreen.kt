@@ -620,7 +620,7 @@ private fun NuevoEmpleadoDialog(
                         label = { Text("Nombre *") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrect = false),
                         isError = uiState.nuevoNombre.isBlank()
                     )
                     OutlinedTextField(
@@ -629,7 +629,7 @@ private fun NuevoEmpleadoDialog(
                         label = { Text("Apellido *") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrect = false),
                         isError = uiState.nuevoApellido.isBlank()
                     )
                     Text("Sector: ${uiState.sectorName}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF888888))

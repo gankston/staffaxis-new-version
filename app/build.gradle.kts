@@ -15,8 +15,8 @@ android {
         applicationId = "com.registro.empleados"
         minSdk = 26
         targetSdk = 35
-        versionCode = 49
-        versionName = "3.0.9"
+        versionCode = 50
+        versionName = "3.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -26,7 +26,7 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("${System.getenv("USERPROFILE")}\\Desktop\\staffaxis-release.keystore")
+            storeFile = file("${System.getenv("USERPROFILE")}\\Desktop\\Versions Staffaxis\\staffaxis-release.keystore")
             storePassword = "staffaxis123"
             keyAlias = "staffaxis"
             keyPassword = "staffaxis123"
