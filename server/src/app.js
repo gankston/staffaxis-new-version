@@ -13,7 +13,23 @@ import { adminRoutes }      from './routes/admin.js';
 import { mcpRoutes }        from './routes/mcp.js';
 import { photoRoutes }      from './routes/photos.js';
 
-// Migraciones automáticas al arrancar
+// Espera a que la DB esté lista (la red interna de Railway puede tardar al arrancar).
+// Reintenta con paciencia en vez de crashear al primer timeout.
+async function waitForDb(retries = 15, delayMs = 3000) {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      await db.query('SELECT 1');
+      console.log('DB lista');
+      return true;
+    } catch (err) {
+      console.error(`DB no lista (intento ${i}/${retries}): ${err.message}`);
+      if (i < retries) await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  return false;
+}
+
+// Migraciones idempotentes. Si fallan, se loguea pero NO se mata el server.
 async function runMigrations() {
   await db.query(`
     ALTER TABLE sectors ADD COLUMN IF NOT EXISTS sector_group TEXT DEFAULT NULL;
@@ -27,7 +43,6 @@ async function runMigrations() {
 }
 
 const start = async () => {
-  await runMigrations();
   const app = Fastify({ logger: true });
 
   await app.register(cors, { origin: true });
@@ -43,11 +58,25 @@ const start = async () => {
 
   app.get('/health', async () => ({ ok: true }));
 
+  // El server arranca SIEMPRE, aunque la DB tarde — así no entra en crash loop.
   const port = parseInt(process.env.PORT ?? '3000', 10);
   await app.listen({ port, host: '0.0.0.0' });
+
+  // Migraciones después de levantar, esperando a la DB sin bloquear el arranque.
+  const ready = await waitForDb();
+  if (ready) {
+    try {
+      await runMigrations();
+      console.log('Migraciones aplicadas');
+    } catch (err) {
+      console.error('Migraciones fallaron (server sigue arriba):', err.message);
+    }
+  } else {
+    console.error('DB no respondió tras los reintentos; el server queda arriba igual');
+  }
 };
 
 start().catch(err => {
-  console.error(err);
+  console.error('Fallo al arrancar el server:', err);
   process.exit(1);
 });
