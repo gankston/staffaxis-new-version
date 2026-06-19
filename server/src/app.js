@@ -34,6 +34,8 @@ async function runMigrations() {
   await db.query(`
     ALTER TABLE sectors ADD COLUMN IF NOT EXISTS sector_group TEXT DEFAULT NULL;
   `);
+  // Las fotos de DNI se guardan en el Railway Volume (archivos en disco).
+  // En la DB solo queda el nombre del archivo de cada cara.
   await db.query(`
     ALTER TABLE employees ADD COLUMN IF NOT EXISTS dni_foto_frente TEXT DEFAULT NULL;
   `);
