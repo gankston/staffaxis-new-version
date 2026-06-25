@@ -4,13 +4,10 @@ import com.staffaxis.hsm.data.remote.dto.CreateEmployeeRequestDto
 import com.staffaxis.hsm.data.remote.dto.EmployeeDto
 import com.staffaxis.hsm.data.remote.dto.EmployeesResponseDto
 import com.staffaxis.hsm.data.remote.dto.UpdateEmployeeRequestDto
+import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.Response
-import retrofit2.http.Body
-import retrofit2.http.GET
-import retrofit2.http.POST
-import retrofit2.http.PUT
-import retrofit2.http.Path
-import retrofit2.http.Query
+import retrofit2.http.*
 
 interface EmployeeApiService {
     @GET("api/employees")
@@ -24,4 +21,24 @@ interface EmployeeApiService {
         @Path("id") id: String,
         @Body request: UpdateEmployeeRequestDto
     ): Response<EmployeeDto>
+
+    @Multipart
+    @POST("api/employees/{id}/foto/{lado}")
+    suspend fun uploadFoto(
+        @Path("id") id: String,
+        @Path("lado") lado: String,
+        @Part foto: MultipartBody.Part
+    ): Response<ResponseBody>
+
+    @DELETE("api/employees/{id}/foto/{lado}")
+    suspend fun deleteFoto(
+        @Path("id") id: String,
+        @Path("lado") lado: String
+    ): Response<ResponseBody>
+
+    @GET("api/employees/{id}/foto/{lado}")
+    suspend fun getFoto(
+        @Path("id") id: String,
+        @Path("lado") lado: String
+    ): Response<ResponseBody>
 }

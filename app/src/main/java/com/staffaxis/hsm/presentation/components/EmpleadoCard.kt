@@ -2,6 +2,7 @@ package com.staffaxis.hsm.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Schedule
@@ -10,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +39,17 @@ fun EmpleadoCard(
     val clockTint = if (estaAusenteHoy || tieneHorasHoy) Color.White else TurquesaBrillante
     val editTint  = if (estaAusenteHoy || tieneHorasHoy) Color.White else Purple80
 
+    val fotoColor = when {
+        empleado.tieneFotoFrente && empleado.tieneFotoDorso -> Color(0xFF4CAF50)
+        empleado.tieneFotoFrente || empleado.tieneFotoDorso -> Color(0xFFFF9800)
+        else -> Color(0xFFEF5350)
+    }
+    val fotoLabel = when {
+        empleado.tieneFotoFrente && empleado.tieneFotoDorso -> "DNI completo"
+        empleado.tieneFotoFrente || empleado.tieneFotoDorso -> "DNI parcial"
+        else -> "Sin foto DNI"
+    }
+
     Card(
         modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
         elevation = CardDefaults.cardElevation(0.dp),
@@ -56,9 +69,9 @@ fun EmpleadoCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    val displayNombre = if (empleado.apellido.isNotBlank()) {
-                        val primerNombre = empleado.nombre.removeSuffix(" ${empleado.apellido}").trim()
-                        "${empleado.apellido} $primerNombre".trim()
+                    val displayNombre = if (empleado.apellido.isNotBlank() && empleado.nombre.length >= empleado.apellido.length) {
+                        val nombrePropio = empleado.nombre.dropLast(empleado.apellido.length).trim()
+                        "${empleado.apellido} $nombrePropio".trim()
                     } else empleado.nombre
                     Text(
                         text = displayNombre,
@@ -71,6 +84,24 @@ fun EmpleadoCard(
                     Spacer(Modifier.height(6.dp))
                     Text("DNI: ${empleado.dni ?: "Sin datos"}", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.8f))
                     Text("Sector: ${empleado.sectorName}", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.8f))
+
+                    // Badge de foto DNI
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(fotoColor)
+                        )
+                        Text(
+                            text = fotoLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = fotoColor.copy(alpha = 0.9f),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
                     if (!empleado.observacion.isNullOrBlank()) {
                         Spacer(Modifier.height(2.dp))
                         Text("Obs: ${empleado.observacion}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.9f), fontWeight = FontWeight.Medium)

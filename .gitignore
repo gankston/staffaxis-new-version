@@ -19,3 +19,7 @@ server/.env
 
 # Schemas de Room (generados, se pueden ignorar o incluir — los incluimos)
 # app/schemas/
+node_modules/
+migrate.js
+package.json
+package-lock.json

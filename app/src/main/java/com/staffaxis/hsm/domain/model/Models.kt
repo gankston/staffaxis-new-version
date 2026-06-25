@@ -18,7 +18,9 @@ data class Employee(
     val sectorName: String,
     val activo: Boolean = true,
     val observacion: String? = null,
-    val fechaIngreso: String = ""
+    val fechaIngreso: String = "",
+    val tieneFotoFrente: Boolean = false,
+    val tieneFotoDorso: Boolean = false,
 )
 
 data class OutboxSubmission(

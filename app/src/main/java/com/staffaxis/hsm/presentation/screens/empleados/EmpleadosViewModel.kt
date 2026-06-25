@@ -1,5 +1,8 @@
 package com.staffaxis.hsm.presentation.screens.empleados
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.staffaxis.hsm.data.local.preferences.AppPreferences
@@ -60,6 +63,14 @@ data class EmpleadosUiState(
     val pedirConfirmReactivar: Boolean = false,
     val empleadoInactivoId: String = "",
     val empleadoInactivoNombre: String = "",
+    // Fotos en dialog nuevo
+    val nuevaFrenteUri: Uri? = null,
+    val nuevaDorsoUri: Uri? = null,
+    // Fotos en dialog editar
+    val editFrenteLoading: Boolean = false,
+    val editDorsoLoading: Boolean = false,
+    val verFotoLado: String? = null,
+    val verFotoLoading: Boolean = false,
     // Mensajes
     val mensajeExito: String? = null,
     val mensajeError: String? = null,
@@ -79,6 +90,9 @@ class EmpleadosViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(EmpleadosUiState())
     val uiState: StateFlow<EmpleadosUiState> = _uiState.asStateFlow()
+
+    private val _verFotoBitmap = MutableStateFlow<Bitmap?>(null)
+    val verFotoBitmap: StateFlow<Bitmap?> = _verFotoBitmap.asStateFlow()
 
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -179,7 +193,6 @@ class EmpleadosViewModel @Inject constructor(
             val result = submissionRepository.saveHoras(empleado.id, sectorId, fecha, minutesWorked, state.observaciones.ifBlank { null })
             when (result) {
                 is AppResult.Success -> {
-                    val sentIds = submissionRepository.getSubmissionsForDate(fecha, sectorId).map { it.employeeId }.toSet()
                     _uiState.update { it.copy(mostrarDialogoHoras = false, empleadoSeleccionado = null, empleadosConHorasHoy = it.empleadosConHorasHoy + empleado.id, mensajeExito = "Horas guardadas correctamente") }
                 }
                 is AppResult.Error -> _uiState.update { it.copy(mostrarDialogoHoras = false, empleadoSeleccionado = null, mensajeError = result.message) }
@@ -199,17 +212,30 @@ class EmpleadosViewModel @Inject constructor(
                 editApellido = apellido,
                 editDni = empleado.dni ?: "",
                 editObservacion = empleado.observacion ?: "",
-                registrosParaEditar = emptyList()
+                registrosParaEditar = emptyList(),
+                editFrenteLoading = false,
+                editDorsoLoading = false,
+                verFotoLado = null,
+                verFotoLoading = false,
             )
         }
+        _verFotoBitmap.value = null
         viewModelScope.launch {
             val registros = submissionRepository.getSubmissionsForEmployee(empleado.id)
             _uiState.update { it.copy(registrosParaEditar = registros) }
         }
     }
 
-    fun cerrarDialogoEditar() = _uiState.update {
-        it.copy(mostrarDialogoEditar = false, empleadoParaEditar = null, registrosParaEditar = emptyList(), registroEnEdicion = null)
+    fun cerrarDialogoEditar() {
+        _verFotoBitmap.value = null
+        _uiState.update {
+            it.copy(
+                mostrarDialogoEditar = false, empleadoParaEditar = null,
+                registrosParaEditar = emptyList(), registroEnEdicion = null,
+                editFrenteLoading = false, editDorsoLoading = false,
+                verFotoLado = null, verFotoLoading = false,
+            )
+        }
     }
 
     fun abrirEdicionRegistro(registro: OutboxSubmission) {
@@ -241,11 +267,11 @@ class EmpleadosViewModel @Inject constructor(
         }
         viewModelScope.launch {
             submissionRepository.updateHoras(registro.id, nuevasHoras)
-            // Refrescar la lista de registros
             val registros = submissionRepository.getSubmissionsForEmployee(registro.employeeId)
             _uiState.update { it.copy(registroEnEdicion = null, registrosParaEditar = registros, mensajeExito = "Registro actualizado") }
         }
     }
+
     fun onEditNombreChanged(v: String) = _uiState.update { it.copy(editNombre = v) }
     fun onEditApellidoChanged(v: String) = _uiState.update { it.copy(editApellido = v) }
     fun onEditDniChanged(v: String) = _uiState.update { it.copy(editDni = v) }
@@ -273,20 +299,39 @@ class EmpleadosViewModel @Inject constructor(
         }
     }
 
-    fun abrirDialogoNuevo() = _uiState.update { it.copy(mostrarDialogoNuevo = true, nuevoDni = "", nuevoNombre = "", nuevoApellido = "", pedirConfirmTransferencia = false) }
-    fun cerrarDialogoNuevo() = _uiState.update { it.copy(mostrarDialogoNuevo = false, pedirConfirmTransferencia = false) }
+    fun abrirDialogoNuevo() = _uiState.update {
+        it.copy(mostrarDialogoNuevo = true, nuevoDni = "", nuevoNombre = "", nuevoApellido = "",
+                pedirConfirmTransferencia = false, nuevaFrenteUri = null, nuevaDorsoUri = null)
+    }
+
+    fun cerrarDialogoNuevo() = _uiState.update {
+        it.copy(mostrarDialogoNuevo = false, pedirConfirmTransferencia = false,
+                nuevaFrenteUri = null, nuevaDorsoUri = null)
+    }
+
     fun onNuevoDniChanged(v: String) = _uiState.update { it.copy(nuevoDni = v) }
-    fun onNuevoNombreChanged(v: String) = _uiState.update { it.copy(nuevoNombre = v) }
-    fun onNuevoApellidoChanged(v: String) = _uiState.update { it.copy(nuevoApellido = v) }
+    fun onNuevoNombreChanged(v: String) = _uiState.update { it.copy(nuevoNombre = v.replace("\n", "")) }
+    fun onNuevoApellidoChanged(v: String) = _uiState.update { it.copy(nuevoApellido = v.replace("\n", "")) }
+    fun onNuevaFrenteUri(uri: Uri) = _uiState.update { it.copy(nuevaFrenteUri = uri) }
+    fun onNuevaDorsoUri(uri: Uri) = _uiState.update { it.copy(nuevaDorsoUri = uri) }
+    fun onBorrarNuevaFrente() = _uiState.update { it.copy(nuevaFrenteUri = null) }
+    fun onBorrarNuevaDorso() = _uiState.update { it.copy(nuevaDorsoUri = null) }
 
     fun crearEmpleado() {
         val state = _uiState.value
-        val nombreCompleto = "${state.nuevoNombre.trim()} ${state.nuevoApellido.trim()}".trim()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            when (val result = employeeRepository.createEmployee(nombreCompleto, state.nuevoDni, state.sectorId, state.sectorName, forceTransfer = false)) {
-                is AppResult.Success -> _uiState.update {
-                    it.copy(isLoading = false, mostrarDialogoNuevo = false, mensajeExito = "Empleado creado: ${result.data.nombre}")
+            when (val result = employeeRepository.createEmployee(state.nuevoNombre.trim(), state.nuevoApellido.trim(), state.nuevoDni, state.sectorId, state.sectorName, forceTransfer = false)) {
+                is AppResult.Success -> {
+                    val empId = result.data.id
+                    // Subir fotos capturadas (best effort, no bloquean la creación)
+                    state.nuevaFrenteUri?.let { employeeRepository.uploadFoto(empId, "frente", it) }
+                    state.nuevaDorsoUri?.let { employeeRepository.uploadFoto(empId, "dorso", it) }
+                    _uiState.update {
+                        it.copy(isLoading = false, mostrarDialogoNuevo = false,
+                                nuevaFrenteUri = null, nuevaDorsoUri = null,
+                                mensajeExito = "Empleado creado: ${result.data.nombre}")
+                    }
                 }
                 is AppResult.Error -> when (result.message) {
                     "EXISTS_SAME_SECTOR" -> _uiState.update {
@@ -298,12 +343,11 @@ class EmpleadosViewModel @Inject constructor(
                     else -> if (result.message.startsWith("EXISTS_INACTIVE")) {
                         val parts = result.message.split(":", limit = 3)
                         _uiState.update {
-                            it.copy(isLoading = false, mostrarDialogoNuevo = true, pedirConfirmReactivar = true, empleadoInactivoId = parts.getOrElse(1) { "" }, empleadoInactivoNombre = parts.getOrElse(2) { "" })
+                            it.copy(isLoading = false, mostrarDialogoNuevo = true, pedirConfirmReactivar = true,
+                                    empleadoInactivoId = parts.getOrElse(1) { "" }, empleadoInactivoNombre = parts.getOrElse(2) { "" })
                         }
                     } else {
-                        _uiState.update {
-                            it.copy(isLoading = false, mostrarDialogoNuevo = false, mensajeError = result.message)
-                        }
+                        _uiState.update { it.copy(isLoading = false, mostrarDialogoNuevo = false, mensajeError = result.message) }
                     }
                 }
             }
@@ -312,12 +356,13 @@ class EmpleadosViewModel @Inject constructor(
 
     fun confirmarTransferencia() {
         val state = _uiState.value
-        val nombreCompleto = "${state.nuevoNombre.trim()} ${state.nuevoApellido.trim()}".trim()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            when (val result = employeeRepository.createEmployee(nombreCompleto, state.nuevoDni, state.sectorId, state.sectorName, forceTransfer = true)) {
+            when (val result = employeeRepository.createEmployee(state.nuevoNombre.trim(), state.nuevoApellido.trim(), state.nuevoDni, state.sectorId, state.sectorName, forceTransfer = true)) {
                 is AppResult.Success -> _uiState.update {
-                    it.copy(isLoading = false, mostrarDialogoNuevo = false, pedirConfirmTransferencia = false, mensajeExito = "Empleado transferido: ${result.data.nombre}")
+                    it.copy(isLoading = false, mostrarDialogoNuevo = false, pedirConfirmTransferencia = false,
+                            nuevaFrenteUri = null, nuevaDorsoUri = null,
+                            mensajeExito = "Empleado transferido: ${result.data.nombre}")
                 }
                 is AppResult.Error -> _uiState.update {
                     it.copy(isLoading = false, mostrarDialogoNuevo = false, pedirConfirmTransferencia = false, mensajeError = result.message)
@@ -334,7 +379,9 @@ class EmpleadosViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             when (employeeRepository.reactivateEmployee(state.empleadoInactivoId)) {
                 is AppResult.Success -> _uiState.update {
-                    it.copy(isLoading = false, mostrarDialogoNuevo = false, pedirConfirmReactivar = false, empleadoInactivoId = "", empleadoInactivoNombre = "", mensajeExito = "${state.empleadoInactivoNombre} vuelve a estar en la lista")
+                    it.copy(isLoading = false, mostrarDialogoNuevo = false, pedirConfirmReactivar = false,
+                            empleadoInactivoId = "", empleadoInactivoNombre = "",
+                            mensajeExito = "${state.empleadoInactivoNombre} vuelve a estar en la lista")
                 }
                 is AppResult.Error -> _uiState.update {
                     it.copy(isLoading = false, mostrarDialogoNuevo = false, pedirConfirmReactivar = false, mensajeError = "No se pudo reactivar el empleado")
@@ -344,6 +391,82 @@ class EmpleadosViewModel @Inject constructor(
     }
 
     fun cancelarReactivar() = _uiState.update { it.copy(pedirConfirmReactivar = false, empleadoInactivoId = "", empleadoInactivoNombre = "") }
+
+    // --- Fotos en dialog editar ---
+
+    fun subirFoto(lado: String, uri: Uri) {
+        val empId = _uiState.value.empleadoParaEditar?.id ?: return
+        viewModelScope.launch {
+            if (lado == "frente") _uiState.update { it.copy(editFrenteLoading = true) }
+            else _uiState.update { it.copy(editDorsoLoading = true) }
+
+            when (employeeRepository.uploadFoto(empId, lado, uri)) {
+                is AppResult.Success -> {
+                    val emp = _uiState.value.empleadoParaEditar
+                    val updated = if (lado == "frente") emp?.copy(tieneFotoFrente = true)
+                                  else emp?.copy(tieneFotoDorso = true)
+                    _uiState.update {
+                        it.copy(
+                            empleadoParaEditar = updated ?: it.empleadoParaEditar,
+                            editFrenteLoading = false, editDorsoLoading = false,
+                            mensajeExito = "Foto guardada"
+                        )
+                    }
+                }
+                is AppResult.Error -> _uiState.update {
+                    it.copy(editFrenteLoading = false, editDorsoLoading = false, mensajeError = "Error al subir la foto")
+                }
+            }
+        }
+    }
+
+    fun eliminarFoto(lado: String) {
+        val empId = _uiState.value.empleadoParaEditar?.id ?: return
+        viewModelScope.launch {
+            if (lado == "frente") _uiState.update { it.copy(editFrenteLoading = true) }
+            else _uiState.update { it.copy(editDorsoLoading = true) }
+
+            when (employeeRepository.deleteFoto(empId, lado)) {
+                is AppResult.Success -> {
+                    val emp = _uiState.value.empleadoParaEditar
+                    val updated = if (lado == "frente") emp?.copy(tieneFotoFrente = false)
+                                  else emp?.copy(tieneFotoDorso = false)
+                    _uiState.update {
+                        it.copy(
+                            empleadoParaEditar = updated ?: it.empleadoParaEditar,
+                            editFrenteLoading = false, editDorsoLoading = false,
+                            mensajeExito = "Foto eliminada"
+                        )
+                    }
+                }
+                is AppResult.Error -> _uiState.update {
+                    it.copy(editFrenteLoading = false, editDorsoLoading = false, mensajeError = "Error al eliminar la foto")
+                }
+            }
+        }
+    }
+
+    fun verFoto(lado: String) {
+        val empId = _uiState.value.empleadoParaEditar?.id ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(verFotoLoading = true, verFotoLado = lado) }
+            when (val result = employeeRepository.getFotoBytes(empId, lado)) {
+                is AppResult.Success -> {
+                    val bitmap = BitmapFactory.decodeByteArray(result.data, 0, result.data.size)
+                    _verFotoBitmap.value = bitmap
+                    _uiState.update { it.copy(verFotoLoading = false) }
+                }
+                is AppResult.Error -> {
+                    _uiState.update { it.copy(verFotoLoading = false, verFotoLado = null, mensajeError = "Error al cargar la foto") }
+                }
+            }
+        }
+    }
+
+    fun cerrarVerFoto() {
+        _verFotoBitmap.value = null
+        _uiState.update { it.copy(verFotoLado = null, verFotoLoading = false) }
+    }
 
     fun clearMensajeExito() = _uiState.update { it.copy(mensajeExito = null) }
     fun clearMensajeError() = _uiState.update { it.copy(mensajeError = null) }

@@ -1,11 +1,18 @@
 package com.staffaxis.hsm.presentation.screens.empleados
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -15,13 +22,20 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.staffaxis.hsm.presentation.components.ConfirmacionFlotante
 import com.staffaxis.hsm.presentation.components.EmpleadoCard
+import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -35,6 +49,7 @@ fun EmpleadosScreen(
     viewModel: EmpleadosViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val verFotoBitmap by viewModel.verFotoBitmap.collectAsState()
     var sectorDropdownExpanded by remember { mutableStateOf(false) }
     var sectorParaCambiar by remember { mutableStateOf<com.staffaxis.hsm.domain.model.Sector?>(null) }
 
@@ -190,7 +205,12 @@ fun EmpleadosScreen(
                 onHorasEdicionChanged = viewModel::onHorasEdicionChanged,
                 onHorasEdicionPorCosechaChanged = viewModel::onHorasEdicionPorCosechaChanged,
                 onHorasEdicionPorImporteChanged = viewModel::onHorasEdicionPorImporteChanged,
-                onGuardarEdicionRegistro = viewModel::guardarEdicionRegistro
+                onGuardarEdicionRegistro = viewModel::guardarEdicionRegistro,
+                onSubirFoto = viewModel::subirFoto,
+                onEliminarFoto = viewModel::eliminarFoto,
+                onVerFoto = viewModel::verFoto,
+                onCerrarVerFoto = viewModel::cerrarVerFoto,
+                verFotoBitmap = verFotoBitmap,
             )
         }
 
@@ -205,7 +225,11 @@ fun EmpleadosScreen(
                 onConfirmarTransferencia = viewModel::confirmarTransferencia,
                 onCancelarTransferencia = viewModel::cancelarTransferencia,
                 onConfirmarReactivar = viewModel::confirmarReactivar,
-                onCancelarReactivar = viewModel::cancelarReactivar
+                onCancelarReactivar = viewModel::cancelarReactivar,
+                onFrenteUri = viewModel::onNuevaFrenteUri,
+                onDorsoUri = viewModel::onNuevaDorsoUri,
+                onBorrarFrente = viewModel::onBorrarNuevaFrente,
+                onBorrarDorso = viewModel::onBorrarNuevaDorso,
             )
         }
 
@@ -227,6 +251,104 @@ fun EmpleadosScreen(
                 colorFondo = Color(0xFFD32F2F),
                 onDismiss = viewModel::clearMensajeError
             )
+        }
+    }
+}
+
+// --- Composable reutilizable para una fila de foto de DNI ---
+@Composable
+private fun FotoDniRow(
+    lado: String,
+    tieneFoto: Boolean,
+    loading: Boolean,
+    onFotoUri: (Uri) -> Unit,
+    onEliminar: () -> Unit,
+    onVer: (() -> Unit)? = null,
+) {
+    val context = LocalContext.current
+    var tempUri by remember(lado) { mutableStateOf<Uri?>(null) }
+    var pendingCam by remember(lado) { mutableStateOf(false) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempUri != null) onFotoUri(tempUri!!)
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && pendingCam) {
+            val file = File(context.cacheDir, "dni_${lado}_temp.jpg")
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            tempUri = uri
+            cameraLauncher.launch(uri)
+        }
+        pendingCam = false
+    }
+
+    fun launchCamera() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            val file = File(context.cacheDir, "dni_${lado}_temp.jpg")
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            tempUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            pendingCam = true
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    val ladoLabel = if (lado == "frente") "Frente" else "Dorso"
+    val fotoColor = if (tieneFoto) Color(0xFF4CAF50) else Color(0xFF888888)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(fotoColor)
+        )
+        Text(
+            text = ladoLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.width(48.dp)
+        )
+        Text(
+            text = if (tieneFoto) "Cargada" else "Sin foto",
+            style = MaterialTheme.typography.bodySmall,
+            color = fotoColor,
+            modifier = Modifier.weight(1f)
+        )
+        if (loading) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        } else {
+            // Ver (solo si tiene foto)
+            if (tieneFoto && onVer != null) {
+                IconButton(onClick = onVer, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Visibility, "Ver foto", tint = Color(0xFF26C6DA), modifier = Modifier.size(20.dp))
+                }
+            }
+            // Tomar / Cambiar
+            IconButton(onClick = { launchCamera() }, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    if (tieneFoto) Icons.Default.CameraAlt else Icons.Default.PhotoCamera,
+                    if (tieneFoto) "Cambiar foto" else "Tomar foto",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            // Eliminar (solo si tiene foto)
+            if (tieneFoto) {
+                IconButton(onClick = onEliminar, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Delete, "Eliminar foto", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                }
+            }
         }
     }
 }
@@ -258,14 +380,12 @@ private fun HorasDialog(
                     }
                 }
 
-                // DatePicker — calendario completo
                 var showDatePicker by remember { mutableStateOf(false) }
                 val datePickerState = rememberDatePickerState(
                     initialSelectedDateMillis = uiState.fechaSeleccionada
                         .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
                     selectableDates = object : SelectableDates {
                         override fun isSelectableDate(utcTimeMillis: Long): Boolean {
-                            // No permitir fechas futuras
                             val selectedDay = java.time.Instant.ofEpochMilli(utcTimeMillis)
                                 .atZone(java.time.ZoneOffset.UTC).toLocalDate()
                             return !selectedDay.isAfter(today)
@@ -389,12 +509,43 @@ private fun EditarEmpleadoDialog(
     onHorasEdicionChanged: (Int) -> Unit,
     onHorasEdicionPorCosechaChanged: (Boolean) -> Unit,
     onHorasEdicionPorImporteChanged: (String) -> Unit,
-    onGuardarEdicionRegistro: () -> Unit
+    onGuardarEdicionRegistro: () -> Unit,
+    onSubirFoto: (lado: String, uri: Uri) -> Unit,
+    onEliminarFoto: (lado: String) -> Unit,
+    onVerFoto: (lado: String) -> Unit,
+    onCerrarVerFoto: () -> Unit,
+    verFotoBitmap: android.graphics.Bitmap?,
 ) {
+    val empleado = uiState.empleadoParaEditar ?: return
     var confirmarOcultar by remember { mutableStateOf(false) }
     var expandido by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd/MM/yyyy") }
+
+    // Visor de foto
+    if (uiState.verFotoLado != null) {
+        AlertDialog(
+            onDismissRequest = onCerrarVerFoto,
+            title = { Text("Foto ${if (uiState.verFotoLado == "frente") "frente" else "dorso"} del DNI", fontWeight = FontWeight.Bold) },
+            text = {
+                Box(modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp), contentAlignment = Alignment.Center) {
+                    if (uiState.verFotoLoading) {
+                        CircularProgressIndicator()
+                    } else {
+                        verFotoBitmap?.let { bmp ->
+                            Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = "Foto DNI ${uiState.verFotoLado}",
+                                modifier = Modifier.fillMaxWidth(),
+                                contentScale = ContentScale.Fit
+                            )
+                        } ?: Text("No se pudo cargar la imagen", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = onCerrarVerFoto) { Text("Cerrar") } }
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -403,7 +554,7 @@ private fun EditarEmpleadoDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 480.dp)
+                    .heightIn(max = 520.dp)
                     .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -411,6 +562,26 @@ private fun EditarEmpleadoDialog(
                 OutlinedTextField(value = uiState.editApellido, onValueChange = onApellidoChanged, label = { Text("Apellido") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text))
                 OutlinedTextField(value = uiState.editDni, onValueChange = onDniChanged, label = { Text("DNI") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 OutlinedTextField(value = uiState.editObservacion, onValueChange = onObservacionChanged, label = { Text("Observación") }, modifier = Modifier.fillMaxWidth(), maxLines = 2)
+
+                // Fotos DNI
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Text("Fotos del DNI", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                FotoDniRow(
+                    lado = "frente",
+                    tieneFoto = empleado.tieneFotoFrente,
+                    loading = uiState.editFrenteLoading,
+                    onFotoUri = { uri -> onSubirFoto("frente", uri) },
+                    onEliminar = { onEliminarFoto("frente") },
+                    onVer = { onVerFoto("frente") },
+                )
+                FotoDniRow(
+                    lado = "dorso",
+                    tieneFoto = empleado.tieneFotoDorso,
+                    loading = uiState.editDorsoLoading,
+                    onFotoUri = { uri -> onSubirFoto("dorso", uri) },
+                    onEliminar = { onEliminarFoto("dorso") },
+                    onVer = { onVerFoto("dorso") },
+                )
 
                 // Historial de horas
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -481,7 +652,6 @@ private fun EditarEmpleadoDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
 
-    // Dialog de edición de un registro individual
     if (uiState.registroEnEdicion != null) {
         AlertDialog(
             onDismissRequest = onCerrarEdicionRegistro,
@@ -560,7 +730,11 @@ private fun NuevoEmpleadoDialog(
     onConfirmarTransferencia: () -> Unit,
     onCancelarTransferencia: () -> Unit,
     onConfirmarReactivar: () -> Unit,
-    onCancelarReactivar: () -> Unit
+    onCancelarReactivar: () -> Unit,
+    onFrenteUri: (Uri) -> Unit,
+    onDorsoUri: (Uri) -> Unit,
+    onBorrarFrente: () -> Unit,
+    onBorrarDorso: () -> Unit,
 ) {
     if (uiState.pedirConfirmReactivar) {
         AlertDialog(
@@ -600,18 +774,25 @@ private fun NuevoEmpleadoDialog(
             dismissButton = { TextButton(onClick = onCancelarTransferencia) { Text("Cancelar") } }
         )
     } else {
+        val scrollState = rememberScrollState()
         AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text("Agregar Empleado") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 520.dp)
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     OutlinedTextField(
                         value = uiState.nuevoDni,
                         onValueChange = onDniChanged,
                         label = { Text("DNI *") },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
+                        maxLines = 1,
                         isError = uiState.nuevoDni.isBlank()
                     )
                     OutlinedTextField(
@@ -619,7 +800,7 @@ private fun NuevoEmpleadoDialog(
                         onValueChange = onNombreChanged,
                         label = { Text("Nombre *") },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
+                        maxLines = 1,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrect = false),
                         isError = uiState.nuevoNombre.isBlank()
                     )
@@ -628,11 +809,33 @@ private fun NuevoEmpleadoDialog(
                         onValueChange = onApellidoChanged,
                         label = { Text("Apellido *") },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
+                        maxLines = 1,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrect = false),
                         isError = uiState.nuevoApellido.isBlank()
                     )
                     Text("Sector: ${uiState.sectorName}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF888888))
+
+                    // Fotos DNI opcionales
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Text("Fotos del DNI (opcional)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Fotografiá el DNI sobre una superficie plana con buena luz.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF888888)
+                    )
+
+                    FotoNuevoRow(
+                        lado = "frente",
+                        uri = uiState.nuevaFrenteUri,
+                        onUri = onFrenteUri,
+                        onBorrar = onBorrarFrente,
+                    )
+                    FotoNuevoRow(
+                        lado = "dorso",
+                        uri = uiState.nuevaDorsoUri,
+                        onUri = onDorsoUri,
+                        onBorrar = onBorrarDorso,
+                    )
                 }
             },
             confirmButton = {
@@ -649,5 +852,83 @@ private fun NuevoEmpleadoDialog(
             },
             dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
         )
+    }
+}
+
+@Composable
+private fun FotoNuevoRow(
+    lado: String,
+    uri: Uri?,
+    onUri: (Uri) -> Unit,
+    onBorrar: () -> Unit,
+) {
+    val context = LocalContext.current
+    var tempUri by remember(lado) { mutableStateOf<Uri?>(null) }
+    var pendingCam by remember(lado) { mutableStateOf(false) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempUri != null) onUri(tempUri!!)
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && pendingCam) {
+            val file = File(context.cacheDir, "dni_nuevo_${lado}_temp.jpg")
+            val newUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            tempUri = newUri
+            cameraLauncher.launch(newUri)
+        }
+        pendingCam = false
+    }
+
+    fun launchCamera() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            val file = File(context.cacheDir, "dni_nuevo_${lado}_temp.jpg")
+            val newUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            tempUri = newUri
+            cameraLauncher.launch(newUri)
+        } else {
+            pendingCam = true
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    val ladoLabel = if (lado == "frente") "Frente" else "Dorso"
+    val tomada = uri != null
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(if (tomada) Color(0xFF4CAF50) else Color(0xFF888888))
+        )
+        Text(
+            text = if (tomada) "$ladoLabel ✓" else ladoLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (tomada) Color(0xFF4CAF50) else Color.Unspecified,
+            modifier = Modifier.weight(1f)
+        )
+        OutlinedButton(
+            onClick = { launchCamera() },
+            modifier = Modifier.height(32.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+        ) {
+            Icon(Icons.Default.PhotoCamera, null, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(if (tomada) "Cambiar" else "Tomar", style = MaterialTheme.typography.labelSmall)
+        }
+        if (tomada) {
+            IconButton(onClick = onBorrar, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Close, "Quitar foto", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+            }
+        }
     }
 }

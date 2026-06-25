@@ -19,11 +19,14 @@ interface SectorRepository {
 interface EmployeeRepository {
     fun getEmployeesForSector(sectorId: String): Flow<List<Employee>>
     suspend fun syncEmployeesFromApi(sectorId: String, sectorName: String = ""): AppResult<List<Employee>>
-    suspend fun createEmployee(nombre: String, dni: String, sectorId: String, sectorName: String = "", forceTransfer: Boolean = false): AppResult<Employee>
+    suspend fun createEmployee(firstName: String, lastName: String, dni: String, sectorId: String, sectorName: String = "", forceTransfer: Boolean = false): AppResult<Employee>
     suspend fun hideEmployee(id: String): AppResult<Unit>
     suspend fun reactivateEmployee(id: String): AppResult<Unit>
     suspend fun updateEmployee(id: String, firstName: String, lastName: String, dni: String?, observacion: String?): AppResult<Unit>
     fun getTransfersForDate(sectorId: String, date: String): Flow<List<EmployeeTransfer>>
+    suspend fun uploadFoto(employeeId: String, lado: String, uri: android.net.Uri): AppResult<Unit>
+    suspend fun deleteFoto(employeeId: String, lado: String): AppResult<Unit>
+    suspend fun getFotoBytes(employeeId: String, lado: String): AppResult<ByteArray>
 }
 
 interface SubmissionRepository {

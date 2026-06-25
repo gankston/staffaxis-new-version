@@ -8,7 +8,9 @@ data class EmployeeDto(
     @SerializedName("first_name") val firstName: String,
     @SerializedName("last_name") val lastName: String = "",
     @SerializedName("dni") val dni: String? = null,
-    @SerializedName("is_active") val isActive: Boolean = true
+    @SerializedName("is_active") val isActive: Boolean = true,
+    @SerializedName("tiene_foto_frente") val tieneFotoFrente: Boolean = false,
+    @SerializedName("tiene_foto_dorso") val tieneFotoDorso: Boolean = false,
 )
 
 data class EmployeesResponseDto(

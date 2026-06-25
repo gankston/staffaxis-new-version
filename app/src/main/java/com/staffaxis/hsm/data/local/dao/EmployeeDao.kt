@@ -6,10 +6,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface EmployeeDao {
-    @Query("SELECT * FROM employees WHERE sectorId = :sectorId AND activo = 1 ORDER BY nombre ASC")
+    @Query("SELECT * FROM employees WHERE sectorId = :sectorId AND activo = 1 ORDER BY apellido ASC, nombre ASC")
     fun getBySector(sectorId: String): Flow<List<EmployeeEntity>>
 
-    @Query("SELECT * FROM employees WHERE sectorId = :sectorId AND activo = 1 ORDER BY nombre ASC")
+    @Query("SELECT * FROM employees WHERE sectorId = :sectorId AND activo = 1 ORDER BY apellido ASC, nombre ASC")
     suspend fun getBySectorOnce(sectorId: String): List<EmployeeEntity>
 
     @Query("SELECT * FROM employees WHERE id = :id")
@@ -35,4 +35,10 @@ interface EmployeeDao {
 
     @Query("DELETE FROM employees WHERE sectorId = :sectorId")
     suspend fun deleteBySector(sectorId: String)
+
+    @Query("UPDATE employees SET tieneFotoFrente = :tiene WHERE id = :id")
+    suspend fun updateFotoFrente(id: String, tiene: Boolean)
+
+    @Query("UPDATE employees SET tieneFotoDorso = :tiene WHERE id = :id")
+    suspend fun updateFotoDorso(id: String, tiene: Boolean)
 }
