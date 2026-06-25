@@ -106,13 +106,14 @@ export async function adminRoutes(app) {
   });
 
   app.put('/api/admin/sectors/:id', { preHandler: verifyAdmin }, async (req, reply) => {
-    const { name, tipo_carga, encargado } = req.body ?? {};
+    const { name, tipo_carga, encargado, sector_group } = req.body ?? {};
     const result = await db.query(
       `UPDATE sectors SET name = COALESCE($1, name),
                           tipo_carga = COALESCE($2, tipo_carga),
-                          encargado  = COALESCE($3, encargado)
-       WHERE id = $4 RETURNING *`,
-      [name ?? null, tipo_carga ?? null, encargado ?? null, req.params.id]
+                          encargado  = COALESCE($3, encargado),
+                          sector_group = CASE WHEN $4::text IS NOT NULL THEN $4 ELSE sector_group END
+       WHERE id = $5 RETURNING *`,
+      [name ?? null, tipo_carga ?? null, encargado ?? null, sector_group ?? null, req.params.id]
     );
     if (!result.rows[0]) return reply.status(404).send({ error: 'Sector no encontrado' });
     return reply.send(result.rows[0]);
