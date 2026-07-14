@@ -44,6 +44,8 @@ interface SubmissionRepository {
     suspend fun getAllActiveForDate(date: String, sectorId: String): List<OutboxSubmission>
     suspend fun migrateMinutesToHours()
     fun countPending(): Flow<Int>
+    suspend fun getSubmissionsForSectorPeriod(sectorId: String, startDate: String, endDate: String): List<OutboxSubmission>
+    suspend fun fetchReport(sectorId: String, startDate: String, endDate: String): List<OutboxSubmission>
 }
 
 interface AbsenceRepository {

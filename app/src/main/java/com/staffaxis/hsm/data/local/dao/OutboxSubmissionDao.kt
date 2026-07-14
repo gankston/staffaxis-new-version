@@ -48,6 +48,9 @@ interface OutboxSubmissionDao {
     @Query("UPDATE outbox_submissions SET minutesWorked = :minutesWorked, status = 'pending', attempts = 0 WHERE id = :id")
     suspend fun updateMinutesWorked(id: String, minutesWorked: String?)
 
+    @Query("SELECT * FROM outbox_submissions WHERE sectorId = :sectorId AND date >= :startDate AND date <= :endDate AND status != 'failed_permanent' ORDER BY date ASC")
+    suspend fun getForSectorBetween(sectorId: String, startDate: String, endDate: String): List<OutboxSubmissionEntity>
+
     // Convierte registros en minutos (>16 y divisible por 60) a horas
     @Query("""
         UPDATE outbox_submissions

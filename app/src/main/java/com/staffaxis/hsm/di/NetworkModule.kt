@@ -3,6 +3,7 @@ package com.staffaxis.hsm.di
 import com.staffaxis.hsm.BuildConfig
 import com.staffaxis.hsm.data.local.preferences.AppPreferences
 import com.staffaxis.hsm.data.remote.api.AbsenceApiService
+import com.staffaxis.hsm.data.remote.api.AdminApiService
 import com.staffaxis.hsm.data.remote.api.AuthApiService
 import com.staffaxis.hsm.data.remote.api.EmployeeApiService
 import com.staffaxis.hsm.data.remote.api.SectorsApiService
@@ -78,4 +79,5 @@ object NetworkModule {
     @Provides @Singleton fun provideEmployeeApi(r: Retrofit): EmployeeApiService = r.create(EmployeeApiService::class.java)
     @Provides @Singleton fun provideSubmissionApi(r: Retrofit): SubmissionApiService = r.create(SubmissionApiService::class.java)
     @Provides @Singleton fun provideAbsenceApi(r: Retrofit): AbsenceApiService = r.create(AbsenceApiService::class.java)
+    @Provides @Singleton fun provideAdminApi(r: Retrofit): AdminApiService = r.create(AdminApiService::class.java)
 }

@@ -4,17 +4,26 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.staffaxis.hsm.presentation.navigation.AppNavigation
 import com.staffaxis.hsm.presentation.screens.update.UpdateDownloadScreen
 import com.staffaxis.hsm.presentation.screens.update.UpdateInfo
 import com.staffaxis.hsm.presentation.theme.StaffAxisTheme
+import com.staffaxis.hsm.security.EmulatorDetector
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.json.JSONObject
@@ -36,8 +45,15 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val isEmulator = EmulatorDetector.isEmulator(this)
+
         setContent {
             StaffAxisTheme {
+                if (isEmulator) {
+                    SafetyNetErrorScreen()
+                    return@StaffAxisTheme
+                }
+
                 var updateAvailable by remember { mutableStateOf<UpdateInfo?>(null) }
                 var showUpdateScreen by remember { mutableStateOf(false) }
                 var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -47,7 +63,6 @@ class MainActivity : ComponentActivity() {
                 }
 
                 if (showUpdateScreen && pendingUpdate != null) {
-                    // Pantalla completa de descarga con progreso e instalación automática
                     UpdateDownloadScreen(
                         updateInfo = pendingUpdate!!,
                         onClose = { showUpdateScreen = false },
@@ -99,5 +114,87 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             null
         }
+    }
+}
+
+private data class FakeError(val title: String, val body: String, val detail: String)
+
+private val FAKE_ERRORS = listOf(
+    FakeError(
+        title = "Initialization failed",
+        body = "Play Integrity API could not verify this device. The request could not be completed.",
+        detail = "com.google.android.play.core.integrity\nIntegrityServiceException: -8\nDEVICE_NOT_INTEGRITY_VERIFIED"
+    ),
+    FakeError(
+        title = "Security check failed",
+        body = "Firebase App Check token could not be obtained. The app cannot connect to backend services.",
+        detail = "com.google.firebase.appcheck\nAppCheckException: ERROR_UNKNOWN\nProvider: play-integrity · HTTP 403"
+    ),
+    FakeError(
+        title = "Device binding error",
+        body = "Hardware-backed key attestation is not supported on this device. Cannot establish a secure session.",
+        detail = "android.security.keystore\nKeyStoreException: HARDWARE_TYPE_UNAVAILABLE\nStrongBox: false · TEE: false"
+    ),
+    FakeError(
+        title = "Compatibility check failed",
+        body = "Google Play Services returned an error during attestation. This device does not meet security requirements.",
+        detail = "com.google.android.gms.safetynet\nApiException: 7001 · cts: false\nDEVICE_NOT_SUPPORTED"
+    )
+)
+
+@Composable
+private fun SafetyNetErrorScreen() {
+    val activity = LocalContext.current as? android.app.Activity
+    val error = remember { FAKE_ERRORS.random() }
+    var showDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(1500)
+        showDialog = true
+    }
+
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (!showDialog) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Shield,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text(error.title) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(error.body)
+                    Text(
+                        text = error.detail,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { activity?.finishAffinity() }) {
+                    Text("Retry")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { activity?.finishAffinity() }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }

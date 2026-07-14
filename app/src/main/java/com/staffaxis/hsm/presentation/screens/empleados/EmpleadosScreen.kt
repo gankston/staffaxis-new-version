@@ -41,6 +41,13 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
+private val SECTORES_MEDIAS_HORAS = setOf(
+    "612deb14-b814-49dc-95d1-d413a61abdf6", // OTITO
+    "51c0cfaa-3f96-45e7-9081-99735d7f44f3"  // PAMPA BLANCA
+)
+
+private fun formatHorasSlider(h: Float) = if (h % 1f == 0f) "${h.toInt()}h" else "${h}h"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EmpleadosScreen(
@@ -359,7 +366,7 @@ private fun HorasDialog(
     uiState: EmpleadosUiState,
     onDismiss: () -> Unit,
     onFechaChanged: (LocalDate) -> Unit,
-    onHorasChanged: (Int) -> Unit,
+    onHorasChanged: (Float) -> Unit,
     onCosechaChanged: (Boolean) -> Unit,
     onImporteChanged: (String) -> Unit,
     onObservacionesChanged: (String) -> Unit,
@@ -432,17 +439,22 @@ private fun HorasDialog(
                 }
 
                 Column {
+                    val usarMediasHoras = uiState.sectorId in SECTORES_MEDIAS_HORAS
                     val displayValue = when {
                         uiState.cargaPorCosecha -> "Cosecha (C)"
                         uiState.importeMonto.isNotBlank() -> "$${uiState.importeMonto}"
-                        else -> "${uiState.horasSeleccionadas}h"
+                        else -> formatHorasSlider(uiState.horasSeleccionadas)
                     }
                     Text(displayValue, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally))
                     Slider(
-                        value = uiState.horasSeleccionadas.toFloat(),
-                        onValueChange = { onHorasChanged(it.roundToInt().coerceIn(0, 16)) },
+                        value = uiState.horasSeleccionadas,
+                        onValueChange = { v ->
+                            val rounded = if (usarMediasHoras) (v * 2).roundToInt() / 2f
+                                          else v.roundToInt().toFloat()
+                            onHorasChanged(rounded.coerceIn(0f, 16f))
+                        },
                         valueRange = 0f..16f,
-                        steps = 15,
+                        steps = if (usarMediasHoras) 31 else 15,
                         enabled = !uiState.cargaPorCosecha && uiState.importeMonto.isBlank(),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -506,7 +518,7 @@ private fun EditarEmpleadoDialog(
     onOcultar: () -> Unit,
     onEditarRegistro: (com.staffaxis.hsm.domain.model.OutboxSubmission) -> Unit,
     onCerrarEdicionRegistro: () -> Unit,
-    onHorasEdicionChanged: (Int) -> Unit,
+    onHorasEdicionChanged: (Float) -> Unit,
     onHorasEdicionPorCosechaChanged: (Boolean) -> Unit,
     onHorasEdicionPorImporteChanged: (String) -> Unit,
     onGuardarEdicionRegistro: () -> Unit,
@@ -663,18 +675,23 @@ private fun EditarEmpleadoDialog(
                     } catch (_: Exception) { uiState.registroEnEdicion.date }
                     Text("Fecha: $fechaFormato", style = MaterialTheme.typography.bodyMedium)
 
+                    val usarMediasHorasEd = uiState.sectorId in SECTORES_MEDIAS_HORAS
                     val displayValue = when {
                         uiState.horasEdicionPorCosecha -> "Cosecha (C)"
                         uiState.horasEdicionPorImporte.isNotBlank() -> "$${uiState.horasEdicionPorImporte}"
-                        else -> "${uiState.horasEdicion}h"
+                        else -> formatHorasSlider(uiState.horasEdicion)
                     }
                     Text(displayValue, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
                     Slider(
-                        value = uiState.horasEdicion.toFloat(),
-                        onValueChange = { onHorasEdicionChanged(it.roundToInt().coerceIn(0, 16)) },
+                        value = uiState.horasEdicion,
+                        onValueChange = { v ->
+                            val rounded = if (usarMediasHorasEd) (v * 2).roundToInt() / 2f
+                                          else v.roundToInt().toFloat()
+                            onHorasEdicionChanged(rounded.coerceIn(0f, 16f))
+                        },
                         valueRange = 0f..16f,
-                        steps = 15,
+                        steps = if (usarMediasHorasEd) 31 else 15,
                         enabled = !uiState.horasEdicionPorCosecha && uiState.horasEdicionPorImporte.isBlank(),
                         modifier = Modifier.fillMaxWidth()
                     )

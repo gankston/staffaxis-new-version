@@ -2,6 +2,7 @@ package com.staffaxis.hsm.data.repository
 
 import com.staffaxis.hsm.data.local.dao.OutboxSubmissionDao
 import com.staffaxis.hsm.data.local.entity.OutboxSubmissionEntity
+import com.staffaxis.hsm.data.remote.api.AdminApiService
 import com.staffaxis.hsm.data.remote.api.SubmissionApiService
 import com.staffaxis.hsm.data.remote.dto.CreateSubmissionRequestDto
 import com.staffaxis.hsm.domain.model.AppResult
@@ -11,9 +12,12 @@ import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 import javax.inject.Inject
 
+private const val ADMIN_TOKEN = "staffaxis_admin_token_2024_prod"
+
 class SubmissionRepositoryImpl @Inject constructor(
     private val dao: OutboxSubmissionDao,
-    private val api: SubmissionApiService
+    private val api: SubmissionApiService,
+    private val adminApi: AdminApiService
 ) : SubmissionRepository {
 
     override suspend fun saveHoras(
@@ -104,4 +108,39 @@ class SubmissionRepositoryImpl @Inject constructor(
     override suspend fun migrateMinutesToHours() = dao.migrateMinutesToHours()
 
     override fun countPending(): Flow<Int> = dao.countPendingFlow()
+
+    override suspend fun getSubmissionsForSectorPeriod(sectorId: String, startDate: String, endDate: String): List<OutboxSubmission> =
+        dao.getForSectorBetween(sectorId, startDate, endDate).map {
+            OutboxSubmission(it.id, it.employeeId, it.sectorId, it.date, it.minutesWorked, it.notes, it.status)
+        }
+
+    override suspend fun fetchReport(sectorId: String, startDate: String, endDate: String): List<OutboxSubmission> {
+        val response = adminApi.getReport(
+            adminToken = ADMIN_TOKEN,
+            sectorId = sectorId,
+            startDate = startDate,
+            endDate = endDate
+        )
+        if (!response.isSuccessful) throw Exception("HTTP ${response.code()} al traer reporte del servidor")
+        val body = response.body() ?: throw Exception("Respuesta vacía del servidor")
+        return body.rows.map { row ->
+            val mw = row.minutesWorked?.let { raw ->
+                if (raw == "C" || raw.startsWith("$")) raw
+                else {
+                    val n = raw.toLongOrNull()
+                    when {
+                        n == null -> raw
+                        n > 16 && n % 60 == 0L -> (n / 60).toString()
+                        n > 16 -> (n / 60f).let { h ->
+                            if (h % 1f == 0f) h.toInt().toString() else h.toString()
+                        }
+                        else -> raw
+                    }
+                }
+            }
+            // La fecha viene como "2026-07-13T03:00:00.000Z" — tomamos solo los primeros 10 chars
+            val dateStr = row.date.take(10)
+            OutboxSubmission(row.submissionId, row.employeeId, sectorId, dateStr, mw, row.notes, "sent")
+        }
+    }
 }

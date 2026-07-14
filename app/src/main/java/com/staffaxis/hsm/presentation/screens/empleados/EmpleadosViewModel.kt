@@ -37,7 +37,7 @@ data class EmpleadosUiState(
     val mostrarDialogoHoras: Boolean = false,
     val empleadoSeleccionado: Employee? = null,
     val fechaSeleccionada: LocalDate = LocalDate.now(),
-    val horasSeleccionadas: Int = 8,
+    val horasSeleccionadas: Float = 8f,
     val cargaPorCosecha: Boolean = false,
     val importeMonto: String = "",
     val observaciones: String = "",
@@ -51,7 +51,7 @@ data class EmpleadosUiState(
     val registrosParaEditar: List<OutboxSubmission> = emptyList(),
     // Edición de un registro de horas
     val registroEnEdicion: OutboxSubmission? = null,
-    val horasEdicion: Int = 8,
+    val horasEdicion: Float = 8f,
     val horasEdicionPorCosecha: Boolean = false,
     val horasEdicionPorImporte: String = "",
     // Dialog nuevo empleado
@@ -161,7 +161,7 @@ class EmpleadosViewModel @Inject constructor(
                 mostrarDialogoHoras = true,
                 empleadoSeleccionado = empleado,
                 fechaSeleccionada = LocalDate.now(),
-                horasSeleccionadas = 8,
+                horasSeleccionadas = 8f,
                 cargaPorCosecha = it.tipoCarga == "cosecha",
                 importeMonto = "",
                 observaciones = ""
@@ -172,7 +172,7 @@ class EmpleadosViewModel @Inject constructor(
     fun cerrarDialogoHoras() = _uiState.update { it.copy(mostrarDialogoHoras = false, empleadoSeleccionado = null) }
 
     fun onFechaChanged(fecha: LocalDate) = _uiState.update { it.copy(fechaSeleccionada = fecha) }
-    fun onHorasChanged(h: Int) = _uiState.update { it.copy(horasSeleccionadas = h) }
+    fun onHorasChanged(h: Float) = _uiState.update { it.copy(horasSeleccionadas = h) }
     fun onCosechaChanged(v: Boolean) = _uiState.update { it.copy(cargaPorCosecha = v) }
     fun onImporteChanged(v: String) = _uiState.update { it.copy(importeMonto = v) }
     fun onObservacionesChanged(v: String) = _uiState.update { it.copy(observaciones = v) }
@@ -186,7 +186,7 @@ class EmpleadosViewModel @Inject constructor(
         val minutesWorked: String? = when {
             state.cargaPorCosecha -> "C"
             state.importeMonto.isNotBlank() -> "\$${state.importeMonto}"
-            else -> state.horasSeleccionadas.toString()
+            else -> formatHorasValue(state.horasSeleccionadas)
         }
 
         viewModelScope.launch {
@@ -239,13 +239,13 @@ class EmpleadosViewModel @Inject constructor(
     }
 
     fun abrirEdicionRegistro(registro: OutboxSubmission) {
-        val horas = registro.minutesWorked?.toIntOrNull() ?: 8
+        val horas = registro.minutesWorked?.toFloatOrNull() ?: 8f
         val esCosecha = registro.minutesWorked == "C"
         val esImporte = registro.minutesWorked?.startsWith("$") == true
         _uiState.update {
             it.copy(
                 registroEnEdicion = registro,
-                horasEdicion = if (esCosecha || esImporte) 8 else horas,
+                horasEdicion = if (esCosecha || esImporte) 8f else horas,
                 horasEdicionPorCosecha = esCosecha,
                 horasEdicionPorImporte = if (esImporte) registro.minutesWorked!!.removePrefix("$") else ""
             )
@@ -253,7 +253,7 @@ class EmpleadosViewModel @Inject constructor(
     }
 
     fun cerrarEdicionRegistro() = _uiState.update { it.copy(registroEnEdicion = null) }
-    fun onHorasEdicionChanged(h: Int) = _uiState.update { it.copy(horasEdicion = h) }
+    fun onHorasEdicionChanged(h: Float) = _uiState.update { it.copy(horasEdicion = h) }
     fun onHorasEdicionPorCosechaChanged(v: Boolean) = _uiState.update { it.copy(horasEdicionPorCosecha = v, horasEdicionPorImporte = "") }
     fun onHorasEdicionPorImporteChanged(v: String) = _uiState.update { it.copy(horasEdicionPorImporte = v) }
 
@@ -263,7 +263,7 @@ class EmpleadosViewModel @Inject constructor(
         val nuevasHoras: String? = when {
             state.horasEdicionPorCosecha -> "C"
             state.horasEdicionPorImporte.isNotBlank() -> "$${state.horasEdicionPorImporte}"
-            else -> state.horasEdicion.toString()
+            else -> formatHorasValue(state.horasEdicion)
         }
         viewModelScope.launch {
             submissionRepository.updateHoras(registro.id, nuevasHoras)
@@ -470,6 +470,9 @@ class EmpleadosViewModel @Inject constructor(
 
     fun clearMensajeExito() = _uiState.update { it.copy(mensajeExito = null) }
     fun clearMensajeError() = _uiState.update { it.copy(mensajeError = null) }
+
+    private fun formatHorasValue(h: Float): String =
+        if (h % 1f == 0f) h.toInt().toString() else h.toString()
 
     private fun loadAllowedSectors() {
         viewModelScope.launch {
