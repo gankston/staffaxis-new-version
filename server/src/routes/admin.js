@@ -221,7 +221,7 @@ export async function adminRoutes(app) {
          AND s.date BETWEEN $2 AND $3
          AND NOT s.is_deleted
          AND e.is_active = true
-       ORDER BY s.date, e.first_name, e.last_name`,
+       ORDER BY e.last_name, e.first_name, s.date`,
       [sector_id, start_date, end_date]
     );
     return reply.send({ rows: result.rows });
