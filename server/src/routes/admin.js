@@ -151,7 +151,7 @@ export async function adminRoutes(app) {
                  WHERE e.is_active = true`;
     const params = [];
     if (sectorId) { query += ' AND e.sector_id = $1'; params.push(sectorId); }
-    query += ' ORDER BY s.name, e.first_name, e.last_name';
+    query += ' ORDER BY s.name, e.last_name, e.first_name';
     const result = await db.query(query, params);
     return reply.send({ employees: result.rows });
   });
