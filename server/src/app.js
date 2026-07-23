@@ -10,7 +10,7 @@ import { employeeRoutes }   from './routes/employees.js';
 import { submissionRoutes } from './routes/submissions.js';
 import { absenceRoutes }    from './routes/absences.js';
 import { adminRoutes }      from './routes/admin.js';
-import { mcpRoutes }        from './routes/mcp.js';
+import { statsRoutes }      from './routes/stats.js';
 import { photoRoutes }      from './routes/photos.js';
 
 // Espera a que la DB esté lista (la red interna de Railway puede tardar al arrancar).
@@ -55,7 +55,7 @@ const start = async () => {
   await app.register(submissionRoutes);
   await app.register(absenceRoutes);
   await app.register(adminRoutes);
-  await app.register(mcpRoutes);
+  await app.register(statsRoutes);
   await app.register(photoRoutes);
 
   app.get('/health', async () => ({ ok: true }));
