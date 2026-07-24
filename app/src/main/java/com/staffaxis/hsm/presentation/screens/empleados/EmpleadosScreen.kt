@@ -191,7 +191,9 @@ fun EmpleadosScreen(
                 onFechaChanged = viewModel::onFechaChanged,
                 onHorasChanged = viewModel::onHorasChanged,
                 onCosechaChanged = viewModel::onCosechaChanged,
-                onImporteChanged = viewModel::onImporteChanged,
+                onCachosCountChanged = viewModel::onCachosCountChanged,
+                onAbonadaChanged = viewModel::onAbonadaChanged,
+                onAbonadaValorChanged = viewModel::onAbonadaValorChanged,
                 onObservacionesChanged = viewModel::onObservacionesChanged,
                 onConfirm = viewModel::guardarHoras
             )
@@ -211,7 +213,9 @@ fun EmpleadosScreen(
                 onCerrarEdicionRegistro = viewModel::cerrarEdicionRegistro,
                 onHorasEdicionChanged = viewModel::onHorasEdicionChanged,
                 onHorasEdicionPorCosechaChanged = viewModel::onHorasEdicionPorCosechaChanged,
-                onHorasEdicionPorImporteChanged = viewModel::onHorasEdicionPorImporteChanged,
+                onHorasEdicionCachosCountChanged = viewModel::onHorasEdicionCachosCountChanged,
+                onHorasEdicionPorAbonadaChanged = viewModel::onHorasEdicionPorAbonadaChanged,
+                onHorasEdicionAbonadaValorChanged = viewModel::onHorasEdicionAbonadaValorChanged,
                 onGuardarEdicionRegistro = viewModel::guardarEdicionRegistro,
                 onSubirFoto = viewModel::subirFoto,
                 onEliminarFoto = viewModel::eliminarFoto,
@@ -282,6 +286,10 @@ private fun FotoDniRow(
         if (success && tempUri != null) onFotoUri(tempUri!!)
     }
 
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> if (uri != null) onFotoUri(uri) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -341,14 +349,13 @@ private fun FotoDniRow(
                     Icon(Icons.Default.Visibility, "Ver foto", tint = Color(0xFF26C6DA), modifier = Modifier.size(20.dp))
                 }
             }
-            // Tomar / Cambiar
+            // Cámara
             IconButton(onClick = { launchCamera() }, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    if (tieneFoto) Icons.Default.CameraAlt else Icons.Default.PhotoCamera,
-                    if (tieneFoto) "Cambiar foto" else "Tomar foto",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                Icon(Icons.Default.PhotoCamera, "Cámara", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            }
+            // Galería
+            IconButton(onClick = { galleryLauncher.launch("image/*") }, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.PhotoLibrary, "Galería", tint = Color(0xFF26C6DA), modifier = Modifier.size(20.dp))
             }
             // Eliminar (solo si tiene foto)
             if (tieneFoto) {
@@ -368,7 +375,9 @@ private fun HorasDialog(
     onFechaChanged: (LocalDate) -> Unit,
     onHorasChanged: (Float) -> Unit,
     onCosechaChanged: (Boolean) -> Unit,
-    onImporteChanged: (String) -> Unit,
+    onCachosCountChanged: (String) -> Unit,
+    onAbonadaChanged: (Boolean) -> Unit,
+    onAbonadaValorChanged: (String) -> Unit,
     onObservacionesChanged: (String) -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -438,12 +447,15 @@ private fun HorasDialog(
                     Text(labelFecha)
                 }
 
+                val usarMediasHoras = uiState.sectorId in SECTORES_MEDIAS_HORAS
                 Column {
-                    val usarMediasHoras = uiState.sectorId in SECTORES_MEDIAS_HORAS
-                    val displayValue = when {
-                        uiState.cargaPorCosecha -> "Cosecha (C)"
-                        uiState.importeMonto.isNotBlank() -> "$${uiState.importeMonto}"
-                        else -> formatHorasSlider(uiState.horasSeleccionadas)
+                    val displayValue = buildString {
+                        append(formatHorasSlider(uiState.horasSeleccionadas))
+                        if (uiState.cargaPorCosecha) {
+                            append(" + Cosecha")
+                            if (uiState.cachosCount.isNotBlank()) append(" (${uiState.cachosCount})")
+                        }
+                        if (uiState.cargaPorAbonada) append(" + Abonada")
                     }
                     Text(displayValue, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally))
                     Slider(
@@ -455,7 +467,6 @@ private fun HorasDialog(
                         },
                         valueRange = 0f..16f,
                         steps = if (usarMediasHoras) 31 else 15,
-                        enabled = !uiState.cargaPorCosecha && uiState.importeMonto.isBlank(),
                         modifier = Modifier.fillMaxWidth()
                     )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -466,25 +477,46 @@ private fun HorasDialog(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+                // — Cosecha —
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { onCosechaChanged(!uiState.cargaPorCosecha) },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(checked = uiState.cargaPorCosecha, onCheckedChange = onCosechaChanged)
                     Spacer(Modifier.width(8.dp))
-                    Text("Carga por cosecha", fontWeight = FontWeight.SemiBold)
+                    Text("Cosecha", fontWeight = FontWeight.SemiBold)
+                }
+                if (uiState.cargaPorCosecha) {
+                    OutlinedTextField(
+                        value = uiState.cachosCount,
+                        onValueChange = onCachosCountChanged,
+                        label = { Text("Cantidad de cachos (obligatorio)") },
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        isError = uiState.cachosCount.isBlank()
+                    )
                 }
 
-                OutlinedTextField(
-                    value = uiState.importeMonto,
-                    onValueChange = onImporteChanged,
-                    label = { Text("Carga por importe (opcional)") },
-                    prefix = { Text("$ ") },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !uiState.cargaPorCosecha,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
+                // — Abonada y Otros —
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onAbonadaChanged(!uiState.cargaPorAbonada) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = uiState.cargaPorAbonada, onCheckedChange = onAbonadaChanged)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Abonada y Otros", fontWeight = FontWeight.SemiBold)
+                }
+                if (uiState.cargaPorAbonada) {
+                    OutlinedTextField(
+                        value = uiState.abonadaValor,
+                        onValueChange = onAbonadaValorChanged,
+                        label = { Text("Valor (obligatorio)") },
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                        singleLine = true,
+                        isError = uiState.abonadaValor.isBlank()
+                    )
+                }
 
                 OutlinedTextField(
                     value = uiState.observaciones,
@@ -496,7 +528,9 @@ private fun HorasDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onConfirm) {
+            val canSave = (!uiState.cargaPorCosecha || uiState.cachosCount.isNotBlank()) &&
+                          (!uiState.cargaPorAbonada || uiState.abonadaValor.isNotBlank())
+            Button(onClick = onConfirm, enabled = canSave) {
                 Icon(Icons.Default.Save, null)
                 Spacer(Modifier.width(8.dp))
                 Text("Guardar")
@@ -520,7 +554,9 @@ private fun EditarEmpleadoDialog(
     onCerrarEdicionRegistro: () -> Unit,
     onHorasEdicionChanged: (Float) -> Unit,
     onHorasEdicionPorCosechaChanged: (Boolean) -> Unit,
-    onHorasEdicionPorImporteChanged: (String) -> Unit,
+    onHorasEdicionCachosCountChanged: (String) -> Unit,
+    onHorasEdicionPorAbonadaChanged: (Boolean) -> Unit,
+    onHorasEdicionAbonadaValorChanged: (String) -> Unit,
     onGuardarEdicionRegistro: () -> Unit,
     onSubirFoto: (lado: String, uri: Uri) -> Unit,
     onEliminarFoto: (lado: String) -> Unit,
@@ -669,19 +705,22 @@ private fun EditarEmpleadoDialog(
             onDismissRequest = onCerrarEdicionRegistro,
             title = { Text("Editar Horas", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val fechaFormato = try {
                         LocalDate.parse(uiState.registroEnEdicion.date).format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
                     } catch (_: Exception) { uiState.registroEnEdicion.date }
                     Text("Fecha: $fechaFormato", style = MaterialTheme.typography.bodyMedium)
 
                     val usarMediasHorasEd = uiState.sectorId in SECTORES_MEDIAS_HORAS
-                    val displayValue = when {
-                        uiState.horasEdicionPorCosecha -> "Cosecha (C)"
-                        uiState.horasEdicionPorImporte.isNotBlank() -> "$${uiState.horasEdicionPorImporte}"
-                        else -> formatHorasSlider(uiState.horasEdicion)
+                    val displayValueEd = buildString {
+                        append(formatHorasSlider(uiState.horasEdicion))
+                        if (uiState.horasEdicionPorCosecha) {
+                            append(" + Cosecha")
+                            if (uiState.horasEdicionCachosCount.isNotBlank()) append(" (${uiState.horasEdicionCachosCount})")
+                        }
+                        if (uiState.horasEdicionPorAbonada) append(" + Abonada")
                     }
-                    Text(displayValue, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(displayValueEd, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
                     Slider(
                         value = uiState.horasEdicion,
@@ -692,34 +731,58 @@ private fun EditarEmpleadoDialog(
                         },
                         valueRange = 0f..16f,
                         steps = if (usarMediasHorasEd) 31 else 15,
-                        enabled = !uiState.horasEdicionPorCosecha && uiState.horasEdicionPorImporte.isBlank(),
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+                    // — Cosecha —
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCosechaChanged(!uiState.horasEdicionPorCosecha) },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(checked = uiState.horasEdicionPorCosecha, onCheckedChange = onHorasEdicionPorCosechaChanged)
                         Spacer(Modifier.width(8.dp))
-                        Text("Carga por cosecha", fontWeight = FontWeight.SemiBold)
+                        Text("Cosecha", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (uiState.horasEdicionPorCosecha) {
+                        OutlinedTextField(
+                            value = uiState.horasEdicionCachosCount,
+                            onValueChange = onHorasEdicionCachosCountChanged,
+                            label = { Text("Cantidad de cachos (obligatorio)") },
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            isError = uiState.horasEdicionCachosCount.isBlank()
+                        )
                     }
 
-                    OutlinedTextField(
-                        value = uiState.horasEdicionPorImporte,
-                        onValueChange = onHorasEdicionPorImporteChanged,
-                        label = { Text("Carga por importe (opcional)") },
-                        prefix = { Text("$ ") },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !uiState.horasEdicionPorCosecha,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
+                    // — Abonada y Otros —
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorAbonadaChanged(!uiState.horasEdicionPorAbonada) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = uiState.horasEdicionPorAbonada, onCheckedChange = onHorasEdicionPorAbonadaChanged)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Abonada y Otros", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (uiState.horasEdicionPorAbonada) {
+                        OutlinedTextField(
+                            value = uiState.horasEdicionAbonadaValor,
+                            onValueChange = onHorasEdicionAbonadaValorChanged,
+                            label = { Text("Valor (obligatorio)") },
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                            singleLine = true,
+                            isError = uiState.horasEdicionAbonadaValor.isBlank()
+                        )
+                    }
                 }
             },
-            confirmButton = { Button(onClick = onGuardarEdicionRegistro) { Text("Guardar") } },
+            confirmButton = {
+                val canSaveEd = (!uiState.horasEdicionPorCosecha || uiState.horasEdicionCachosCount.isNotBlank()) &&
+                                (!uiState.horasEdicionPorAbonada || uiState.horasEdicionAbonadaValor.isNotBlank())
+                Button(onClick = onGuardarEdicionRegistro, enabled = canSaveEd) { Text("Guardar") }
+            },
             dismissButton = { TextButton(onClick = onCerrarEdicionRegistro) { Text("Cancelar") } }
         )
     }
@@ -889,6 +952,10 @@ private fun FotoNuevoRow(
         if (success && tempUri != null) onUri(tempUri!!)
     }
 
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { u -> if (u != null) onUri(u) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -933,14 +1000,11 @@ private fun FotoNuevoRow(
             color = if (tomada) Color(0xFF4CAF50) else Color.Unspecified,
             modifier = Modifier.weight(1f)
         )
-        OutlinedButton(
-            onClick = { launchCamera() },
-            modifier = Modifier.height(32.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
-        ) {
-            Icon(Icons.Default.PhotoCamera, null, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(if (tomada) "Cambiar" else "Tomar", style = MaterialTheme.typography.labelSmall)
+        IconButton(onClick = { launchCamera() }, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Default.PhotoCamera, "Cámara", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        }
+        IconButton(onClick = { galleryLauncher.launch("image/*") }, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Default.PhotoLibrary, "Galería", modifier = Modifier.size(18.dp), tint = Color(0xFF26C6DA))
         }
         if (tomada) {
             IconButton(onClick = onBorrar, modifier = Modifier.size(32.dp)) {

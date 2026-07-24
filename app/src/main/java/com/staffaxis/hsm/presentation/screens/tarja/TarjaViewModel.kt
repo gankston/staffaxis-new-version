@@ -43,18 +43,20 @@ data class TarjaUiState(
     val allowedSectors: List<Sector> = emptyList(),
     val navegarACambiarSector: Boolean = false,
     val recargarMain: Boolean = false,
+    // Selector de período
+    val periodoOffset: Int = 0,
+    val periodoLabel: String = "",
     // Visualizador de horas
     val mostrarVisualizador: Boolean = false,
     val visualizadorData: List<ResumenEmpleadoHoras> = emptyList(),
     val visualizadorFechas: List<String> = emptyList(),
     val visualizadorLoading: Boolean = false,
-    val visualizadorPeriodo: String = "",
     val visualizadorError: String? = null
 )
 
 data class ResumenEmpleadoHoras(
     val empleado: Employee,
-    val horasPorDia: Map<String, String?>,  // date (yyyy-MM-dd) -> minutesWorked
+    val horasPorDia: Map<String, String?>,
     val totalHoras: Float,
     val cosechaCount: Int,
     val importeTotal: Float
@@ -78,6 +80,7 @@ class TarjaViewModel @Inject constructor(
     init {
         loadData()
         loadAllowedSectors()
+        actualizarPeriodoLabel(0)
     }
 
     private fun loadData() {
@@ -103,18 +106,17 @@ class TarjaViewModel @Inject constructor(
                 val submissions = submissionRepository.getAllActiveForDate(today, sectorId)
                 val tarjados = submissions.size
                 val horas = submissions.sumOf { sub ->
-                    when {
-                        sub.minutesWorked == "C" -> 8
-                        sub.minutesWorked?.startsWith("$") == true -> 0
-                        sub.minutesWorked != null -> sub.minutesWorked.toIntOrNull() ?: 0
-                        else -> 0
-                    }
+                    val parts = sub.minutesWorked?.split("|") ?: emptyList()
+                    parts.firstOrNull { it.toDoubleOrNull() != null }?.toDoubleOrNull() ?: 0.0
                 }.toFloat()
-                val cosechaDelDia = submissions.count { it.minutesWorked == "C" }
-                val montoDelDia = submissions
-                    .filter { it.minutesWorked?.startsWith("$") == true }
-                    .sumOf { it.minutesWorked!!.substring(1).toDoubleOrNull() ?: 0.0 }
-                    .toFloat()
+                val cosechaDelDia = submissions.count { sub ->
+                    val parts = sub.minutesWorked?.split("|") ?: emptyList()
+                    parts.any { it == "C" || it.startsWith("C:") }
+                }
+                val montoDelDia = submissions.sumOf { sub ->
+                    val parts = sub.minutesWorked?.split("|") ?: emptyList()
+                    parts.filter { it.startsWith("$") }.sumOf { it.substring(1).toDoubleOrNull() ?: 0.0 }
+                }.toFloat()
 
                 Quad(status, empleados.size, ausentesHoy, tarjados, horas, pending, transfers, cosechaDelDia, montoDelDia)
             }.collect { (status, total, ausentes, tarjados, horas, pending, transfers, cosecha, monto) ->
@@ -186,16 +188,27 @@ class TarjaViewModel @Inject constructor(
 
     fun clearMensajes() = _uiState.update { it.copy(mensajeExito = null, error = null) }
 
+    fun cambiarPeriodo(delta: Int) {
+        val nuevoOffset = (_uiState.value.periodoOffset + delta).coerceAtMost(0)
+        actualizarPeriodoLabel(nuevoOffset)
+    }
+
+    private fun actualizarPeriodoLabel(offset: Int) {
+        val (start, end) = calcularPeriodo(LocalDate.now(), offset)
+        val fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+        _uiState.update {
+            it.copy(periodoOffset = offset, periodoLabel = "${start.format(fmt)} – ${end.format(fmt)}")
+        }
+    }
+
     fun abrirVisualizador() {
         val state = _uiState.value
         if (state.sectorId.isBlank()) return
         _uiState.update { it.copy(mostrarVisualizador = true, visualizadorLoading = true, visualizadorError = null) }
         viewModelScope.launch {
             val today = LocalDate.now()
-            val (startDate, endDate) = calcularPeriodo(today)
-            val periodoLabel = "${startDate.format(DateTimeFormatter.ofPattern("dd/MM"))} – ${endDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))}"
+            val (startDate, endDate) = calcularPeriodo(today, state.periodoOffset)
 
-            // Generar lista de fechas del período
             val fechas = mutableListOf<String>()
             var d = startDate
             while (!d.isAfter(endDate)) {
@@ -222,25 +235,31 @@ class TarjaViewModel @Inject constructor(
                     val emp = empleadoMap[empId] ?: return@mapNotNull null
                     val horasPorDia = subs.associate { it.date to it.minutesWorked }
                     val totalHoras = subs.sumOf { sub ->
-                        when {
-                            sub.minutesWorked == "C" -> 0.0
-                            sub.minutesWorked?.startsWith("$") == true -> 0.0
-                            else -> sub.minutesWorked?.toDoubleOrNull() ?: 0.0
-                        }
+                        val parts = sub.minutesWorked?.split("|") ?: emptyList()
+                        parts.firstOrNull { it.toDoubleOrNull() != null }?.toDoubleOrNull() ?: 0.0
                     }.toFloat()
-                    val cosechaCount = subs.count { it.minutesWorked == "C" }
-                    val importeTotal = subs.filter { it.minutesWorked?.startsWith("$") == true }
-                        .sumOf { it.minutesWorked!!.substring(1).toDoubleOrNull() ?: 0.0 }.toFloat()
+                    val cosechaCount = subs.count { sub ->
+                        val parts = sub.minutesWorked?.split("|") ?: emptyList()
+                        parts.any { it == "C" || it.startsWith("C:") }
+                    }
+                    val importeTotal = subs.sumOf { sub ->
+                        val parts = sub.minutesWorked?.split("|") ?: emptyList()
+                        parts.filter { it.startsWith("$") }.sumOf { it.substring(1).toDoubleOrNull() ?: 0.0 }
+                    }.toFloat()
                     ResumenEmpleadoHoras(emp, horasPorDia, totalHoras, cosechaCount, importeTotal)
                 }
-                .sortedBy { it.empleado.apellido }
+                .sortedBy { emp ->
+                    emp.empleado.apellido.ifBlank {
+                        // fallback: último token de nombre (nombre = "FIRSTNAME LASTNAME")
+                        emp.empleado.nombre.trim().substringAfterLast(" ").ifBlank { emp.empleado.nombre }
+                    }
+                }
 
             _uiState.update {
                 it.copy(
                     visualizadorData = resumen,
                     visualizadorFechas = fechas,
-                    visualizadorLoading = false,
-                    visualizadorPeriodo = periodoLabel
+                    visualizadorLoading = false
                 )
             }
         }
@@ -248,16 +267,13 @@ class TarjaViewModel @Inject constructor(
 
     fun cerrarVisualizador() = _uiState.update { it.copy(mostrarVisualizador = false) }
 
-    private fun calcularPeriodo(today: LocalDate): Pair<LocalDate, LocalDate> {
-        return if (today.dayOfMonth >= 21) {
-            val start = today.withDayOfMonth(21)
-            val end = today.plusMonths(1).withDayOfMonth(20)
-            Pair(start, end)
+    private fun calcularPeriodo(today: LocalDate, offset: Int = 0): Pair<LocalDate, LocalDate> {
+        val (start, end) = if (today.dayOfMonth >= 21) {
+            Pair(today.withDayOfMonth(21), today.plusMonths(1).withDayOfMonth(20))
         } else {
-            val start = today.minusMonths(1).withDayOfMonth(21)
-            val end = today.withDayOfMonth(20)
-            Pair(start, end)
+            Pair(today.minusMonths(1).withDayOfMonth(21), today.withDayOfMonth(20))
         }
+        return Pair(start.plusMonths(offset.toLong()), end.plusMonths(offset.toLong()))
     }
 }
 

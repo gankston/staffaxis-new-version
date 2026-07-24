@@ -191,7 +191,7 @@ fun TarjaScreen(
                 item { MovimientosCard(uiState) }
             }
 
-            // Send button section
+            // Cierre de Tarja
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -208,6 +208,37 @@ fun TarjaScreen(
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
+
+                        // Selector de período
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF1A1A30), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            IconButton(onClick = { viewModel.cambiarPeriodo(-1) }) {
+                                Icon(Icons.Default.ChevronLeft, null, tint = Color(0xFF26C6DA))
+                            }
+                            Text(
+                                uiState.periodoLabel,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                textAlign = TextAlign.Center
+                            )
+                            IconButton(
+                                onClick = { viewModel.cambiarPeriodo(1) },
+                                enabled = uiState.periodoOffset < 0
+                            ) {
+                                Icon(
+                                    Icons.Default.ChevronRight, null,
+                                    tint = if (uiState.periodoOffset < 0) Color(0xFF26C6DA) else Color(0xFF444466)
+                                )
+                            }
+                        }
+
                         OutlinedButton(
                             onClick = viewModel::abrirVisualizador,
                             modifier = Modifier.fillMaxWidth(),
@@ -493,9 +524,9 @@ private fun VisualizadorHorasDialog(
                                 Icon(Icons.Default.Close, "Cerrar", tint = Color.White)
                             }
                         }
-                        if (uiState.visualizadorPeriodo.isNotBlank()) {
+                        if (uiState.periodoLabel.isNotBlank()) {
                             Text(
-                                "Período: ${uiState.visualizadorPeriodo}",
+                                "Período: ${uiState.periodoLabel}",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Color.White.copy(alpha = 0.8f)
                             )
@@ -546,7 +577,6 @@ private fun VisualizadorHorasDialog(
                             }
                         }
 
-                        // Tabla empleados × días con scroll horizontal sincronizado
                         val hScroll = rememberScrollState()
                         val dateFmt = remember { DateTimeFormatter.ofPattern("dd/MM") }
                         val nameW = 118.dp
@@ -554,7 +584,7 @@ private fun VisualizadorHorasDialog(
                         val totalW = 50.dp
 
                         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                            // Fila cabecera
+                            // Cabecera de tabla
                             Row(
                                 modifier = Modifier.fillMaxWidth().background(Color(0xFF252545)).horizontalScroll(hScroll),
                                 verticalAlignment = Alignment.CenterVertically
@@ -599,7 +629,7 @@ private fun VisualizadorHorasDialog(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        resumen.empleado.nombre,
+                                        formatNombreViz(resumen.empleado),
                                         modifier = Modifier.width(nameW).padding(horizontal = 6.dp, vertical = 7.dp),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = Color.White,
@@ -656,14 +686,54 @@ private fun ResumenStat(valor: String, label: String) {
     }
 }
 
-private fun celdaValor(mw: String?): Pair<String, Color> = when {
-    mw == null -> Pair("-", Color(0xFF444466))
-    mw == "C" -> Pair("C", Color(0xFFFF9800))
-    mw.startsWith("$") -> Pair(mw, Color(0xFF4CAF50))
-    else -> {
-        val h = mw.toFloatOrNull()
-        if (h != null) Pair(if (h % 1f == 0f) "${h.toInt()}h" else "${h}h", Color(0xFF26C6DA))
-        else Pair(mw, Color(0xFF888888))
+private fun formatNombreViz(emp: com.staffaxis.hsm.domain.model.Employee): String {
+    val apellido = emp.apellido.trim()
+    return if (apellido.isNotBlank()) {
+        val nombre = emp.nombre.removeSuffix(apellido).trim()
+        "$apellido $nombre".trim()
+    } else {
+        // nombre = "FIRSTNAME LASTNAME" → rearrangar a "LASTNAME FIRSTNAME"
+        val partes = emp.nombre.trim().split(" ")
+        if (partes.size >= 2) "${partes.last()} ${partes.dropLast(1).joinToString(" ")}"
+        else emp.nombre
+    }
+}
+
+private fun celdaValor(mw: String?): Pair<String, Color> {
+    if (mw == null) return Pair("-", Color(0xFF444466))
+    val parts = mw.split("|")
+    val horasPart = parts.firstOrNull { it.toFloatOrNull() != null }
+    val hasCosecha = parts.any { it == "C" || it.startsWith("C:") }
+    val hasAbonada = parts.any { it.startsWith("AB:") }
+    val isImporte = parts.any { it.startsWith("$") }
+    val hasHoras = horasPart != null
+    return when {
+        hasCosecha || hasAbonada -> {
+            val cachos = parts.firstOrNull { it.startsWith("C:") }?.removePrefix("C:") ?: ""
+            val label = buildString {
+                if (hasHoras) {
+                    val h = horasPart!!.toFloat()
+                    append(if (h % 1f == 0f) "${h.toInt()}h" else "${h}h")
+                    append("+")
+                }
+                if (hasCosecha) append(if (cachos.isNotBlank()) "C$cachos" else "C")
+                if (hasCosecha && hasAbonada) append("+")
+                if (hasAbonada) append("AB")
+            }
+            val color = if (hasCosecha && hasAbonada) Color(0xFFAB47BC)
+                        else if (hasCosecha) Color(0xFFFF9800)
+                        else Color(0xFF7E57C2)
+            Pair(label, color)
+        }
+        isImporte -> {
+            val imp = parts.firstOrNull { it.startsWith("$") } ?: ""
+            Pair(imp, Color(0xFF4CAF50))
+        }
+        hasHoras -> {
+            val h = horasPart!!.toFloat()
+            Pair(if (h % 1f == 0f) "${h.toInt()}h" else "${h}h", Color(0xFF26C6DA))
+        }
+        else -> Pair(mw, Color(0xFF888888))
     }
 }
 

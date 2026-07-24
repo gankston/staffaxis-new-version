@@ -39,7 +39,9 @@ data class EmpleadosUiState(
     val fechaSeleccionada: LocalDate = LocalDate.now(),
     val horasSeleccionadas: Float = 8f,
     val cargaPorCosecha: Boolean = false,
-    val importeMonto: String = "",
+    val cachosCount: String = "",
+    val cargaPorAbonada: Boolean = false,
+    val abonadaValor: String = "",
     val observaciones: String = "",
     // Dialog editar empleado
     val mostrarDialogoEditar: Boolean = false,
@@ -53,7 +55,9 @@ data class EmpleadosUiState(
     val registroEnEdicion: OutboxSubmission? = null,
     val horasEdicion: Float = 8f,
     val horasEdicionPorCosecha: Boolean = false,
-    val horasEdicionPorImporte: String = "",
+    val horasEdicionCachosCount: String = "",
+    val horasEdicionPorAbonada: Boolean = false,
+    val horasEdicionAbonadaValor: String = "",
     // Dialog nuevo empleado
     val mostrarDialogoNuevo: Boolean = false,
     val nuevoDni: String = "",
@@ -163,7 +167,9 @@ class EmpleadosViewModel @Inject constructor(
                 fechaSeleccionada = LocalDate.now(),
                 horasSeleccionadas = 8f,
                 cargaPorCosecha = it.tipoCarga == "cosecha",
-                importeMonto = "",
+                cachosCount = "",
+                cargaPorAbonada = false,
+                abonadaValor = "",
                 observaciones = ""
             )
         }
@@ -173,21 +179,25 @@ class EmpleadosViewModel @Inject constructor(
 
     fun onFechaChanged(fecha: LocalDate) = _uiState.update { it.copy(fechaSeleccionada = fecha) }
     fun onHorasChanged(h: Float) = _uiState.update { it.copy(horasSeleccionadas = h) }
-    fun onCosechaChanged(v: Boolean) = _uiState.update { it.copy(cargaPorCosecha = v) }
-    fun onImporteChanged(v: String) = _uiState.update { it.copy(importeMonto = v) }
+    fun onCosechaChanged(v: Boolean) = _uiState.update { it.copy(cargaPorCosecha = v, cachosCount = if (!v) "" else it.cachosCount) }
+    fun onCachosCountChanged(v: String) = _uiState.update { it.copy(cachosCount = v) }
+    fun onAbonadaChanged(v: Boolean) = _uiState.update { it.copy(cargaPorAbonada = v, abonadaValor = if (!v) "" else it.abonadaValor) }
+    fun onAbonadaValorChanged(v: String) = _uiState.update { it.copy(abonadaValor = v) }
     fun onObservacionesChanged(v: String) = _uiState.update { it.copy(observaciones = v) }
 
     fun guardarHoras() {
         val state = _uiState.value
         val empleado = state.empleadoSeleccionado ?: return
+        if (state.cargaPorCosecha && state.cachosCount.isBlank()) return
+        if (state.cargaPorAbonada && state.abonadaValor.isBlank()) return
+
         val sectorId = state.sectorId
         val fecha = state.fechaSeleccionada.format(dateFormatter)
 
-        val minutesWorked: String? = when {
-            state.cargaPorCosecha -> "C"
-            state.importeMonto.isNotBlank() -> "\$${state.importeMonto}"
-            else -> formatHorasValue(state.horasSeleccionadas)
-        }
+        val parts = mutableListOf(formatHorasValue(state.horasSeleccionadas))
+        if (state.cargaPorCosecha) parts.add("C:${state.cachosCount.trim()}")
+        if (state.cargaPorAbonada) parts.add("AB:${state.abonadaValor.trim()}")
+        val minutesWorked: String? = if (parts.size == 1) parts[0] else parts.joinToString("|")
 
         viewModelScope.launch {
             val result = submissionRepository.saveHoras(empleado.id, sectorId, fecha, minutesWorked, state.observaciones.ifBlank { null })
@@ -239,32 +249,45 @@ class EmpleadosViewModel @Inject constructor(
     }
 
     fun abrirEdicionRegistro(registro: OutboxSubmission) {
-        val horas = registro.minutesWorked?.toFloatOrNull() ?: 8f
-        val esCosecha = registro.minutesWorked == "C"
-        val esImporte = registro.minutesWorked?.startsWith("$") == true
+        val mw = registro.minutesWorked
+        val parts = mw?.split("|") ?: emptyList()
+        val cosechaPart = parts.firstOrNull { it == "C" || it.startsWith("C:") }
+        val abonadaPart = parts.firstOrNull { it.startsWith("AB:") }
+        val esCosecha = cosechaPart != null
+        val cachosCount = if (cosechaPart?.startsWith("C:") == true) cosechaPart.removePrefix("C:") else ""
+        val esAbonada = abonadaPart != null
+        val abonadaValor = abonadaPart?.removePrefix("AB:") ?: ""
+        // Primer segmento numérico = horas; si no hay (registro viejo tipo "C"), default 0
+        val horasPart = parts.firstOrNull { it.toFloatOrNull() != null }
+        val horas = horasPart?.toFloatOrNull() ?: if (esCosecha || esAbonada) 0f else mw?.toFloatOrNull() ?: 8f
         _uiState.update {
             it.copy(
                 registroEnEdicion = registro,
-                horasEdicion = if (esCosecha || esImporte) 8f else horas,
+                horasEdicion = horas,
                 horasEdicionPorCosecha = esCosecha,
-                horasEdicionPorImporte = if (esImporte) registro.minutesWorked!!.removePrefix("$") else ""
+                horasEdicionCachosCount = cachosCount,
+                horasEdicionPorAbonada = esAbonada,
+                horasEdicionAbonadaValor = abonadaValor
             )
         }
     }
 
     fun cerrarEdicionRegistro() = _uiState.update { it.copy(registroEnEdicion = null) }
     fun onHorasEdicionChanged(h: Float) = _uiState.update { it.copy(horasEdicion = h) }
-    fun onHorasEdicionPorCosechaChanged(v: Boolean) = _uiState.update { it.copy(horasEdicionPorCosecha = v, horasEdicionPorImporte = "") }
-    fun onHorasEdicionPorImporteChanged(v: String) = _uiState.update { it.copy(horasEdicionPorImporte = v) }
+    fun onHorasEdicionPorCosechaChanged(v: Boolean) = _uiState.update { it.copy(horasEdicionPorCosecha = v, horasEdicionCachosCount = if (!v) "" else it.horasEdicionCachosCount) }
+    fun onHorasEdicionCachosCountChanged(v: String) = _uiState.update { it.copy(horasEdicionCachosCount = v) }
+    fun onHorasEdicionPorAbonadaChanged(v: Boolean) = _uiState.update { it.copy(horasEdicionPorAbonada = v, horasEdicionAbonadaValor = if (!v) "" else it.horasEdicionAbonadaValor) }
+    fun onHorasEdicionAbonadaValorChanged(v: String) = _uiState.update { it.copy(horasEdicionAbonadaValor = v) }
 
     fun guardarEdicionRegistro() {
         val state = _uiState.value
         val registro = state.registroEnEdicion ?: return
-        val nuevasHoras: String? = when {
-            state.horasEdicionPorCosecha -> "C"
-            state.horasEdicionPorImporte.isNotBlank() -> "$${state.horasEdicionPorImporte}"
-            else -> formatHorasValue(state.horasEdicion)
-        }
+        if (state.horasEdicionPorCosecha && state.horasEdicionCachosCount.isBlank()) return
+        if (state.horasEdicionPorAbonada && state.horasEdicionAbonadaValor.isBlank()) return
+        val editParts = mutableListOf(formatHorasValue(state.horasEdicion))
+        if (state.horasEdicionPorCosecha) editParts.add("C:${state.horasEdicionCachosCount.trim()}")
+        if (state.horasEdicionPorAbonada) editParts.add("AB:${state.horasEdicionAbonadaValor.trim()}")
+        val nuevasHoras: String? = if (editParts.size == 1) editParts[0] else editParts.joinToString("|")
         viewModelScope.launch {
             submissionRepository.updateHoras(registro.id, nuevasHoras)
             val registros = submissionRepository.getSubmissionsForEmployee(registro.employeeId)
