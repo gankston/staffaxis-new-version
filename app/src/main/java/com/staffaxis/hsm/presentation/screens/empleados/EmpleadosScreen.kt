@@ -194,6 +194,10 @@ fun EmpleadosScreen(
                 onCachosCountChanged = viewModel::onCachosCountChanged,
                 onAbonadaChanged = viewModel::onAbonadaChanged,
                 onAbonadaValorChanged = viewModel::onAbonadaValorChanged,
+                onCajasChanged = viewModel::onCajasChanged,
+                onCajasCountChanged = viewModel::onCajasCountChanged,
+                onCajonesChanged = viewModel::onCajonesChanged,
+                onCajonesCountChanged = viewModel::onCajonesCountChanged,
                 onObservacionesChanged = viewModel::onObservacionesChanged,
                 onConfirm = viewModel::guardarHoras
             )
@@ -216,6 +220,10 @@ fun EmpleadosScreen(
                 onHorasEdicionCachosCountChanged = viewModel::onHorasEdicionCachosCountChanged,
                 onHorasEdicionPorAbonadaChanged = viewModel::onHorasEdicionPorAbonadaChanged,
                 onHorasEdicionAbonadaValorChanged = viewModel::onHorasEdicionAbonadaValorChanged,
+                onHorasEdicionPorCajasChanged = viewModel::onHorasEdicionPorCajasChanged,
+                onHorasEdicionCajasCountChanged = viewModel::onHorasEdicionCajasCountChanged,
+                onHorasEdicionPorCajonesChanged = viewModel::onHorasEdicionPorCajonesChanged,
+                onHorasEdicionCajonesCountChanged = viewModel::onHorasEdicionCajonesCountChanged,
                 onGuardarEdicionRegistro = viewModel::guardarEdicionRegistro,
                 onSubirFoto = viewModel::subirFoto,
                 onEliminarFoto = viewModel::eliminarFoto,
@@ -367,6 +375,35 @@ private fun FotoDniRow(
     }
 }
 
+// Traduce el string compuesto de minutes_worked ("H 4|C:33|Cajas 32 Cajones 43") a texto legible.
+// Compatible con formatos viejos: "C" solo, "$1500", número plano sin prefijo "H ".
+private fun formatMinutesWorkedDisplay(mw: String?): String {
+    if (mw.isNullOrBlank()) return "?"
+    val parts = mw.split("|")
+
+    val horasPart = parts.firstOrNull { it.startsWith("H ") } ?: parts.firstOrNull { it.toFloatOrNull() != null }
+    val horas = horasPart?.let {
+        if (it.startsWith("H ")) it.removePrefix("H ").trim().toFloatOrNull() else it.toFloatOrNull()
+    }
+    val cosechaPart = parts.firstOrNull { it == "C" || it.startsWith("C:") }
+    val abonadaPart = parts.firstOrNull { it.startsWith("AB:") }
+    val importePart = parts.firstOrNull { it.startsWith("$") }
+    val cajasCajonesPart = parts.firstOrNull { it.startsWith("Cajas ") || it.startsWith("Cajones ") }
+
+    val piezas = mutableListOf<String>()
+    if (horas != null && horas > 0f) {
+        piezas.add(if (horas % 1f == 0f) "${horas.toInt()}h" else "${horas}h")
+    }
+    if (cosechaPart != null) {
+        piezas.add(if (cosechaPart.startsWith("C:")) "Cosecha ${cosechaPart.removePrefix("C:")}" else "Cosecha")
+    }
+    if (abonadaPart != null) piezas.add("Abonada ${abonadaPart.removePrefix("AB:")}")
+    if (importePart != null) piezas.add(importePart)
+    if (cajasCajonesPart != null) piezas.add(cajasCajonesPart)
+
+    return if (piezas.isEmpty()) mw else piezas.joinToString(" + ")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HorasDialog(
@@ -378,21 +415,47 @@ private fun HorasDialog(
     onCachosCountChanged: (String) -> Unit,
     onAbonadaChanged: (Boolean) -> Unit,
     onAbonadaValorChanged: (String) -> Unit,
+    onCajasChanged: (Boolean) -> Unit,
+    onCajasCountChanged: (String) -> Unit,
+    onCajonesChanged: (Boolean) -> Unit,
+    onCajonesCountChanged: (String) -> Unit,
     onObservacionesChanged: (String) -> Unit,
     onConfirm: () -> Unit
 ) {
     val empleado = uiState.empleadoSeleccionado ?: return
     val today = LocalDate.now()
+    val faltaDni = empleado.dni.isNullOrBlank()
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Registrar Horas", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                     Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
                         Text(empleado.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("DNI: ${empleado.dni ?: "Sin datos"}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                if (faltaDni) {
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F).copy(alpha = 0.15f))) {
+                        Row(
+                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Warning, null, tint = Color(0xFFD32F2F))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Este empleado no tiene DNI cargado. No se pueden registrar horas hasta cargarlo desde \"Editar\".",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFD32F2F),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
 
@@ -456,6 +519,8 @@ private fun HorasDialog(
                             if (uiState.cachosCount.isNotBlank()) append(" (${uiState.cachosCount})")
                         }
                         if (uiState.cargaPorAbonada) append(" + Abonada")
+                        if (uiState.cargaPorCajas) append(" + Cajas ${uiState.cajasCount}")
+                        if (uiState.cargaPorCajones) append(" + Cajones ${uiState.cajonesCount}")
                     }
                     Text(displayValue, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally))
                     Slider(
@@ -518,6 +583,48 @@ private fun HorasDialog(
                     )
                 }
 
+                // — Cajas —
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onCajasChanged(!uiState.cargaPorCajas) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = uiState.cargaPorCajas, onCheckedChange = onCajasChanged)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Cajas", fontWeight = FontWeight.SemiBold)
+                }
+                if (uiState.cargaPorCajas) {
+                    OutlinedTextField(
+                        value = uiState.cajasCount,
+                        onValueChange = onCajasCountChanged,
+                        label = { Text("Cantidad de cajas (obligatorio)") },
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        isError = uiState.cajasCount.isBlank()
+                    )
+                }
+
+                // — Cajones —
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onCajonesChanged(!uiState.cargaPorCajones) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = uiState.cargaPorCajones, onCheckedChange = onCajonesChanged)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Cajones", fontWeight = FontWeight.SemiBold)
+                }
+                if (uiState.cargaPorCajones) {
+                    OutlinedTextField(
+                        value = uiState.cajonesCount,
+                        onValueChange = onCajonesCountChanged,
+                        label = { Text("Cantidad de cajones (obligatorio)") },
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        isError = uiState.cajonesCount.isBlank()
+                    )
+                }
+
                 OutlinedTextField(
                     value = uiState.observaciones,
                     onValueChange = onObservacionesChanged,
@@ -528,8 +635,11 @@ private fun HorasDialog(
             }
         },
         confirmButton = {
-            val canSave = (!uiState.cargaPorCosecha || uiState.cachosCount.isNotBlank()) &&
-                          (!uiState.cargaPorAbonada || uiState.abonadaValor.isNotBlank())
+            val canSave = !faltaDni &&
+                          (!uiState.cargaPorCosecha || uiState.cachosCount.isNotBlank()) &&
+                          (!uiState.cargaPorAbonada || uiState.abonadaValor.isNotBlank()) &&
+                          (!uiState.cargaPorCajas || uiState.cajasCount.isNotBlank()) &&
+                          (!uiState.cargaPorCajones || uiState.cajonesCount.isNotBlank())
             Button(onClick = onConfirm, enabled = canSave) {
                 Icon(Icons.Default.Save, null)
                 Spacer(Modifier.width(8.dp))
@@ -557,6 +667,10 @@ private fun EditarEmpleadoDialog(
     onHorasEdicionCachosCountChanged: (String) -> Unit,
     onHorasEdicionPorAbonadaChanged: (Boolean) -> Unit,
     onHorasEdicionAbonadaValorChanged: (String) -> Unit,
+    onHorasEdicionPorCajasChanged: (Boolean) -> Unit,
+    onHorasEdicionCajasCountChanged: (String) -> Unit,
+    onHorasEdicionPorCajonesChanged: (Boolean) -> Unit,
+    onHorasEdicionCajonesCountChanged: (String) -> Unit,
     onGuardarEdicionRegistro: () -> Unit,
     onSubirFoto: (lado: String, uri: Uri) -> Unit,
     onEliminarFoto: (lado: String) -> Unit,
@@ -649,11 +763,7 @@ private fun EditarEmpleadoDialog(
                         val fechaFormato = try {
                             LocalDate.parse(registro.date).format(dateFormatter)
                         } catch (_: Exception) { registro.date }
-                        val displayValue = when {
-                            registro.minutesWorked == "C" -> "Cosecha"
-                            registro.minutesWorked?.startsWith("$") == true -> registro.minutesWorked
-                            else -> "${registro.minutesWorked ?: "?"}h"
-                        }
+                        val displayValue = formatMinutesWorkedDisplay(registro.minutesWorked)
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -705,7 +815,10 @@ private fun EditarEmpleadoDialog(
             onDismissRequest = onCerrarEdicionRegistro,
             title = { Text("Editar Horas", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
                     val fechaFormato = try {
                         LocalDate.parse(uiState.registroEnEdicion.date).format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
                     } catch (_: Exception) { uiState.registroEnEdicion.date }
@@ -719,6 +832,8 @@ private fun EditarEmpleadoDialog(
                             if (uiState.horasEdicionCachosCount.isNotBlank()) append(" (${uiState.horasEdicionCachosCount})")
                         }
                         if (uiState.horasEdicionPorAbonada) append(" + Abonada")
+                        if (uiState.horasEdicionPorCajas) append(" + Cajas ${uiState.horasEdicionCajasCount}")
+                        if (uiState.horasEdicionPorCajones) append(" + Cajones ${uiState.horasEdicionCajonesCount}")
                     }
                     Text(displayValueEd, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
@@ -776,11 +891,55 @@ private fun EditarEmpleadoDialog(
                             isError = uiState.horasEdicionAbonadaValor.isBlank()
                         )
                     }
+
+                    // — Cajas —
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCajasChanged(!uiState.horasEdicionPorCajas) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = uiState.horasEdicionPorCajas, onCheckedChange = onHorasEdicionPorCajasChanged)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cajas", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (uiState.horasEdicionPorCajas) {
+                        OutlinedTextField(
+                            value = uiState.horasEdicionCajasCount,
+                            onValueChange = onHorasEdicionCajasCountChanged,
+                            label = { Text("Cantidad de cajas (obligatorio)") },
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            isError = uiState.horasEdicionCajasCount.isBlank()
+                        )
+                    }
+
+                    // — Cajones —
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCajonesChanged(!uiState.horasEdicionPorCajones) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = uiState.horasEdicionPorCajones, onCheckedChange = onHorasEdicionPorCajonesChanged)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cajones", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (uiState.horasEdicionPorCajones) {
+                        OutlinedTextField(
+                            value = uiState.horasEdicionCajonesCount,
+                            onValueChange = onHorasEdicionCajonesCountChanged,
+                            label = { Text("Cantidad de cajones (obligatorio)") },
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            isError = uiState.horasEdicionCajonesCount.isBlank()
+                        )
+                    }
                 }
             },
             confirmButton = {
                 val canSaveEd = (!uiState.horasEdicionPorCosecha || uiState.horasEdicionCachosCount.isNotBlank()) &&
-                                (!uiState.horasEdicionPorAbonada || uiState.horasEdicionAbonadaValor.isNotBlank())
+                                (!uiState.horasEdicionPorAbonada || uiState.horasEdicionAbonadaValor.isNotBlank()) &&
+                                (!uiState.horasEdicionPorCajas || uiState.horasEdicionCajasCount.isNotBlank()) &&
+                                (!uiState.horasEdicionPorCajones || uiState.horasEdicionCajonesCount.isNotBlank())
                 Button(onClick = onGuardarEdicionRegistro, enabled = canSaveEd) { Text("Guardar") }
             },
             dismissButton = { TextButton(onClick = onCerrarEdicionRegistro) { Text("Cancelar") } }

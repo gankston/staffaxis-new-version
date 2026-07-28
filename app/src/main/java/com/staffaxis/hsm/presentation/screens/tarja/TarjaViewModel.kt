@@ -59,7 +59,9 @@ data class ResumenEmpleadoHoras(
     val horasPorDia: Map<String, String?>,
     val totalHoras: Float,
     val cosechaCount: Int,
-    val importeTotal: Float
+    val importeTotal: Float,
+    val cajasTotal: Int = 0,
+    val cajonesTotal: Int = 0
 )
 
 @HiltViewModel
@@ -236,7 +238,10 @@ class TarjaViewModel @Inject constructor(
                     val horasPorDia = subs.associate { it.date to it.minutesWorked }
                     val totalHoras = subs.sumOf { sub ->
                         val parts = sub.minutesWorked?.split("|") ?: emptyList()
-                        parts.firstOrNull { it.toDoubleOrNull() != null }?.toDoubleOrNull() ?: 0.0
+                        // Formato nuevo "H 4" primero; si no, cae al número plano viejo
+                        val horasPart = parts.firstOrNull { it.startsWith("H ") } ?: parts.firstOrNull { it.toDoubleOrNull() != null }
+                        if (horasPart?.startsWith("H ") == true) horasPart.removePrefix("H ").trim().toDoubleOrNull() ?: 0.0
+                        else horasPart?.toDoubleOrNull() ?: 0.0
                     }.toFloat()
                     val cosechaCount = subs.count { sub ->
                         val parts = sub.minutesWorked?.split("|") ?: emptyList()
@@ -246,7 +251,16 @@ class TarjaViewModel @Inject constructor(
                         val parts = sub.minutesWorked?.split("|") ?: emptyList()
                         parts.filter { it.startsWith("$") }.sumOf { it.substring(1).toDoubleOrNull() ?: 0.0 }
                     }.toFloat()
-                    ResumenEmpleadoHoras(emp, horasPorDia, totalHoras, cosechaCount, importeTotal)
+                    val cajasCajonesParts = subs.mapNotNull { sub ->
+                        sub.minutesWorked?.split("|")?.firstOrNull { it.startsWith("Cajas ") || it.startsWith("Cajones ") }
+                    }
+                    val cajasTotal = cajasCajonesParts.sumOf { part ->
+                        Regex("Cajas ([0-9]+(?:[.,][0-9]+)?)").find(part)?.groupValues?.get(1)?.replace(",", ".")?.toDoubleOrNull() ?: 0.0
+                    }.toInt()
+                    val cajonesTotal = cajasCajonesParts.sumOf { part ->
+                        Regex("Cajones ([0-9]+(?:[.,][0-9]+)?)").find(part)?.groupValues?.get(1)?.replace(",", ".")?.toDoubleOrNull() ?: 0.0
+                    }.toInt()
+                    ResumenEmpleadoHoras(emp, horasPorDia, totalHoras, cosechaCount, importeTotal, cajasTotal, cajonesTotal)
                 }
                 .sortedBy { emp ->
                     emp.empleado.apellido.ifBlank {

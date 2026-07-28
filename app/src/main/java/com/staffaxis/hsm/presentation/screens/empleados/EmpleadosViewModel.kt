@@ -42,6 +42,10 @@ data class EmpleadosUiState(
     val cachosCount: String = "",
     val cargaPorAbonada: Boolean = false,
     val abonadaValor: String = "",
+    val cargaPorCajas: Boolean = false,
+    val cajasCount: String = "",
+    val cargaPorCajones: Boolean = false,
+    val cajonesCount: String = "",
     val observaciones: String = "",
     // Dialog editar empleado
     val mostrarDialogoEditar: Boolean = false,
@@ -58,6 +62,10 @@ data class EmpleadosUiState(
     val horasEdicionCachosCount: String = "",
     val horasEdicionPorAbonada: Boolean = false,
     val horasEdicionAbonadaValor: String = "",
+    val horasEdicionPorCajas: Boolean = false,
+    val horasEdicionCajasCount: String = "",
+    val horasEdicionPorCajones: Boolean = false,
+    val horasEdicionCajonesCount: String = "",
     // Dialog nuevo empleado
     val mostrarDialogoNuevo: Boolean = false,
     val nuevoDni: String = "",
@@ -170,6 +178,10 @@ class EmpleadosViewModel @Inject constructor(
                 cachosCount = "",
                 cargaPorAbonada = false,
                 abonadaValor = "",
+                cargaPorCajas = false,
+                cajasCount = "",
+                cargaPorCajones = false,
+                cajonesCount = "",
                 observaciones = ""
             )
         }
@@ -183,13 +195,29 @@ class EmpleadosViewModel @Inject constructor(
     fun onCachosCountChanged(v: String) = _uiState.update { it.copy(cachosCount = v) }
     fun onAbonadaChanged(v: Boolean) = _uiState.update { it.copy(cargaPorAbonada = v, abonadaValor = if (!v) "" else it.abonadaValor) }
     fun onAbonadaValorChanged(v: String) = _uiState.update { it.copy(abonadaValor = v) }
+    fun onCajasChanged(v: Boolean) = _uiState.update { it.copy(cargaPorCajas = v, cajasCount = if (!v) "" else it.cajasCount) }
+    fun onCajasCountChanged(v: String) = _uiState.update { it.copy(cajasCount = v) }
+    fun onCajonesChanged(v: Boolean) = _uiState.update { it.copy(cargaPorCajones = v, cajonesCount = if (!v) "" else it.cajonesCount) }
+    fun onCajonesCountChanged(v: String) = _uiState.update { it.copy(cajonesCount = v) }
     fun onObservacionesChanged(v: String) = _uiState.update { it.copy(observaciones = v) }
+
+    // Arma el segmento "Cajas X Cajones Y" (o solo uno de los dos) para el string compuesto.
+    private fun buildCajasCajonesSegment(porCajas: Boolean, cajas: String, porCajones: Boolean, cajones: String): String =
+        buildString {
+            if (porCajas) append("Cajas ${cajas.trim()}")
+            if (porCajas && porCajones) append(" ")
+            if (porCajones) append("Cajones ${cajones.trim()}")
+        }
 
     fun guardarHoras() {
         val state = _uiState.value
         val empleado = state.empleadoSeleccionado ?: return
+        // A partir de ahora, sin DNI cargado no se puede registrar una tarja nueva.
+        if (empleado.dni.isNullOrBlank()) return
         if (state.cargaPorCosecha && state.cachosCount.isBlank()) return
         if (state.cargaPorAbonada && state.abonadaValor.isBlank()) return
+        if (state.cargaPorCajas && state.cajasCount.isBlank()) return
+        if (state.cargaPorCajones && state.cajonesCount.isBlank()) return
 
         val sectorId = state.sectorId
         val fecha = state.fechaSeleccionada.format(dateFormatter)
@@ -197,6 +225,8 @@ class EmpleadosViewModel @Inject constructor(
         val parts = mutableListOf(formatHorasValue(state.horasSeleccionadas))
         if (state.cargaPorCosecha) parts.add("C:${state.cachosCount.trim()}")
         if (state.cargaPorAbonada) parts.add("AB:${state.abonadaValor.trim()}")
+        val cajasCajones = buildCajasCajonesSegment(state.cargaPorCajas, state.cajasCount, state.cargaPorCajones, state.cajonesCount)
+        if (cajasCajones.isNotBlank()) parts.add(cajasCajones)
         val minutesWorked: String? = if (parts.size == 1) parts[0] else parts.joinToString("|")
 
         viewModelScope.launch {
@@ -257,9 +287,20 @@ class EmpleadosViewModel @Inject constructor(
         val cachosCount = if (cosechaPart?.startsWith("C:") == true) cosechaPart.removePrefix("C:") else ""
         val esAbonada = abonadaPart != null
         val abonadaValor = abonadaPart?.removePrefix("AB:") ?: ""
-        // Primer segmento numérico = horas; si no hay (registro viejo tipo "C"), default 0
-        val horasPart = parts.firstOrNull { it.toFloatOrNull() != null }
-        val horas = horasPart?.toFloatOrNull() ?: if (esCosecha || esAbonada) 0f else mw?.toFloatOrNull() ?: 8f
+        // Segmento "Cajas X Cajones Y" (o solo uno de los dos)
+        val cajasCajonesPart = parts.firstOrNull { it.startsWith("Cajas ") || it.startsWith("Cajones ") }
+        val cajasMatch = cajasCajonesPart?.let { Regex("Cajas ([0-9]+(?:[.,][0-9]+)?)").find(it) }
+        val cajonesMatch = cajasCajonesPart?.let { Regex("Cajones ([0-9]+(?:[.,][0-9]+)?)").find(it) }
+        val esCajas = cajasMatch != null
+        val cajasCount = cajasMatch?.groupValues?.get(1) ?: ""
+        val esCajones = cajonesMatch != null
+        val cajonesCount = cajonesMatch?.groupValues?.get(1) ?: ""
+        // Horas: nuevo formato "H 4" tiene prioridad; si no, cae al formato viejo (número plano) para compatibilidad
+        val horasPartNuevo = parts.firstOrNull { it.startsWith("H ") }
+        val horasPartViejo = parts.firstOrNull { it.toFloatOrNull() != null }
+        val horas = horasPartNuevo?.removePrefix("H ")?.trim()?.toFloatOrNull()
+            ?: horasPartViejo?.toFloatOrNull()
+            ?: if (esCosecha || esAbonada || esCajas || esCajones) 0f else mw?.toFloatOrNull() ?: 8f
         _uiState.update {
             it.copy(
                 registroEnEdicion = registro,
@@ -267,7 +308,11 @@ class EmpleadosViewModel @Inject constructor(
                 horasEdicionPorCosecha = esCosecha,
                 horasEdicionCachosCount = cachosCount,
                 horasEdicionPorAbonada = esAbonada,
-                horasEdicionAbonadaValor = abonadaValor
+                horasEdicionAbonadaValor = abonadaValor,
+                horasEdicionPorCajas = esCajas,
+                horasEdicionCajasCount = cajasCount,
+                horasEdicionPorCajones = esCajones,
+                horasEdicionCajonesCount = cajonesCount,
             )
         }
     }
@@ -278,15 +323,23 @@ class EmpleadosViewModel @Inject constructor(
     fun onHorasEdicionCachosCountChanged(v: String) = _uiState.update { it.copy(horasEdicionCachosCount = v) }
     fun onHorasEdicionPorAbonadaChanged(v: Boolean) = _uiState.update { it.copy(horasEdicionPorAbonada = v, horasEdicionAbonadaValor = if (!v) "" else it.horasEdicionAbonadaValor) }
     fun onHorasEdicionAbonadaValorChanged(v: String) = _uiState.update { it.copy(horasEdicionAbonadaValor = v) }
+    fun onHorasEdicionPorCajasChanged(v: Boolean) = _uiState.update { it.copy(horasEdicionPorCajas = v, horasEdicionCajasCount = if (!v) "" else it.horasEdicionCajasCount) }
+    fun onHorasEdicionCajasCountChanged(v: String) = _uiState.update { it.copy(horasEdicionCajasCount = v) }
+    fun onHorasEdicionPorCajonesChanged(v: Boolean) = _uiState.update { it.copy(horasEdicionPorCajones = v, horasEdicionCajonesCount = if (!v) "" else it.horasEdicionCajonesCount) }
+    fun onHorasEdicionCajonesCountChanged(v: String) = _uiState.update { it.copy(horasEdicionCajonesCount = v) }
 
     fun guardarEdicionRegistro() {
         val state = _uiState.value
         val registro = state.registroEnEdicion ?: return
         if (state.horasEdicionPorCosecha && state.horasEdicionCachosCount.isBlank()) return
         if (state.horasEdicionPorAbonada && state.horasEdicionAbonadaValor.isBlank()) return
+        if (state.horasEdicionPorCajas && state.horasEdicionCajasCount.isBlank()) return
+        if (state.horasEdicionPorCajones && state.horasEdicionCajonesCount.isBlank()) return
         val editParts = mutableListOf(formatHorasValue(state.horasEdicion))
         if (state.horasEdicionPorCosecha) editParts.add("C:${state.horasEdicionCachosCount.trim()}")
         if (state.horasEdicionPorAbonada) editParts.add("AB:${state.horasEdicionAbonadaValor.trim()}")
+        val cajasCajonesEd = buildCajasCajonesSegment(state.horasEdicionPorCajas, state.horasEdicionCajasCount, state.horasEdicionPorCajones, state.horasEdicionCajonesCount)
+        if (cajasCajonesEd.isNotBlank()) editParts.add(cajasCajonesEd)
         val nuevasHoras: String? = if (editParts.size == 1) editParts[0] else editParts.joinToString("|")
         viewModelScope.launch {
             submissionRepository.updateHoras(registro.id, nuevasHoras)
@@ -495,7 +548,7 @@ class EmpleadosViewModel @Inject constructor(
     fun clearMensajeError() = _uiState.update { it.copy(mensajeError = null) }
 
     private fun formatHorasValue(h: Float): String =
-        if (h % 1f == 0f) h.toInt().toString() else h.toString()
+        "H " + (if (h % 1f == 0f) h.toInt().toString() else h.toString())
 
     private fun loadAllowedSectors() {
         viewModelScope.launch {

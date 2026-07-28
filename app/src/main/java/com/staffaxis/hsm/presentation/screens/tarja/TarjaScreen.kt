@@ -643,7 +643,7 @@ private fun VisualizadorHorasDialog(
                                             style = MaterialTheme.typography.labelSmall,
                                             color = color,
                                             textAlign = TextAlign.Center,
-                                            maxLines = 1
+                                            maxLines = 2
                                         )
                                     }
                                     val totalText = buildString {
@@ -651,6 +651,14 @@ private fun VisualizadorHorasDialog(
                                         if (resumen.cosechaCount > 0) {
                                             if (isNotEmpty()) append(" ")
                                             append("${resumen.cosechaCount}C")
+                                        }
+                                        if (resumen.cajasTotal > 0) {
+                                            if (isNotEmpty()) append("\n")
+                                            append("Cajas ${resumen.cajasTotal}")
+                                        }
+                                        if (resumen.cajonesTotal > 0) {
+                                            if (isNotEmpty()) append(" ")
+                                            append("Cajones ${resumen.cajonesTotal}")
                                         }
                                         if (resumen.importeTotal > 0f) {
                                             if (isNotEmpty()) append("\n")
@@ -664,7 +672,7 @@ private fun VisualizadorHorasDialog(
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF26C6DA),
                                         textAlign = TextAlign.Center,
-                                        maxLines = 2
+                                        maxLines = 3
                                     )
                                 }
                                 HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
@@ -702,25 +710,42 @@ private fun formatNombreViz(emp: com.staffaxis.hsm.domain.model.Employee): Strin
 private fun celdaValor(mw: String?): Pair<String, Color> {
     if (mw == null) return Pair("-", Color(0xFF444466))
     val parts = mw.split("|")
-    val horasPart = parts.firstOrNull { it.toFloatOrNull() != null }
+    // Formato nuevo "H 4" primero; si no hay, cae al número plano viejo (compatibilidad)
+    val horasPartNuevo = parts.firstOrNull { it.startsWith("H ") }
+    val horasPartViejo = parts.firstOrNull { it.toFloatOrNull() != null }
+    val horas = horasPartNuevo?.removePrefix("H ")?.trim()?.toFloatOrNull() ?: horasPartViejo?.toFloatOrNull()
+    val hasHoras = horas != null
     val hasCosecha = parts.any { it == "C" || it.startsWith("C:") }
     val hasAbonada = parts.any { it.startsWith("AB:") }
     val isImporte = parts.any { it.startsWith("$") }
-    val hasHoras = horasPart != null
+    val cajasCajonesPart = parts.firstOrNull { it.startsWith("Cajas ") || it.startsWith("Cajones ") }
+    val hasCajasCajones = cajasCajonesPart != null
+    // Abreviado para que entre en la celda angosta del visualizador ("Cajas 32" -> "Cj32")
+    val cajasCajonesCompacto = cajasCajonesPart?.let {
+        buildString {
+            Regex("Cajas ([0-9]+(?:[.,][0-9]+)?)").find(it)?.let { m -> append("Cj${m.groupValues[1]}") }
+            Regex("Cajones ([0-9]+(?:[.,][0-9]+)?)").find(it)?.let { m ->
+                if (isNotEmpty()) append(" ")
+                append("Cn${m.groupValues[1]}")
+            }
+        }
+    } ?: ""
     return when {
-        hasCosecha || hasAbonada -> {
+        hasCosecha || hasAbonada || hasCajasCajones -> {
             val cachos = parts.firstOrNull { it.startsWith("C:") }?.removePrefix("C:") ?: ""
             val label = buildString {
                 if (hasHoras) {
-                    val h = horasPart!!.toFloat()
-                    append(if (h % 1f == 0f) "${h.toInt()}h" else "${h}h")
+                    append(if (horas!! % 1f == 0f) "${horas.toInt()}h" else "${horas}h")
                     append("+")
                 }
                 if (hasCosecha) append(if (cachos.isNotBlank()) "C$cachos" else "C")
                 if (hasCosecha && hasAbonada) append("+")
                 if (hasAbonada) append("AB")
+                if ((hasCosecha || hasAbonada) && hasCajasCajones) append("+")
+                if (hasCajasCajones) append(cajasCajonesCompacto)
             }
-            val color = if (hasCosecha && hasAbonada) Color(0xFFAB47BC)
+            val color = if (hasCajasCajones) Color(0xFF66BB6A)
+                        else if (hasCosecha && hasAbonada) Color(0xFFAB47BC)
                         else if (hasCosecha) Color(0xFFFF9800)
                         else Color(0xFF7E57C2)
             Pair(label, color)
@@ -730,8 +755,7 @@ private fun celdaValor(mw: String?): Pair<String, Color> {
             Pair(imp, Color(0xFF4CAF50))
         }
         hasHoras -> {
-            val h = horasPart!!.toFloat()
-            Pair(if (h % 1f == 0f) "${h.toInt()}h" else "${h}h", Color(0xFF26C6DA))
+            Pair(if (horas!! % 1f == 0f) "${horas.toInt()}h" else "${horas}h", Color(0xFF26C6DA))
         }
         else -> Pair(mw, Color(0xFF888888))
     }

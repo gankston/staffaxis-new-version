@@ -5,8 +5,19 @@ function horas(minutos) {
   return Math.round(Number(minutos ?? 0) / 60 * 10) / 10;
 }
 
-const CAST_MW = `CAST(NULLIF(REPLACE(REGEXP_REPLACE(NULLIF(sub.minutes_worked,'C'), '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC)`;
-const COUNT_COSECHA = `COUNT(sub.id) FILTER (WHERE sub.minutes_worked = 'C')`;
+// Extrae SOLO el segmento de horas antes de convertir a número — el valor puede venir
+// como compuesto "H 4|C:33" (horas + cosecha), "H 4|Cajas 32 Cajones 43", etc. Sin esto,
+// REGEXP_REPLACE borraba todo lo que no fuera dígito y pegaba "4" y "33" en un solo "433".
+const CAST_MW = `CAST(NULLIF(REGEXP_REPLACE(
+  CASE
+    WHEN sub.minutes_worked = 'C' THEN NULL
+    WHEN sub.minutes_worked LIKE '$%' THEN NULL
+    WHEN sub.minutes_worked LIKE '%|%' THEN SPLIT_PART(sub.minutes_worked, '|', 1)
+    ELSE sub.minutes_worked
+  END,
+  '[^0-9.,]', '', 'g'
+), '') AS NUMERIC)`;
+const COUNT_COSECHA = `COUNT(sub.id) FILTER (WHERE sub.minutes_worked = 'C' OR sub.minutes_worked LIKE '%|C:%')`;
 
 function resolvePeriod(periodo, fecha_desde, fecha_hasta) {
   const hoy = new Date();

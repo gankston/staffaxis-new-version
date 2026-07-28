@@ -42,20 +42,19 @@ fun UpdateDownloadScreen(
     val context = LocalContext.current
     var downloadStatus by remember { mutableStateOf("Iniciando descarga...") }
     var showInstallButton by remember { mutableStateOf(false) }
-    var downloadedApkPath by remember { mutableStateOf<String?>(null) }
+    // Nombre único por descarga — evita que un archivo viejo (que a veces no se puede
+    // borrar en Android 10+) se mezcle con la descarga nueva y quede un APK corrupto.
+    val apkFileName = remember { "StaffAxis_update_${System.currentTimeMillis()}.apk" }
 
     // Inicia la descarga automáticamente al entrar a la pantalla
     LaunchedEffect(Unit) {
         try {
-            val downloadId = startDownload(context, updateInfo.apkUrl)
+            val downloadId = startDownload(context, updateInfo.apkUrl, apkFileName)
             if (downloadId != -1L) {
                 downloadStatus = "Descargando..."
-                checkDownloadStatus(context, downloadId) { status, path ->
+                checkDownloadStatus(context, downloadId) { status, done ->
                     downloadStatus = status
-                    if (path != null) {
-                        downloadedApkPath = path
-                        showInstallButton = true
-                    }
+                    if (done) showInstallButton = true
                 }
             } else {
                 downloadStatus = "Error al iniciar la descarga"
@@ -169,9 +168,9 @@ fun UpdateDownloadScreen(
                 Spacer(Modifier.height(16.dp))
 
                 // Botón instalar — aparece automáticamente al terminar la descarga
-                if (showInstallButton && downloadedApkPath != null) {
+                if (showInstallButton) {
                     Button(
-                        onClick = { installApk(context, onInstall) },
+                        onClick = { installApk(context, apkFileName, onInstall) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
@@ -191,14 +190,14 @@ fun UpdateDownloadScreen(
     }
 }
 
-private fun startDownload(context: Context, apkUrl: String): Long {
+private fun startDownload(context: Context, apkUrl: String, fileName: String): Long {
     return try {
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val request = DownloadManager.Request(Uri.parse(apkUrl))
             .setTitle("Descargando StaffAxis")
             .setDescription("Descargando actualización...")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "StaffAxis_update.apk")
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(true)
         dm.enqueue(request)
@@ -210,7 +209,7 @@ private fun startDownload(context: Context, apkUrl: String): Long {
 private suspend fun checkDownloadStatus(
     context: Context,
     downloadId: Long,
-    onUpdate: (String, String?) -> Unit
+    onUpdate: (String, Boolean) -> Unit
 ) {
     val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
     val query = DownloadManager.Query().setFilterById(downloadId)
@@ -222,22 +221,21 @@ private suspend fun checkDownloadStatus(
                 val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                 when (status) {
                     DownloadManager.STATUS_SUCCESSFUL -> {
-                        val uri = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-                        onUpdate("¡Descarga completada!", uri)
+                        onUpdate("¡Descarga completada!", true)
                         break
                     }
                     DownloadManager.STATUS_FAILED -> {
-                        onUpdate("Error en la descarga", null)
+                        onUpdate("Error en la descarga", false)
                         break
                     }
                     DownloadManager.STATUS_RUNNING -> {
                         val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
                         val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
                         val pct = if (total > 0) (downloaded * 100 / total).toInt() else 0
-                        onUpdate("Descargando... $pct%", null)
+                        onUpdate("Descargando... $pct%", false)
                     }
-                    DownloadManager.STATUS_PENDING  -> onUpdate("Preparando descarga...", null)
-                    DownloadManager.STATUS_PAUSED   -> onUpdate("Descarga pausada...", null)
+                    DownloadManager.STATUS_PENDING  -> onUpdate("Preparando descarga...", false)
+                    DownloadManager.STATUS_PAUSED   -> onUpdate("Descarga pausada...", false)
                 }
             }
         } finally {
@@ -246,10 +244,10 @@ private suspend fun checkDownloadStatus(
     }
 }
 
-private fun installApk(context: Context, onInstall: () -> Unit) {
+private fun installApk(context: Context, fileName: String, onInstall: () -> Unit) {
     try {
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val file = File(downloadsDir, "StaffAxis_update.apk")
+        val file = File(downloadsDir, fileName)
         if (!file.exists()) return
 
         val installUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
