@@ -13,6 +13,7 @@ export async function adminRoutes(app) {
   app.get('/api/admin/devices', { preHandler: verifyAdmin }, async (_req, reply) => {
     const result = await db.query(
       `SELECT d.id, d.device_id, d.encargado_name, d.approved,
+              d.is_master, d.revoked, d.phone_model,
               d.created_at, s.name AS sector_name, s.id AS sector_id
        FROM devices d
        LEFT JOIN sectors s ON s.id = d.sector_id

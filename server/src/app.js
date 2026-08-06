@@ -5,6 +5,7 @@ import multipart from '@fastify/multipart';
 
 import { db } from './db.js';
 import { authRoutes }       from './routes/auth.js';
+import { accessRequestRoutes } from './routes/accessRequests.js';
 import { sectorRoutes }     from './routes/sectors.js';
 import { employeeRoutes }   from './routes/employees.js';
 import { submissionRoutes } from './routes/submissions.js';
@@ -50,6 +51,7 @@ const start = async () => {
   await app.register(cors, { origin: true });
   await app.register(multipart, { limits: { fileSize: 8 * 1024 * 1024 } }); // 8MB por foto
   await app.register(authRoutes);
+  await app.register(accessRequestRoutes);
   await app.register(sectorRoutes);
   await app.register(employeeRoutes);
   await app.register(submissionRoutes);
