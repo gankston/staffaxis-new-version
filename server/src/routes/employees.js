@@ -30,13 +30,24 @@ export async function employeeRoutes(app) {
       if (!auth?.startsWith('Bearer ')) {
         return reply.status(401).send({ error: 'No autorizado' });
       }
+      let payload;
       try {
         const jwt = await import('jsonwebtoken');
-        const payload = jwt.default.verify(auth.slice(7), process.env.JWT_SECRET);
-        req.device = payload;
+        payload = jwt.default.verify(auth.slice(7), process.env.JWT_SECRET);
       } catch {
         return reply.status(401).send({ error: 'Token inválido o expirado' });
       }
+      // Mismo chequeo de revocacion en caliente que verifyDevice — este endpoint
+      // hacia su propia validacion de JWT y se salteaba este control.
+      try {
+        const r = await db.query('SELECT revoked FROM devices WHERE device_id = $1', [payload.deviceId]);
+        if (r.rows[0]?.revoked) {
+          return reply.status(403).send({ error: 'Dispositivo revocado', revoked: true });
+        }
+      } catch (err) {
+        req.log?.error?.('GET /api/employees: fallo chequeo de revocacion: ' + err.message);
+      }
+      req.device = payload;
     }
     const sectorId = req.query.sector_id ?? req.device?.sectorId;
     const result = await db.query(

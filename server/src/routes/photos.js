@@ -14,7 +14,7 @@ const DNI_DIR = path.join(UPLOAD_DIR, 'dni');
 const COL = { frente: 'dni_foto_frente', dorso: 'dni_foto_dorso' };
 
 // Acepta device JWT (app Android) o admin token (StaffAdmin). Igual que GET /api/employees.
-function verifyDeviceOrAdmin(req, reply) {
+async function verifyDeviceOrAdmin(req, reply) {
   const adminToken = req.headers['x-admin-token'];
   if (adminToken) {
     if (adminToken !== process.env.ADMIN_TOKEN) {
@@ -28,20 +28,30 @@ function verifyDeviceOrAdmin(req, reply) {
     reply.status(401).send({ error: 'No autorizado' });
     return false;
   }
+  let payload;
   try {
-    jwt.verify(auth.slice(7), process.env.JWT_SECRET);
-    return true;
+    payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
   } catch {
     reply.status(401).send({ error: 'Token inválido o expirado' });
     return false;
   }
+  try {
+    const r = await db.query('SELECT revoked FROM devices WHERE device_id = $1', [payload.deviceId]);
+    if (r.rows[0]?.revoked) {
+      reply.status(403).send({ error: 'Dispositivo revocado', revoked: true });
+      return false;
+    }
+  } catch (err) {
+    req.log?.error?.('verifyDeviceOrAdmin: fallo chequeo de revocacion: ' + err.message);
+  }
+  return true;
 }
 
 export async function photoRoutes(app) {
 
   // POST /api/employees/:id/foto/:lado — sube o reemplaza una cara del DNI (multipart)
   app.post('/api/employees/:id/foto/:lado', async (req, reply) => {
-    if (!verifyDeviceOrAdmin(req, reply)) return;
+    if (!(await verifyDeviceOrAdmin(req, reply))) return;
     const { id, lado } = req.params;
     const col = COL[lado];
     if (!col) return reply.status(400).send({ error: 'lado debe ser frente o dorso' });
@@ -73,7 +83,7 @@ export async function photoRoutes(app) {
 
   // GET /api/employees/:id/foto/:lado — devuelve la imagen
   app.get('/api/employees/:id/foto/:lado', async (req, reply) => {
-    if (!verifyDeviceOrAdmin(req, reply)) return;
+    if (!(await verifyDeviceOrAdmin(req, reply))) return;
     const { id, lado } = req.params;
     const col = COL[lado];
     if (!col) return reply.status(400).send({ error: 'lado debe ser frente o dorso' });
@@ -90,7 +100,7 @@ export async function photoRoutes(app) {
 
   // DELETE /api/employees/:id/foto/:lado — elimina la foto
   app.delete('/api/employees/:id/foto/:lado', async (req, reply) => {
-    if (!verifyDeviceOrAdmin(req, reply)) return;
+    if (!(await verifyDeviceOrAdmin(req, reply))) return;
     const { id, lado } = req.params;
     const col = COL[lado];
     if (!col) return reply.status(400).send({ error: 'lado debe ser frente o dorso' });

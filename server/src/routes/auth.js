@@ -57,6 +57,13 @@ export async function authRoutes(app) {
     return reply.send({ token });
   });
 
+  // GET /api/auth/device/status — heartbeat liviano para que la app detecte una
+  // revocacion "en caliente" aunque el usuario no este tocando nada. verifyDevice
+  // ya corta con 403 si el dispositivo esta revocado.
+  app.get('/api/auth/device/status', { preHandler: verifyDevice }, async (_req, reply) => {
+    return reply.send({ ok: true });
+  });
+
   // GET /api/auth/device/allowed-sectors
   app.get('/api/auth/device/allowed-sectors', { preHandler: verifyDevice }, async (req, reply) => {
     const { sectorId } = req.device;

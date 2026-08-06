@@ -53,7 +53,7 @@ export async function accessRequestRoutes(app) {
     const dev = existing.rows[0];
     if (dev && !dev.revoked && (dev.is_master || dev.approved)) {
       const token = await upsertAuthorizedDevice(device_id, sector_id, full_name.trim(), phone_model);
-      return reply.send({ status: 'authorized', token });
+      return reply.send({ status: 'authorized', token, is_master: dev.is_master === true });
     }
 
     // Si ya hay un pedido pendiente de este mismo dispositivo, no duplicar: devolver ese.
@@ -90,11 +90,11 @@ export async function accessRequestRoutes(app) {
     }
 
     // authorized -> traer el token vigente del device
-    const dev = await db.query('SELECT token, revoked FROM devices WHERE device_id = $1', [reqRow.device_id]);
+    const dev = await db.query('SELECT token, revoked, is_master FROM devices WHERE device_id = $1', [reqRow.device_id]);
     if (!dev.rows[0] || dev.rows[0].revoked) {
       return reply.send({ status: 'rejected' }); // revocado entre medio, no darle token
     }
-    return reply.send({ status: 'authorized', token: dev.rows[0].token });
+    return reply.send({ status: 'authorized', token: dev.rows[0].token, is_master: dev.rows[0].is_master === true });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
