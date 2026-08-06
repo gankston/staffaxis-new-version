@@ -60,8 +60,12 @@ export async function authRoutes(app) {
   // GET /api/auth/device/status — heartbeat liviano para que la app detecte una
   // revocacion "en caliente" aunque el usuario no este tocando nada. verifyDevice
   // ya corta con 403 si el dispositivo esta revocado.
-  app.get('/api/auth/device/status', { preHandler: verifyDevice }, async (_req, reply) => {
-    return reply.send({ ok: true });
+  // Devuelve tambien is_master: el flag se marca a mano en la base despues de que
+  // el telefono ya fue autorizado, asi que la app necesita poder enterarse del
+  // cambio sin tener que re-autorizarse.
+  app.get('/api/auth/device/status', { preHandler: verifyDevice }, async (req, reply) => {
+    const r = await db.query('SELECT is_master FROM devices WHERE device_id = $1', [req.device.deviceId]);
+    return reply.send({ ok: true, is_master: r.rows[0]?.is_master === true });
   });
 
   // GET /api/auth/device/allowed-sectors
