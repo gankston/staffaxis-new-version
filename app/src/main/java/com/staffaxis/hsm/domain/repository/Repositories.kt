@@ -9,6 +9,20 @@ interface AuthRepository {
     suspend fun getAllowedSectors(): AppResult<List<Sector>>
     fun getDeviceToken(): Flow<String?>
     fun getDeviceId(): Flow<String?>
+
+    // Autorizacion sin codigo: pide acceso con nombre completo, puede quedar pendiente
+    // (a que alguien en StaffAdmin lo autorice) o autorizarse al toque si es maestro/ya aprobado.
+    suspend fun requestAccess(
+        deviceId: String, sectorId: String, fullName: String,
+        phoneModel: String?, latitude: Double?, longitude: Double?
+    ): AppResult<AccessRequestResult>
+
+    suspend fun checkAccessStatus(requestId: String, deviceId: String): AppResult<AccessStatus>
+
+    // Heartbeat para detectar revocacion "en caliente" aunque el usuario no haga nada.
+    // No importa el resultado en si — el interceptor global de red es el que actua
+    // si la respuesta viene con 403 revoked.
+    suspend fun pingDeviceStatus()
 }
 
 interface SectorRepository {

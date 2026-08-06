@@ -563,9 +563,17 @@ class EmpleadosViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val deviceId = prefs.deviceId.first() ?: return@launch
-            val encargadoName = prefs.activeSectorEncargado.first() ?: _uiState.value.sectorName
-            authRepository.registerDevice(deviceId, sector.id, encargadoName)
-            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, encargadoName)
+            val nombre = prefs.userFullName.first()
+                ?: prefs.activeSectorEncargado.first()
+                ?: _uiState.value.sectorName
+            // requestAccess (no el registro viejo): el endpoint viejo devolvia el token
+            // que ya existia sin actualizar el sector en el servidor, asi que el token
+            // quedaba apuntando al sector anterior.
+            authRepository.requestAccess(
+                deviceId = deviceId, sectorId = sector.id, fullName = nombre,
+                phoneModel = null, latitude = null, longitude = null
+            )
+            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado)
             _uiState.update { it.copy(isLoading = false, recargarMain = true) }
         }
     }

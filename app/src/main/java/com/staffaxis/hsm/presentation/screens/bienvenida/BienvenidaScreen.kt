@@ -1,9 +1,14 @@
 package com.staffaxis.hsm.presentation.screens.bienvenida
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material3.*
@@ -31,6 +36,19 @@ fun BienvenidaScreen(
     val uiState by viewModel.uiState.collectAsState()
     var expandido by remember { mutableStateOf(false) }
 
+    // Diálogo nativo de Android — sin texto propio, ya se le explicó para qué es.
+    // Se pida o no se pida el permiso, siempre se sigue con la solicitud: el GPS
+    // nunca bloquea el flujo (LocationHelper cae a null si no hay permiso/timeout).
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { viewModel.solicitarAutorizacion() }
+
+    fun solicitarConGps() {
+        locationPermissionLauncher.launch(
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        )
+    }
+
     LaunchedEffect(uiState.navegarAMain) {
         if (uiState.navegarAMain) onNavegar()
     }
@@ -52,6 +70,8 @@ fun BienvenidaScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -73,7 +93,9 @@ fun BienvenidaScreen(
             Spacer(Modifier.height(48.dp))
 
             when {
-                uiState.isPending -> PendingCard()
+                uiState.rechazado -> RechazadoCard(onVolver = viewModel::cancelarEspera)
+
+                uiState.esperandoAutorizacion -> EsperandoAutorizacionCard()
 
                 uiState.isLoading -> {
                     CircularProgressIndicator(color = Color(0xFF26C6DA))
@@ -93,14 +115,15 @@ fun BienvenidaScreen(
                     )
                 }
 
-                // Formulario de registro: dropdown de encargados/sectores
+                // Sin token todavia: elegir sector + nombre completo + pedir autorizacion
                 !uiState.tieneToken && uiState.mostrarFormulario && uiState.sectores.isNotEmpty() -> {
-                    RegistroConSectoresCard(
+                    SolicitarAutorizacionCard(
                         uiState = uiState,
                         expandido = expandido,
                         onExpandedChange = { expandido = it },
                         onSectorSelected = { viewModel.onSectorSelected(it); expandido = false },
-                        onRegistrar = viewModel::registrarDispositivo
+                        onNombreChanged = viewModel::onNombreCompletoChanged,
+                        onSolicitar = ::solicitarConGps
                     )
                 }
 
@@ -148,7 +171,7 @@ fun BienvenidaScreen(
 }
 
 @Composable
-private fun PendingCard() {
+private fun EsperandoAutorizacionCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -159,10 +182,10 @@ private fun PendingCard() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("⏳", fontSize = 40.sp)
-            Text("Registro pendiente", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            CircularProgressIndicator(color = Color(0xFF26C6DA))
+            Text("Esperando autorización", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "Tu dispositivo está esperando aprobación del administrador. Volvé a intentar más tarde.",
+                "Tu solicitud ya llegó al administrador. Esta pantalla va a avanzar sola apenas te autoricen.",
                 color = Color(0xFFB0B0B0),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center
@@ -171,14 +194,41 @@ private fun PendingCard() {
     }
 }
 
+@Composable
+private fun RechazadoCard(onVolver: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3E))
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("✕", fontSize = 40.sp, color = Color(0xFFFF5252))
+            Text("Solicitud rechazada", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "El administrador rechazó el acceso. Si es un error, pedile que revise la solicitud.",
+                color = Color(0xFFB0B0B0),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(4.dp))
+            GradientButton(text = "Volver a intentar", onClick = onVolver, isLoading = false, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RegistroConSectoresCard(
+private fun SolicitarAutorizacionCard(
     uiState: BienvenidaUiState,
     expandido: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onSectorSelected: (Sector) -> Unit,
-    onRegistrar: () -> Unit
+    onNombreChanged: (String) -> Unit,
+    onSolicitar: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -186,7 +236,7 @@ private fun RegistroConSectoresCard(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3E))
     ) {
         Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("Seleccione el Encargado", color = Color.White, style = MaterialTheme.typography.labelLarge)
+            Text("Seleccione el Sector", color = Color.White, style = MaterialTheme.typography.labelLarge)
 
             ExposedDropdownMenuBox(expanded = expandido, onExpandedChange = onExpandedChange) {
                 OutlinedTextField(
@@ -195,7 +245,7 @@ private fun RegistroConSectoresCard(
                     } ?: "",
                     onValueChange = {},
                     readOnly = true,
-                    placeholder = { Text("Seleccione un encargado", color = Color(0xFF888888)) },
+                    placeholder = { Text("Seleccione un sector", color = Color(0xFF888888)) },
                     leadingIcon = { Icon(Icons.Default.Business, null, tint = Color(0xFF26C6DA)) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandido) },
                     modifier = Modifier.fillMaxWidth().menuAnchor(),
@@ -218,11 +268,21 @@ private fun RegistroConSectoresCard(
                 }
             }
 
-            GradientButton(
-                text = if (uiState.isLoading) "Registrando..." else "Registrar dispositivo",
-                onClick = onRegistrar,
+            OutlinedTextField(
+                value = uiState.nombreCompleto,
+                onValueChange = onNombreChanged,
+                label = { Text("Nombre y apellido", color = Color(0xFF888888)) },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = uiState.sectorSeleccionado != null,
+                singleLine = true,
+                colors = textFieldColors(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            GradientButton(
+                text = if (uiState.isLoading) "Solicitando..." else "Solicitar autorización",
+                onClick = onSolicitar,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = uiState.sectorSeleccionado != null && uiState.nombreCompleto.trim().isNotEmpty(),
                 isLoading = uiState.isLoading
             )
         }

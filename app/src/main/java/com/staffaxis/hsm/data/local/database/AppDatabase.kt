@@ -16,7 +16,7 @@ import com.staffaxis.hsm.data.local.entity.*
         TarjaStatusEntity::class,
         TransferEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +32,13 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE employees ADD COLUMN tieneFotoFrente INTEGER NOT NULL DEFAULT 0")
                 database.execSQL("ALTER TABLE employees ADD COLUMN tieneFotoDorso INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE outbox_submissions ADD COLUMN latitude REAL")
+                database.execSQL("ALTER TABLE outbox_submissions ADD COLUMN longitude REAL")
             }
         }
     }

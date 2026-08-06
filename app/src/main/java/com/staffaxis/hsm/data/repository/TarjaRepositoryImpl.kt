@@ -7,6 +7,7 @@ import com.staffaxis.hsm.data.remote.api.SubmissionApiService
 import com.staffaxis.hsm.data.remote.dto.CreateSubmissionRequestDto
 import com.staffaxis.hsm.domain.model.AppResult
 import com.staffaxis.hsm.domain.model.TarjaStatus
+import com.staffaxis.hsm.domain.model.TarjaValores
 import com.staffaxis.hsm.domain.repository.TarjaRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -37,7 +38,9 @@ class TarjaRepositoryImpl @Inject constructor(
 
         val allSent = outboxDao.getSentForDate(date, sectorId)
         val totalEmpleados = allSent.size
-        val totalHours = allSent.sumOf { it.minutesWorked?.toIntOrNull() ?: 0 }.toFloat()
+        // El valor es compuesto ("H 8|C:33|..."), no un numero plano: toIntOrNull daba
+        // siempre null y por eso la tarja enviada quedaba en 0h.
+        val totalHours = TarjaValores.sumar(allSent.map { it.minutesWorked }).horas
 
         val status = TarjaStatusEntity(
             date = date,
@@ -69,7 +72,14 @@ class TarjaRepositoryImpl @Inject constructor(
                     async {
                         try {
                             val response = api.createSubmission(
-                                CreateSubmissionRequestDto(submission.employeeId, submission.date, toApiMinutes(submission.minutesWorked), submission.notes)
+                                CreateSubmissionRequestDto(
+                                    employeeId = submission.employeeId,
+                                    date = submission.date,
+                                    minutesWorked = toApiMinutes(submission.minutesWorked),
+                                    notes = submission.notes,
+                                    latitude = submission.latitude,
+                                    longitude = submission.longitude
+                                )
                             )
                             mutex.withLock {
                                 when {

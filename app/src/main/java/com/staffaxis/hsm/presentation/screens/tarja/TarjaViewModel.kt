@@ -9,6 +9,7 @@ import com.staffaxis.hsm.domain.model.EmployeeTransfer
 import com.staffaxis.hsm.domain.model.OutboxSubmission
 import com.staffaxis.hsm.domain.model.Sector
 import com.staffaxis.hsm.domain.model.TarjaStatus
+import com.staffaxis.hsm.domain.model.TarjaValores
 import com.staffaxis.hsm.domain.repository.AbsenceRepository
 import com.staffaxis.hsm.domain.repository.AuthRepository
 import com.staffaxis.hsm.domain.repository.EmployeeRepository
@@ -35,7 +36,9 @@ data class TarjaUiState(
     val ausentesHoy: Int = 0,
     val horasTarjadas: Float = 0f,
     val pendingCount: Int = 0,
-    val cosechaDelDia: Int = 0,
+    val cosechaDelDia: Float = 0f,
+    val cajasDelDia: Int = 0,
+    val cajonesDelDia: Int = 0,
     val montoDelDia: Float = 0f,
     val transfers: List<EmployeeTransfer> = emptyList(),
     val error: String? = null,
@@ -58,7 +61,8 @@ data class ResumenEmpleadoHoras(
     val empleado: Employee,
     val horasPorDia: Map<String, String?>,
     val totalHoras: Float,
-    val cosechaCount: Int,
+    // Cachos de cosecha sumados (antes contaba cuantos empleados tenian cosecha)
+    val cosechaTotal: Float,
     val importeTotal: Float,
     val cajasTotal: Int = 0,
     val cajonesTotal: Int = 0
@@ -107,31 +111,24 @@ class TarjaViewModel @Inject constructor(
                 }
                 val submissions = submissionRepository.getAllActiveForDate(today, sectorId)
                 val tarjados = submissions.size
-                val horas = submissions.sumOf { sub ->
-                    val parts = sub.minutesWorked?.split("|") ?: emptyList()
-                    parts.firstOrNull { it.toDoubleOrNull() != null }?.toDoubleOrNull() ?: 0.0
-                }.toFloat()
-                val cosechaDelDia = submissions.count { sub ->
-                    val parts = sub.minutesWorked?.split("|") ?: emptyList()
-                    parts.any { it == "C" || it.startsWith("C:") }
-                }
-                val montoDelDia = submissions.sumOf { sub ->
-                    val parts = sub.minutesWorked?.split("|") ?: emptyList()
-                    parts.filter { it.startsWith("$") }.sumOf { it.substring(1).toDoubleOrNull() ?: 0.0 }
-                }.toFloat()
+                val valores = TarjaValores.sumar(submissions.map { it.minutesWorked })
 
-                Quad(status, empleados.size, ausentesHoy, tarjados, horas, pending, transfers, cosechaDelDia, montoDelDia)
-            }.collect { (status, total, ausentes, tarjados, horas, pending, transfers, cosecha, monto) ->
+                Quad(status, empleados.size, ausentesHoy, tarjados, valores, pending, transfers)
+            }.collect { (status, total, ausentes, tarjados, valores, pending, transfers) ->
                 _uiState.update { state ->
                     state.copy(
                         tarjaStatus = status,
                         empleadosTotal = total,
                         empleadosTarjados = status?.empleadosTarjados ?: tarjados,
                         ausentesHoy = ausentes,
-                        horasTarjadas = status?.horasTarjadas ?: horas,
+                        // Siempre los totales calculados en vivo: los guardados en tarja_status
+                        // de tarjas viejas quedaron en 0 por el bug de parseo.
+                        horasTarjadas = valores.horas,
                         pendingCount = pending,
-                        cosechaDelDia = cosecha,
-                        montoDelDia = monto,
+                        cosechaDelDia = valores.cosecha,
+                        cajasDelDia = valores.cajas,
+                        cajonesDelDia = valores.cajones,
+                        montoDelDia = valores.importe,
                         transfers = transfers,
                         isLoading = false
                     )
@@ -181,9 +178,17 @@ class TarjaViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val deviceId = prefs.deviceId.first() ?: return@launch
-            val encargadoName = prefs.activeSectorEncargado.first() ?: _uiState.value.encargadoName
-            authRepository.registerDevice(deviceId, sector.id, encargadoName)
-            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, encargadoName)
+            val nombre = prefs.userFullName.first()
+                ?: prefs.activeSectorEncargado.first()
+                ?: _uiState.value.encargadoName
+            // requestAccess (no el registro viejo): el endpoint viejo devolvia el token
+            // que ya existia sin actualizar el sector en el servidor, asi que el token
+            // quedaba apuntando al sector anterior.
+            authRepository.requestAccess(
+                deviceId = deviceId, sectorId = sector.id, fullName = nombre,
+                phoneModel = null, latitude = null, longitude = null
+            )
+            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado)
             _uiState.update { it.copy(isLoading = false, recargarMain = true) }
         }
     }
@@ -236,31 +241,8 @@ class TarjaViewModel @Inject constructor(
                 .mapNotNull { (empId, subs) ->
                     val emp = empleadoMap[empId] ?: return@mapNotNull null
                     val horasPorDia = subs.associate { it.date to it.minutesWorked }
-                    val totalHoras = subs.sumOf { sub ->
-                        val parts = sub.minutesWorked?.split("|") ?: emptyList()
-                        // Formato nuevo "H 4" primero; si no, cae al número plano viejo
-                        val horasPart = parts.firstOrNull { it.startsWith("H ") } ?: parts.firstOrNull { it.toDoubleOrNull() != null }
-                        if (horasPart?.startsWith("H ") == true) horasPart.removePrefix("H ").trim().toDoubleOrNull() ?: 0.0
-                        else horasPart?.toDoubleOrNull() ?: 0.0
-                    }.toFloat()
-                    val cosechaCount = subs.count { sub ->
-                        val parts = sub.minutesWorked?.split("|") ?: emptyList()
-                        parts.any { it == "C" || it.startsWith("C:") }
-                    }
-                    val importeTotal = subs.sumOf { sub ->
-                        val parts = sub.minutesWorked?.split("|") ?: emptyList()
-                        parts.filter { it.startsWith("$") }.sumOf { it.substring(1).toDoubleOrNull() ?: 0.0 }
-                    }.toFloat()
-                    val cajasCajonesParts = subs.mapNotNull { sub ->
-                        sub.minutesWorked?.split("|")?.firstOrNull { it.startsWith("Cajas ") || it.startsWith("Cajones ") }
-                    }
-                    val cajasTotal = cajasCajonesParts.sumOf { part ->
-                        Regex("Cajas ([0-9]+(?:[.,][0-9]+)?)").find(part)?.groupValues?.get(1)?.replace(",", ".")?.toDoubleOrNull() ?: 0.0
-                    }.toInt()
-                    val cajonesTotal = cajasCajonesParts.sumOf { part ->
-                        Regex("Cajones ([0-9]+(?:[.,][0-9]+)?)").find(part)?.groupValues?.get(1)?.replace(",", ".")?.toDoubleOrNull() ?: 0.0
-                    }.toInt()
-                    ResumenEmpleadoHoras(emp, horasPorDia, totalHoras, cosechaCount, importeTotal, cajasTotal, cajonesTotal)
+                    val v = TarjaValores.sumar(subs.map { it.minutesWorked })
+                    ResumenEmpleadoHoras(emp, horasPorDia, v.horas, v.cosecha, v.importe, v.cajas, v.cajones)
                 }
                 .sortedBy { emp ->
                     emp.empleado.apellido.ifBlank {
@@ -296,9 +278,7 @@ private data class Quad(
     val total: Int,
     val ausentes: Int,
     val tarjados: Int,
-    val horas: Float,
+    val valores: TarjaValores,
     val pending: Int,
-    val transfers: List<EmployeeTransfer>,
-    val cosechaDelDia: Int,
-    val montoDelDia: Float
+    val transfers: List<EmployeeTransfer>
 )

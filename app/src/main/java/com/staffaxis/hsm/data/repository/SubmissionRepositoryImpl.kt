@@ -1,5 +1,6 @@
 package com.staffaxis.hsm.data.repository
 
+import com.staffaxis.hsm.data.local.LocationHelper
 import com.staffaxis.hsm.data.local.dao.OutboxSubmissionDao
 import com.staffaxis.hsm.data.local.entity.OutboxSubmissionEntity
 import com.staffaxis.hsm.data.remote.api.AdminApiService
@@ -17,7 +18,8 @@ private const val ADMIN_TOKEN = "staffaxis_admin_token_2024_prod"
 class SubmissionRepositoryImpl @Inject constructor(
     private val dao: OutboxSubmissionDao,
     private val api: SubmissionApiService,
-    private val adminApi: AdminApiService
+    private val adminApi: AdminApiService,
+    private val locationHelper: LocationHelper
 ) : SubmissionRepository {
 
     override suspend fun saveHoras(
@@ -28,6 +30,7 @@ class SubmissionRepositoryImpl @Inject constructor(
         notes: String?
     ): AppResult<Unit> {
         return try {
+            val ubicacion = locationHelper.getLocation()
             val entity = OutboxSubmissionEntity(
                 id = UUID.randomUUID().toString(),
                 dedupKey = "$sectorId:$employeeId:$date",
@@ -36,7 +39,9 @@ class SubmissionRepositoryImpl @Inject constructor(
                 date = date,
                 minutesWorked = minutesWorked,
                 notes = notes,
-                createdAt = System.currentTimeMillis()
+                createdAt = System.currentTimeMillis(),
+                latitude = ubicacion?.latitude,
+                longitude = ubicacion?.longitude
             )
             val inserted = dao.insert(entity)
             if (inserted == -1L) {
@@ -80,7 +85,9 @@ class SubmissionRepositoryImpl @Inject constructor(
                         employeeId = submission.employeeId,
                         date = submission.date,
                         minutesWorked = toApiMinutes(submission.minutesWorked),
-                        notes = submission.notes
+                        notes = submission.notes,
+                        latitude = submission.latitude,
+                        longitude = submission.longitude
                     )
                 )
                 when {

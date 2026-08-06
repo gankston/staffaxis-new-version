@@ -6,7 +6,9 @@ data class CreateSubmissionRequestDto(
     @SerializedName("employee_id") val employeeId: String,
     @SerializedName("date") val date: String,
     @SerializedName("minutes_worked") val minutesWorked: String? = null,
-    @SerializedName("notes") val notes: String? = null
+    @SerializedName("notes") val notes: String? = null,
+    @SerializedName("latitude") val latitude: Double? = null,
+    @SerializedName("longitude") val longitude: Double? = null
 )
 
 data class SubmissionResponseDto(

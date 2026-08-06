@@ -175,7 +175,9 @@ fun TarjaScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceAround
                             ) {
-                                GradientStat("${uiState.cosechaDelDia}", "Cosecha")
+                                GradientStat(formatCantidad(uiState.cosechaDelDia), "Cosecha")
+                                GradientStat("${uiState.cajasDelDia}", "Cajas")
+                                GradientStat("${uiState.cajonesDelDia}", "Cajones")
                                 GradientStat(formatMonto(uiState.montoDelDia), "Monto")
                             }
                         }
@@ -391,8 +393,22 @@ private fun EstadoTarjaCard(uiState: TarjaUiState, fechaCorta: String) {
                     HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
                         TarjaEnviadaStat("${status.empleadosTarjados}", "Empleados\ntarjados")
-                        TarjaEnviadaStat(formatHoras(status.horasTarjadas), "Horas\ntarjadas")
+                        // Totales calculados en vivo: los guardados en tarja_status de tarjas
+                        // viejas quedaron en 0 por el bug de parseo del formato compuesto.
+                        TarjaEnviadaStat(formatHoras(uiState.horasTarjadas), "Horas\ntarjadas")
                         TarjaEnviadaStat("${status.jornalesTotales}", "Jornales\nde hoy")
+                    }
+
+                    val hayExtras = uiState.cosechaDelDia > 0f || uiState.cajasDelDia > 0 ||
+                            uiState.cajonesDelDia > 0 || uiState.montoDelDia > 0f
+                    if (hayExtras) {
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                            if (uiState.cosechaDelDia > 0f) TarjaEnviadaStat(formatCantidad(uiState.cosechaDelDia), "Cosecha")
+                            if (uiState.cajasDelDia > 0) TarjaEnviadaStat("${uiState.cajasDelDia}", "Cajas")
+                            if (uiState.cajonesDelDia > 0) TarjaEnviadaStat("${uiState.cajonesDelDia}", "Cajones")
+                            if (uiState.montoDelDia > 0f) TarjaEnviadaStat(formatMonto(uiState.montoDelDia), "Importe")
+                        }
                     }
                     status.horaEnvio?.let { millis ->
                         val hora = java.time.Instant.ofEpochMilli(millis)
@@ -561,8 +577,10 @@ private fun VisualizadorHorasDialog(
                     }
                     else -> {
                         val totalHoras = uiState.visualizadorData.sumOf { it.totalHoras.toDouble() }.toFloat()
-                        val totalCosecha = uiState.visualizadorData.sumOf { it.cosechaCount }
+                        val totalCosecha = uiState.visualizadorData.sumOf { it.cosechaTotal.toDouble() }.toFloat()
                         val totalImporte = uiState.visualizadorData.sumOf { it.importeTotal.toDouble() }.toFloat()
+                        val totalCajas = uiState.visualizadorData.sumOf { it.cajasTotal }
+                        val totalCajones = uiState.visualizadorData.sumOf { it.cajonesTotal }
 
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
@@ -572,7 +590,9 @@ private fun VisualizadorHorasDialog(
                             Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceAround) {
                                 ResumenStat("${uiState.visualizadorData.size}", "Empleados")
                                 ResumenStat(formatHoras(totalHoras), "Total horas")
-                                if (totalCosecha > 0) ResumenStat("$totalCosecha", "Cosecha")
+                                if (totalCosecha > 0f) ResumenStat(formatCantidad(totalCosecha), "Cosecha")
+                                if (totalCajas > 0) ResumenStat("$totalCajas", "Cajas")
+                                if (totalCajones > 0) ResumenStat("$totalCajones", "Cajones")
                                 if (totalImporte > 0f) ResumenStat(formatMonto(totalImporte), "Importe")
                             }
                         }
@@ -648,9 +668,9 @@ private fun VisualizadorHorasDialog(
                                     }
                                     val totalText = buildString {
                                         if (resumen.totalHoras > 0f) append(formatHoras(resumen.totalHoras))
-                                        if (resumen.cosechaCount > 0) {
+                                        if (resumen.cosechaTotal > 0f) {
                                             if (isNotEmpty()) append(" ")
-                                            append("${resumen.cosechaCount}C")
+                                            append("C${formatCantidad(resumen.cosechaTotal)}")
                                         }
                                         if (resumen.cajasTotal > 0) {
                                             if (isNotEmpty()) append("\n")
@@ -772,3 +792,7 @@ private fun formatMonto(monto: Float): String {
     else if (monto == monto.toLong().toFloat()) "$${monto.toLong()}"
     else "$${"%.2f".format(monto)}"
 }
+
+// Cantidades sueltas (cachos de cosecha): sin decimales cuando son enteras.
+private fun formatCantidad(valor: Float): String =
+    if (valor == valor.toLong().toFloat()) "${valor.toLong()}" else "%.1f".format(valor)

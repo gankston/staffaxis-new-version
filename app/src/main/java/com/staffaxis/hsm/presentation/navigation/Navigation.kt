@@ -48,6 +48,15 @@ fun AppNavigation(sessionViewModel: SessionViewModel = hiltViewModel()) {
 
     val rootNav = rememberNavController()
 
+    LaunchedEffect(Unit) {
+        sessionViewModel.forceLogout.collect {
+            sessionViewModel.handleForcedLogout()
+            rootNav.navigate(Destination.Bienvenida.route) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
+
     NavHost(navController = rootNav, startDestination = startDestination!!) {
         composable(Destination.Bienvenida.route) {
             BienvenidaScreen(onNavegar = {

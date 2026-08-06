@@ -19,7 +19,9 @@ data class OutboxSubmissionEntity(
     val createdAt: Long,
     val attempts: Int = 0,
     val lastError: String? = null,
-    val status: String = STATUS_PENDING
+    val status: String = STATUS_PENDING,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 ) {
     companion object {
         const val STATUS_PENDING = "pending"

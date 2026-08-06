@@ -9,6 +9,19 @@ data class Sector(
     val encargado: String? = null
 )
 
+// Resultado de pedir autorización — puede quedar pendiente (a la espera de que
+// alguien en StaffAdmin lo apruebe) o quedar autorizada al toque (dispositivo maestro).
+sealed class AccessRequestResult {
+    data class Authorized(val token: String, val isMaster: Boolean) : AccessRequestResult()
+    data class Pending(val requestId: String) : AccessRequestResult()
+}
+
+sealed class AccessStatus {
+    object Pending : AccessStatus()
+    data class Authorized(val token: String, val isMaster: Boolean) : AccessStatus()
+    object Rejected : AccessStatus()
+}
+
 data class Employee(
     val id: String,
     val nombre: String,

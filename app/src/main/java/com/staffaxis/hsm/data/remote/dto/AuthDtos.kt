@@ -21,3 +21,24 @@ data class AllowedSectorsResponseDto(
 data class SectorsListResponseDto(
     @SerializedName("sectors") val sectors: List<SectorDto> = emptyList()
 )
+
+data class RequestAccessRequestDto(
+    @SerializedName("device_id") val deviceId: String,
+    @SerializedName("sector_id") val sectorId: String,
+    @SerializedName("full_name") val fullName: String,
+    @SerializedName("phone_model") val phoneModel: String?,
+    @SerializedName("latitude") val latitude: Double?,
+    @SerializedName("longitude") val longitude: Double?
+)
+
+data class DeviceStatusResponseDto(
+    @SerializedName("ok") val ok: Boolean = false,
+    @SerializedName("is_master") val isMaster: Boolean? = null
+)
+
+data class AccessStatusResponseDto(
+    @SerializedName("status") val status: String, // pending | authorized | rejected
+    @SerializedName("token") val token: String? = null,
+    @SerializedName("is_master") val isMaster: Boolean? = null,
+    @SerializedName("request_id") val requestId: String? = null
+)

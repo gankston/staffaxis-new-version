@@ -1,6 +1,7 @@
 package com.staffaxis.hsm.di
 
 import com.staffaxis.hsm.BuildConfig
+import com.staffaxis.hsm.data.local.SessionEvents
 import com.staffaxis.hsm.data.local.preferences.AppPreferences
 import com.staffaxis.hsm.data.remote.api.AbsenceApiService
 import com.staffaxis.hsm.data.remote.api.AdminApiService
@@ -28,7 +29,7 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(prefs: AppPreferences): OkHttpClient {
+    fun provideOkHttpClient(prefs: AppPreferences, sessionEvents: SessionEvents): OkHttpClient {
         val authInterceptor = Interceptor { chain ->
             val token = runBlocking { prefs.deviceToken.first() }
             val request = chain.request().newBuilder().apply {
@@ -51,9 +52,23 @@ object NetworkModule {
             )
         }
 
+        // Revocacion "en caliente": cualquier respuesta 403 {revoked:true} de CUALQUIER
+        // endpoint dispara el evento global que manda a toda la app de vuelta a bienvenida.
+        val revokedInterceptor = Interceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (response.code == 403) {
+                val bodySnippet = response.peekBody(2048).string()
+                if (bodySnippet.contains("\"revoked\":true") || bodySnippet.contains("\"revoked\": true")) {
+                    sessionEvents.notifyRevoked()
+                }
+            }
+            response
+        }
+
         return OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
             .addInterceptor(noCacheInterceptor)
+            .addInterceptor(revokedInterceptor)
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
                         else HttpLoggingInterceptor.Level.NONE

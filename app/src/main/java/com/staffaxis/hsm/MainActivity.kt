@@ -4,7 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
@@ -47,8 +50,19 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val isEmulator = EmulatorDetector.isEmulator(this)
 
+        val crashPrefs = getSharedPreferences("crash_log", MODE_PRIVATE)
+        val lastCrash = crashPrefs.getString("last_crash", null)
+
         setContent {
             StaffAxisTheme {
+                if (lastCrash != null) {
+                    CrashScreen(
+                        stackTrace = lastCrash,
+                        onDismiss = { crashPrefs.edit().clear().apply(); recreate() }
+                    )
+                    return@StaffAxisTheme
+                }
+
                 if (isEmulator) {
                     SafetyNetErrorScreen()
                     return@StaffAxisTheme
@@ -113,6 +127,49 @@ class MainActivity : ComponentActivity() {
             } else null
         } catch (e: Exception) {
             null
+        }
+    }
+}
+
+@Composable
+private fun CrashScreen(stackTrace: String, onDismiss: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color(0xFF1E1E2E))
+            .padding(20.dp)
+    ) {
+        Text(
+            "La app se cerró de golpe",
+            color = androidx.compose.ui.graphics.Color(0xFFFF5252),
+            style = MaterialTheme.typography.titleLarge,
+            fontFamily = FontFamily.Default
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Mandale una captura de esto a Gastón:",
+            color = androidx.compose.ui.graphics.Color.White,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(Modifier.height(16.dp))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(androidx.compose.ui.graphics.Color(0xFF2A2A3E))
+                .padding(12.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Text(
+                stackTrace,
+                color = androidx.compose.ui.graphics.Color(0xFFB0B0B0),
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+            Text("Reintentar")
         }
     }
 }
