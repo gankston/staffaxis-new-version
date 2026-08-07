@@ -56,13 +56,27 @@ export async function accessRequestRoutes(app) {
       return reply.send({ status: 'authorized', token, is_master: dev.is_master === true });
     }
 
-    // Si ya hay un pedido pendiente de este mismo dispositivo, no duplicar: devolver ese.
+    // Si ya hay un pedido pendiente de este mismo dispositivo no se duplica: se pisa
+    // con los datos nuevos. Si alguien se equivoco de sector (o escribio mal el nombre)
+    // y vuelve a pedir, lo que vale es el ultimo pedido — antes se ignoraba la
+    // correccion y terminaba autorizado en el sector viejo.
     const pending = await db.query(
       `SELECT id FROM access_requests WHERE device_id = $1 AND status = 'pending'
        ORDER BY created_at DESC LIMIT 1`,
       [device_id]
     );
     if (pending.rows[0]) {
+      await db.query(
+        `UPDATE access_requests
+            SET sector_id   = $1,
+                full_name   = $2,
+                phone_model = COALESCE($3, phone_model),
+                latitude    = COALESCE($4, latitude),
+                longitude   = COALESCE($5, longitude),
+                created_at  = NOW()
+          WHERE id = $6`,
+        [sector_id, full_name.trim(), phone_model ?? null, latitude ?? null, longitude ?? null, pending.rows[0].id]
+      );
       return reply.send({ status: 'pending', request_id: pending.rows[0].id });
     }
 
