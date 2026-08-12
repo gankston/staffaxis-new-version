@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StaffAxis — Architecture Map</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0A0D13;--surface:#111822;--surface2:#192030;--border:#243048;
+  --text:#CDD9E5;--muted:#768390;--faint:#2A3A52;
+  --mono:'JetBrains Mono',Consolas,monospace;
+  --sans:'Inter',-apple-system,system-ui,sans-serif;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;flex-direction:column}
+svg,svg *{user-select:none}
+svg text{pointer-events:none}
+
+.hdr{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px;background:rgba(10,13,19,.96);border-bottom:1px solid var(--border)}
+.hdr-l{display:flex;align-items:center;gap:8px}
+.hdr-title{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff}
+.hdr-badge{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:4px;
+  background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.leg{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.leg-i{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.leg-d{width:7px;height:7px;border-radius:50%}
+
+.pills-bar{flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.pills-label{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;margin-right:4px}
+.fpill{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:9999px;
+  cursor:pointer;font-family:var(--mono);font-size:10px;
+  border:1px solid var(--border);background:var(--bg);color:var(--muted);
+  transition:all .15s ease;user-select:none;white-space:nowrap}
+.fpill:hover{border-color:rgba(88,166,255,.4);color:var(--text)}
+.fpill.active{color:#fff}
+.fpill-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+.main{flex:1;display:flex;min-height:0;overflow:hidden}
+.diag-wrap{flex:1;overflow:auto;padding:12px;background:#0D1119;
+  background-image:radial-gradient(var(--faint) 1px,transparent 1px);
+  background-size:26px 26px;background-position:13px 13px}
+#arch-svg{display:block}
+
+.panel{width:320px;flex-shrink:0;border-left:1px solid var(--border);
+  background:var(--surface);display:flex;flex-direction:column;overflow:hidden}
+.panel-empty{flex:1;display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:24px;font-size:12px;color:var(--muted);line-height:1.6}
+.panel-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.panel-hdr{padding:16px 16px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.panel-hdr-row{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.panel-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.panel-name{font-family:var(--mono);font-size:12px;font-weight:700;color:#fff}
+.panel-desc{font-size:11px;color:var(--muted);line-height:1.5;padding-left:17px}
+.steps-scroll{flex:1;overflow-y:auto;padding:8px 0}
+.step{display:flex;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)}
+.step:last-child{border-bottom:none}
+.step-n{font-family:var(--mono);font-size:10px;color:var(--muted);min-width:20px;padding-top:1px;flex-shrink:0}
+.step-lbl{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px}
+.step-desc{font-size:11px;color:var(--muted);line-height:1.5}
+
+.edge-path{transition:stroke .18s,stroke-width .18s,opacity .18s}
+@keyframes dashFlow{to{stroke-dashoffset:-12}}
+.edge-active{animation:dashFlow .5s linear infinite}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-l">
+    <span class="hdr-title">StaffAxis + StaffAdmin</span>
+    <span class="hdr-badge">v3.3.5 / v1.6.1</span>
+  </div>
+  <div class="leg">
+    <span class="leg-i"><span class="leg-d" style="background:#60CDFF"></span>Windows</span>
+    <span class="leg-i"><span class="leg-d" style="background:#3DDC84"></span>Android</span>
+    <span class="leg-i"><span class="leg-d" style="background:#F0883E"></span>Backend</span>
+    <span class="leg-i"><span class="leg-d" style="background:#A371F7"></span>Storage</span>
+    <span class="leg-i"><span class="leg-d" style="background:#58A6FF"></span>Local DB</span>
+    <span class="leg-i"><span class="leg-d" style="background:#EC6547"></span>External</span>
+  </div>
+</header>
+
+<div class="pills-bar">
+  <span class="pills-label">Flows →</span>
+  <div id="flow-pills" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+</div>
+
+<div class="main">
+  <div class="diag-wrap">
+    <svg id="arch-svg" viewBox="0 0 1300 800" width="1300" height="800">
+      <defs>
+        <marker id="arr-d"        markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#2A3547"/></marker>
+        <marker id="arr-green"    markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#3DDC84"/></marker>
+        <marker id="arr-blue"     markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#58A6FF"/></marker>
+        <marker id="arr-orange"   markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#F0883E"/></marker>
+        <marker id="arr-red"      markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#FF7B72"/></marker>
+        <marker id="arr-purple"   markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#A371F7"/></marker>
+        <marker id="arr-lime"     markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#39D353"/></marker>
+        <marker id="arr-lavender" markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#D2A8FF"/></marker>
+        <marker id="arr-winblue"  markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#60CDFF"/></marker>
+        <marker id="arr-sky"      markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#7DD3FC"/></marker>
+        <marker id="arr-google"   markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#4285F4"/></marker>
+        <marker id="arr-teal"     markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#2DD4BF"/></marker>
+        <marker id="arr-pink"     markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#E879F9"/></marker>
+        <marker id="arr-amber"    markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#FBBF24"/></marker>
+        <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+          <feGaussianBlur stdDeviation="4" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- column bg panels -->
+      <rect x="18"   y="32" width="255" height="330" rx="8" fill="rgba(96,205,255,.025)" stroke="rgba(96,205,255,.08)" stroke-width="1"/>
+      <rect x="298"  y="32" width="257" height="690" rx="8" fill="rgba(61,220,132,.025)"  stroke="rgba(61,220,132,.07)"  stroke-width="1"/>
+      <rect x="658"  y="32" width="257" height="745" rx="8" fill="rgba(240,136,62,.025)"  stroke="rgba(240,136,62,.07)"  stroke-width="1"/>
+      <rect x="1018" y="32" width="257" height="615" rx="8" fill="rgba(163,113,247,.025)" stroke="rgba(163,113,247,.07)" stroke-width="1"/>
+
+      <!-- column labels -->
+      <text x="145"  y="24" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" letter-spacing="2" fill="#60CDFF" opacity=".5">WINDOWS CLIENT</text>
+      <text x="427"  y="24" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" letter-spacing="2" fill="#3DDC84" opacity=".5">ANDROID APP</text>
+      <text x="787"  y="24" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" letter-spacing="2" fill="#F0883E" opacity=".5">FASTIFY BACKEND · RAILWAY</text>
+      <text x="1147" y="24" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" letter-spacing="2" fill="#A371F7" opacity=".5">STORAGE</text>
+
+      <g id="edges-layer"></g>
+      <g id="nodes-layer"></g>
+    </svg>
+  </div>
+
+  <aside class="panel">
+    <div class="panel-empty" id="panel-empty">Clickeá un flow<br>para ver el camino<br>y los pasos</div>
+    <div class="panel-content" id="panel-content" style="display:none">
+      <div class="panel-hdr">
+        <div class="panel-hdr-row">
+          <span class="panel-dot" id="p-dot"></span>
+          <span class="panel-name" id="p-name"></span>
+        </div>
+        <p class="panel-desc" id="p-desc"></p>
+      </div>
+      <div class="steps-scroll" id="p-steps"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+const NW=220, NH=50;
+
+const ARCH = {
+  nodes:[
+    // Windows
+    {id:'staffadmin',     label:'StaffAdmin',      sub:'Electron · React · v1.6.1',           layer:'windows', x:145, y:200},
+    {id:'github-releases',label:'GitHub Releases', sub:'gankston/StaffAdmin · NSIS installer', layer:'ext',     x:1147,y:230},
+    // Android
+    {id:'bienvenida',     label:'Bienvenida',       sub:'Auth · Sector Select',              layer:'android', x:427, y:90},
+    {id:'empleados',      label:'Empleados',         sub:'Employee list · Hours dialog',      layer:'android', x:427, y:200},
+    {id:'ausencias',      label:'Ausencias',         sub:'Absence tracking',                  layer:'android', x:427, y:310},
+    {id:'tarja',          label:'Tarja',             sub:'Dashboard · Visualizador',          layer:'android', x:427, y:420},
+    {id:'workmanager',    label:'WorkManager',       sub:'15-min periodic background sync',   layer:'android', x:427, y:530},
+    {id:'room',           label:'Room DB',           sub:'6 tables · offline-first outbox',   layer:'localdb', x:427, y:655},
+    // Backend
+    {id:'auth-api',       label:'Auth API',          sub:'/api/auth/* · /api/sectors',        layer:'backend', x:787, y:90},
+    {id:'employees-api',  label:'Employees API',     sub:'/api/employees/* · CRUD',           layer:'backend', x:787, y:200},
+    {id:'photos-api',     label:'Photos API',        sub:'/api/.../foto/* · multipart 8 MB',  layer:'backend', x:787, y:310},
+    {id:'submissions-api',label:'Submissions API',   sub:'/api/submissions · UPSERT',         layer:'backend', x:787, y:420},
+    {id:'absences-api',   label:'Absences API',      sub:'/api/absences/*',                   layer:'backend', x:787, y:530},
+    {id:'admin-api',      label:'Admin API',         sub:'/api/admin/* · x-admin-token',      layer:'backend', x:787, y:640},
+    {id:'stats-api',      label:'Stats API',         sub:'23 endpoints · 2–5 min cache',      layer:'backend', x:787, y:750},
+    // Storage
+    {id:'google-oauth',   label:'Google OAuth',      sub:'Admin auth · tokeninfo verify',     layer:'ext',     x:1147,y:90},
+    {id:'postgres',       label:'PostgreSQL',        sub:'Railway · 6 tables · SSL',          layer:'storage', x:1147,y:430},
+    {id:'volume',         label:'Railway Volume',    sub:'/data/dni/ · JPEG files',           layer:'storage', x:1147,y:580},
+  ],
+
+  edges:[
+    // StaffAdmin → Backend
+    {id:'e-sa-admin',  from:'staffadmin', to:'admin-api',       lbl:'x-admin-token'},
+    {id:'e-sa-stats',  from:'staffadmin', to:'stats-api',       lbl:'reportes / stats'},
+    {id:'e-sa-oauth',  from:'staffadmin', to:'google-oauth',    lbl:'OAuth code exchange'},
+    {id:'e-sa-photos', from:'staffadmin', to:'photos-api',      lbl:'view / upload / delete'},
+    {id:'e-sa-employees',from:'staffadmin',to:'employees-api',  lbl:'empleados por sector'},
+    {id:'e-sa-github', from:'staffadmin', to:'github-releases', lbl:'electron-updater check'},
+    // Android → Backend
+    {id:'e-bien-auth', from:'bienvenida',    to:'auth-api',       lbl:'register / sectors'},
+    {id:'e-emp-emp',   from:'empleados',     to:'employees-api',  lbl:'sync / CRUD'},
+    {id:'e-emp-photo', from:'empleados',     to:'photos-api',     lbl:'multipart upload'},
+    {id:'e-aus-abs',   from:'ausencias',     to:'absences-api',   lbl:'POST / GET'},
+    {id:'e-tarja-admin',from:'tarja',        to:'admin-api',      lbl:'visualizador report'},
+    {id:'e-work-sub',  from:'workmanager',   to:'submissions-api',lbl:'push outbox'},
+    // Local (Room)
+    {id:'e-emp-room',  from:'empleados',  to:'room', lbl:'outbox write',  local:true},
+    {id:'e-aus-room',  from:'ausencias',  to:'room', lbl:'absence write', local:true},
+    {id:'e-tarja-room',from:'tarja',      to:'room', lbl:'status read',   local:true},
+    {id:'e-room-work', from:'room', to:'workmanager', lbl:'pending queue', local:true},
+    // Backend → Storage
+    {id:'e-auth-pg',   from:'auth-api',      to:'postgres',lbl:'devices table'},
+    {id:'e-emp-pg',    from:'employees-api', to:'postgres',lbl:'employees'},
+    {id:'e-photo-pg',  from:'photos-api',    to:'postgres',lbl:'filename column'},
+    {id:'e-sub-pg',    from:'submissions-api',to:'postgres',lbl:'submissions UPSERT'},
+    {id:'e-abs-pg',    from:'absences-api',  to:'postgres',lbl:'absences table'},
+    {id:'e-admin-pg',  from:'admin-api',     to:'postgres',lbl:'report joins'},
+    {id:'e-stats-pg',  from:'stats-api',     to:'postgres',lbl:'analytics queries'},
+    {id:'e-photo-vol', from:'photos-api',    to:'volume',  lbl:'stream.pipeline JPEG'},
+    {id:'e-admin-oauth',from:'admin-api',    to:'google-oauth',lbl:'tokeninfo verify'},
+  ],
+
+  flows:[
+    // ── StaffAdmin flows ──
+    {id:'excel-export',name:'Excel Export',color:'#60CDFF',marker:'arr-winblue',
+     desc:'StaffAdmin genera el Excel de asistencias del período (21→20) con horas, cosecha y observaciones.',
+     nodes:['staffadmin','admin-api','postgres'],edges:['e-sa-admin','e-admin-pg'],
+     steps:[
+       {lbl:'Usuario presiona "Exportar Excel"',desc:'exportExcel() en el proceso main de Electron recibe sectorId, periodMonth, periodYear'},
+       {lbl:'GET /api/admin/employees',desc:'Trae la lista completa de empleados del sector con x-admin-token'},
+       {lbl:'GET /api/admin/report',desc:'Trae asistencias del período con horas, notas y sector de cada registro'},
+       {lbl:'GET /api/absences + /api/transfers',desc:'Ausencias y traslados del período para las columnas AUSENTE y OBSERVACIONES'},
+       {lbl:'Construye la matriz (empleados × días)',desc:'Período 21→20, columna por día. Prioridad: ausencia > asistencia > vacío.'},
+       {lbl:'Columna OBSERVACIONES',desc:"Notas de asistencias ('DD: texto | DD: texto') + traslados ('Viene de X' / 'Se fue a Y')"},
+       {lbl:'XLSX.write → base64',desc:'El main devuelve base64 al renderer, que abre diálogo de guardado'},
+     ]},
+    {id:'sa-autoupdate',name:'Auto Update',color:'#7DD3FC',marker:'arr-sky',
+     desc:'StaffAdmin se actualiza automáticamente desde GitHub Releases al iniciar.',
+     nodes:['staffadmin','github-releases'],edges:['e-sa-github'],
+     steps:[
+       {lbl:'App inicia',desc:'electron-updater llama checkForUpdatesAndNotify() en el evento ready-to-show'},
+       {lbl:'GET GitHub API releases/latest',desc:'Compara la versión actual del package.json con la del latest release'},
+       {lbl:'Nueva versión disponible',desc:'Descarga staffadmin Setup X.Y.Z.exe desde los assets del release'},
+       {lbl:'Notificación al usuario',desc:'Notification del sistema: "StaffAdmin X.Y.Z disponible, se instalará al cerrar"'},
+       {lbl:'App se cierra → NSIS corre',desc:'Installer NSIS reemplaza los binarios y reabre la app en la versión nueva'},
+     ]},
+    {id:'google-login',name:'Google OAuth Login',color:'#4285F4',marker:'arr-google',
+     desc:'El admin se autentica con Google. Electron abre el browser del SO y captura el redirect con un servidor HTTP local efímero.',
+     nodes:['staffadmin','google-oauth','admin-api'],edges:['e-sa-oauth','e-sa-admin','e-admin-oauth'],
+     steps:[
+       {lbl:'Botón "Iniciar sesión con Google"',desc:'Electron abre el browser del SO con la URL de consent de Google (shell.openExternal)'},
+       {lbl:'Servidor HTTP local en puerto aleatorio',desc:'http.createServer() escucha en 127.0.0.1:{randomPort} como redirect_uri del OAuth'},
+       {lbl:'Usuario da permiso en Google',desc:'Google redirige a 127.0.0.1:{port}?code=AUTH_CODE. El servidor captura el código.'},
+       {lbl:'Intercambio de código → tokens',desc:'POST oauth2.googleapis.com/token → recibe access_token + id_token de Google'},
+       {lbl:'POST /api/admin/google-auth',desc:'Manda el id_token al backend Railway. El backend verifica con tokeninfo de Google.'},
+       {lbl:'Admin token recibido',desc:'Railway responde con { token, user }. adminToken se guarda en memoria del proceso main.'},
+       {lbl:'Renderer actualizado',desc:'IPC devuelve { success: true, token, user } → App.tsx guarda token y habilita todas las features'},
+     ]},
+    {id:'dashboard',name:'Dashboard Sectores',color:'#60CDFF',marker:'arr-winblue',
+     desc:'Pantalla principal: carga todos los sectores y verifica si cada uno ya tarjó hoy.',
+     nodes:['staffadmin','admin-api','postgres'],edges:['e-sa-admin','e-admin-pg'],
+     steps:[
+       {lbl:'App monta el dashboard',desc:'ipcRenderer.invoke("get-sectors") — el renderer pide la lista completa'},
+       {lbl:'GET /api/sectors',desc:'Devuelve sectores con employee_count embebido (JOIN en DB). Sin auth requerida.'},
+       {lbl:'Enriquecimiento paralelo (concurrency=5)',desc:'Por cada sector: GET /api/admin/report?start_date=hoy&end_date=hoy con x-admin-token'},
+       {lbl:'state = sent / missing',desc:'Si hay alguna fila con date=hoy → state="sent" (verde). Sin filas → state="missing" (rojo).'},
+       {lbl:'UiSector[] devuelto al renderer',desc:'attendancesToday[] también incluido para que App.tsx calcule stats globales sin re-requests'},
+       {lbl:'Dashboard renderizado',desc:'Cards por sector con nombre del encargado, cantidad de empleados, estado del día y tendencia'},
+     ]},
+    {id:'employee-mgmt',name:'Gestión de Empleados',color:'#2DD4BF',marker:'arr-teal',
+     desc:'Admin consulta y navega los empleados de un sector, con fotos DNI y datos.',
+     nodes:['staffadmin','employees-api','postgres'],edges:['e-sa-employees','e-emp-pg'],
+     steps:[
+       {lbl:'Admin abre un sector',desc:'ipcRenderer.invoke("get-employees", sectorId, adminToken)'},
+       {lbl:'GET /api/admin/employees?sector_id=X',desc:'Con x-admin-token. Devuelve todos los empleados con tiene_foto_frente/dorso.'},
+       {lbl:'ApiEmployee[] mapeado',desc:'Normaliza id, first_name, last_name, dni, external_code, is_active, fotos booleans'},
+       {lbl:'Lista renderizada',desc:'Tabla con nombre, DNI, indicadores de foto. Clic en empleado abre el panel lateral.'},
+     ]},
+    {id:'photos-admin',name:'Fotos DNI (admin)',color:'#FBBF24',marker:'arr-amber',
+     desc:'El admin ve, sube o elimina fotos de DNI desde la PC con un file picker nativo.',
+     nodes:['staffadmin','photos-api','postgres','volume'],edges:['e-sa-photos','e-photo-pg','e-photo-vol'],
+     steps:[
+       {lbl:'Admin ve la foto existente',desc:'ipcRenderer.invoke("get-foto", employeeId, lado) → GET /api/employees/{id}/foto/{lado}'},
+       {lbl:'Foto devuelta como base64',desc:'arrayBuffer → Buffer.toString("base64") → data:image/jpeg;base64,... se renderiza en el UI'},
+       {lbl:'Admin elige nueva foto',desc:'ipcRenderer.invoke("open-file-dialog") → dialog.showOpenDialog filtra jpg/jpeg/png'},
+       {lbl:'Upload desde ruta de archivo',desc:'fs.readFileSync(filePath) → FormData → POST multipart /api/employees/{id}/foto/{lado} con x-admin-token'},
+       {lbl:'Archivo guardado en Volume',desc:"stream.pipeline → /data/dni/{id}_{lado}.jpg en Railway Volume"},
+       {lbl:'DB actualizada',desc:'employees.dni_foto_frente/dorso = filename'},
+       {lbl:'Admin elimina foto',desc:'ipcRenderer.invoke("delete-foto") → DELETE /api/employees/{id}/foto/{lado}'},
+     ]},
+    {id:'pdf-report',name:'PDF Report',color:'#E879F9',marker:'arr-pink',
+     desc:'Genera un reporte PDF con las asistencias del período, listo para imprimir.',
+     nodes:['staffadmin','admin-api','postgres'],edges:['e-sa-admin','e-admin-pg'],
+     steps:[
+       {lbl:'Admin abre el período en el sector',desc:'Ya tiene los datos de asistencias del período (fetchAttendances previamente llamado)'},
+       {lbl:'Construye ReportRow[]',desc:'Por empleado × fecha: employeeName, dni, sectorName, recordSectorName, hours, date'},
+       {lbl:'ipcRenderer.invoke("generate-pdf-report")',desc:'Pasa { categoryName, periodMonth, periodYear, rows, totalHours }'},
+       {lbl:'Electron buildHTML()',desc:'Genera HTML con tabla de asistencias, cabecera del período, totales y estilos CSS para impresión'},
+       {lbl:'BrowserWindow headless → printToPDF()',desc:'Ventana oculta carga el HTML y lo convierte a PDF con márgenes tipo A4'},
+       {lbl:'PDF guardado en disco',desc:'dialog.showSaveDialog → fs.writeFileSync → shell.openPath abre el PDF en el visor del SO'},
+     ]},
+    // ── Android flows ──
+    {id:'device-auth',name:'Device Registration',color:'#3DDC84',marker:'arr-green',
+     desc:'First launch: el device Android se registra y obtiene un JWT.',
+     nodes:['bienvenida','auth-api','postgres'],edges:['e-bien-auth','e-auth-pg'],
+     steps:[
+       {lbl:'App launch — no token',desc:'SessionViewModel lee DataStore → deviceToken null → navega a BienvenidaScreen'},
+       {lbl:'GET /api/sectors',desc:'Sin auth. Devuelve todos los sectores para el picker.'},
+       {lbl:'POST /api/auth/device/register',desc:'Body: { device_id: ANDROID_ID, sector_id, encargado_name }'},
+       {lbl:'JWT issued (365 días)',desc:'Backend inserta device row con approved=true → firma JWT'},
+       {lbl:'Token → DataStore',desc:'AppPreferences guarda token + activeSectorId. Sobrevive reinstalación.'},
+       {lbl:'Navega a main',desc:'Próximo launch: token encontrado → BienvenidaScreen se saltea'},
+     ]},
+    {id:'employee-sync',name:'Employee Sync',color:'#58A6FF',marker:'arr-blue',
+     desc:'Trae empleados de la API y reemplaza el cache local de Room.',
+     nodes:['empleados','employees-api','postgres','room'],edges:['e-emp-emp','e-emp-pg','e-emp-room'],
+     steps:[
+       {lbl:'loadData() al iniciar',desc:'Lee activeSectorId de DataStore'},
+       {lbl:'GET /api/employees?sector_id=X',desc:'Bearer token. Returns DTOs con tieneFotoFrente/Dorso booleans.'},
+       {lbl:'Query PostgreSQL',desc:'SELECT where sector_id=X AND is_active=true ORDER BY last_name'},
+       {lbl:'DTO → EmployeeEntity',desc:'first_name+last_name → nombre; last_name separado como apellido'},
+       {lbl:'Room: deleteBySector + insertAll',desc:'Replace completo — siempre datos frescos'},
+       {lbl:'Flow<List<Employee>> emite',desc:'getBySector() es query live — UI recompone automáticamente'},
+     ]},
+    {id:'record-tarja',name:'Record Tarja',color:'#F0883E',marker:'arr-orange',
+     desc:'Write-to-outbox: escritura local inmediata, push en background cada 15 min.',
+     nodes:['empleados','room','workmanager','submissions-api','postgres'],
+     edges:['e-emp-room','e-room-work','e-work-sub','e-sub-pg'],
+     steps:[
+       {lbl:'Dialog de horas confirmado',desc:"guardarHoras() → minutesWorked: '8' | '8|C:3' | '8|C:3|AB:texto'"},
+       {lbl:'OutboxSubmission → Room',desc:"dedupKey = 'sectorId:employeeId:date'. INSERT OR IGNORE."},
+       {lbl:'UI actualiza al instante',desc:'Indicador en la card cambia sin round-trip de red'},
+       {lbl:'PushTarjaWorker (15 min)',desc:'WorkManager lee todas las entradas status=pending de Room'},
+       {lbl:'POST /api/submissions',desc:'Horas convertidas a minutos si h ≤ 16. Bearer JWT.'},
+       {lbl:'PostgreSQL UPSERT',desc:'ON CONFLICT (employee_id, date) → UPDATE SET minutes_worked'},
+       {lbl:'markSent() en Room',desc:"Status → 'sent'. countPendingFlow() decrementa."},
+     ]},
+    {id:'cerrar-tarja',name:'Cerrar Tarja',color:'#FF7B72',marker:'arr-red',
+     desc:'Flush de todas las submissions pendientes en batches paralelos de 10.',
+     nodes:['tarja','room','workmanager','submissions-api','postgres'],
+     edges:['e-tarja-room','e-room-work','e-work-sub','e-sub-pg'],
+     steps:[
+       {lbl:'Botón "Cerrar Tarja"',desc:'cerrarTarja() → isCerrando=true para bloquear double-submit'},
+       {lbl:'getAllNotSentForDate()',desc:'Pending + failed de hoy y cualquier fecha anterior'},
+       {lbl:'Batches paralelos de 10',desc:"chunked(10).map { async {} } + awaitAll(). Mutex protege DAO."},
+       {lbl:'Cada POST /api/submissions',desc:"markSent() en 2xx, markFailed() en 4xx, incrementAttempt() en 5xx"},
+       {lbl:'TarjaStatusEntity creada',desc:'enviada=true, horaEnvio, empleadosTarjados, horasTarjadas'},
+       {lbl:'Persistida en Room',desc:'tarjaStatusDao.upsert() → dashboard actualiza via Flow'},
+     ]},
+    {id:'visualizador',name:'Visualizador de Horas',color:'#A371F7',marker:'arr-purple',
+     desc:'Grilla del período (21→20): empleados × fechas con cosecha y notas.',
+     nodes:['tarja','admin-api','postgres','room'],edges:['e-tarja-admin','e-admin-pg','e-tarja-room'],
+     steps:[
+       {lbl:'"Ver Horas" presionado',desc:'abrirVisualizador() → calcula período 21 del mes anterior → 20 del actual'},
+       {lbl:'Navegación de períodos',desc:'periodoOffset permite ver meses anteriores con ‹ ›'},
+       {lbl:'GET /api/admin/report',desc:'ADMIN_TOKEN hardcodeado (no JWT del device). Devuelve filas con campo notes.'},
+       {lbl:'Empleados desde Room',desc:'Cache local — evita llamada extra a la API'},
+       {lbl:'Agrupar + totales',desc:'Por employeeId → totalHoras, cosechaCount, horasPorDia Map<fecha,valor>'},
+       {lbl:'Ordenar por apellido',desc:'Fallback: último token de nombre si apellido está vacío'},
+       {lbl:'Grilla renderizada',desc:"celdaValor() parsea '8|C:3|AB:...' en celdas con colores"},
+     ]},
+    {id:'photo-upload',name:'DNI Photo Upload',color:'#39D353',marker:'arr-lime',
+     desc:'Cámara o galería → compresión JPEG → upload multipart → Railway Volume.',
+     nodes:['empleados','photos-api','postgres','volume'],edges:['e-emp-photo','e-photo-pg','e-photo-vol'],
+     steps:[
+       {lbl:'Cámara o galería',desc:'TakePicture + GetContent (galería para fotos recibidas por mensaje)'},
+       {lbl:'URI → InputStream',desc:'ContentResolver.openInputStream(uri) funciona para ambos URIs'},
+       {lbl:'JPEG compresión (calidad 80)',desc:'BitmapFactory.decode → Bitmap.compress(JPEG, 80)'},
+       {lbl:'POST multipart /api/employees/{id}/foto/{lado}',desc:'Máx 8 MB. Bearer JWT. frente o dorso.'},
+       {lbl:'Escrito en Railway Volume',desc:"stream.pipeline → /data/dni/{id}_{lado}.jpg"},
+       {lbl:'PostgreSQL actualizado',desc:"UPDATE employees SET dni_foto_frente = '{filename}'"},
+       {lbl:'Room flag actualizado',desc:'dao.updateFotoFrente(true) → indicador cambia en la card'},
+     ]},
+    {id:'create-employee',name:'Create Employee',color:'#D2A8FF',marker:'arr-lavender',
+     desc:'Check duplicado local → POST → confirmación de traslado si aplica.',
+     nodes:['empleados','employees-api','postgres','room'],edges:['e-emp-emp','e-emp-pg','e-emp-room'],
+     steps:[
+       {lbl:'FAB presionado',desc:'abrirDialogoNuevo() limpia el form'},
+       {lbl:'Check duplicado local',desc:'getByDniAndSector() en Room — inmediato'},
+       {lbl:'POST /api/employees',desc:'409 = mismo sector. 422 + EXISTS_OTHER_SECTOR = otro sector.'},
+       {lbl:'Dialog de traslado',desc:'En 422: forceTransfer=true re-POST mueve el empleado'},
+       {lbl:'Backend crea/traslada',desc:'INSERT o UPDATE sector_id + transfers row'},
+       {lbl:'Guardado en Room',desc:'EmployeeEntity insertado → visible inmediatamente via Flow'},
+       {lbl:'Fotos subidas (best-effort)',desc:"uploadFoto() por cada URI. El fallo no bloquea la creación."},
+     ]},
+  ]
+};
+
+// ─── Render ───────────────────────────────────────────────────
+const layerColor={windows:'#60CDFF',android:'#3DDC84',localdb:'#58A6FF',backend:'#F0883E',storage:'#A371F7',ext:'#EC6547'};
+const nById=id=>ARCH.nodes.find(n=>n.id===id);
+
+function edgePath(e){
+  const s=nById(e.from),t=nById(e.to); if(!s||!t) return '';
+  if(e.local){
+    // route on left side of source column
+    const ax=s.x-NW/2+2, lx=ax-28;
+    const sy=s.y<t.y ? s.y+16 : s.y-16;
+    const ty=s.y<t.y ? t.y-16 : t.y+16;
+    return `M${ax},${sy} C${lx},${sy} ${lx},${ty} ${ax},${ty}`;
+  }
+  // StaffAdmin → far-right nodes: long arching bezier
+  const sx=s.x+NW/2, sy=s.y, tx=t.x-NW/2, ty=t.y, dx=tx-sx;
+  return `M${sx},${sy} C${sx+dx*.42},${sy} ${tx-dx*.42},${ty} ${tx},${ty}`;
+}
+
+function svgEl(tag,a={}){
+  const el=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const[k,v]of Object.entries(a)) el.setAttribute(k,String(v));
+  return el;
+}
+
+function renderEdges(){
+  const g=document.getElementById('edges-layer');
+  ARCH.edges.forEach(e=>{
+    const p=svgEl('path',{d:edgePath(e),fill:'none',stroke:'#243048','stroke-width':'1.5',
+      'marker-end':'url(#arr-d)',...(e.local?{'stroke-dasharray':'4 3'}:{})});
+    p.dataset.edge=e.id; p.classList.add('edge-path'); g.appendChild(p);
+  });
+}
+
+function renderNodes(){
+  const g=document.getElementById('nodes-layer');
+  ARCH.nodes.forEach(n=>{
+    const grp=svgEl('g'); grp.dataset.node=n.id;
+    const x=n.x-NW/2, y=n.y-NH/2, c=layerColor[n.layer]||'#58A6FF';
+    const rect=svgEl('rect',{x,y,width:NW,height:NH,rx:5,fill:'#141922',stroke:'#243048','stroke-width':'1'});
+    const strip=svgEl('rect',{x,y:y+1,width:3,height:NH-2,rx:2,fill:c,opacity:'0.9'});
+    const lbl=svgEl('text',{x:x+14,y:y+19,'font-family':'JetBrains Mono,Consolas,monospace','font-size':'12','font-weight':'700',fill:'#CDD9E5'});
+    lbl.textContent=n.label;
+    const sub=svgEl('text',{x:x+14,y:y+35,'font-family':'Inter,system-ui,sans-serif','font-size':'10',fill:'#5A6A82'});
+    sub.textContent=n.sub;
+    grp.append(rect,strip,lbl,sub); g.appendChild(grp);
+  });
+}
+
+// ─── Interaction ──────────────────────────────────────────────
+let activeFlow=null;
+
+function applyFlow(flowId){
+  activeFlow=flowId;
+  const flow=ARCH.flows.find(f=>f.id===flowId);
+  const AN=new Set(flow?.nodes??[]), AE=new Set(flow?.edges??[]);
+
+  document.querySelectorAll('.fpill').forEach(p=>{
+    const on=p.dataset.flow===flowId&&flow;
+    p.classList.toggle('active',!!on);
+    p.style.background=on?flow.color+'1A':'';
+    p.style.borderColor=on?flow.color+'66':'';
+    p.style.color=on?flow.color:'';
+  });
+
+  document.querySelectorAll('[data-node]').forEach(g=>{
+    const on=!flow||AN.has(g.dataset.node);
+    g.style.opacity=on?'1':'0.15';
+    const r=g.querySelector('rect');
+    if(r){
+      r.setAttribute('fill',on&&flow?'#1C2840':'#141922');
+      r.setAttribute('stroke',on&&flow?flow.color+'55':'#243048');
+      r.setAttribute('filter',on&&flow?'url(#glow)':'');
+    }
+  });
+
+  document.querySelectorAll('[data-edge]').forEach(p=>{
+    const id=p.dataset.edge, on=!flow||AE.has(id);
+    if(flow){
+      if(on){
+        p.setAttribute('stroke',flow.color); p.setAttribute('stroke-width','2.5');
+        p.setAttribute('opacity','1'); p.setAttribute('marker-end',`url(#${flow.marker})`);
+        p.style.strokeDasharray='8 4'; p.classList.add('edge-active');
+      } else {
+        p.setAttribute('stroke','#161E2E'); p.setAttribute('stroke-width','1');
+        p.setAttribute('opacity','0.1'); p.setAttribute('marker-end','url(#arr-d)');
+        p.style.strokeDasharray=''; p.classList.remove('edge-active');
+      }
+    } else {
+      const edge=ARCH.edges.find(e=>e.id===id);
+      p.setAttribute('stroke','#243048'); p.setAttribute('stroke-width','1.5');
+      p.setAttribute('opacity','1'); p.setAttribute('marker-end','url(#arr-d)');
+      p.style.strokeDasharray=edge?.local?'4 3':''; p.classList.remove('edge-active');
+    }
+  });
+
+  const empty=document.getElementById('panel-empty');
+  const content=document.getElementById('panel-content');
+  if(!flow){empty.style.display='';content.style.display='none';return;}
+  empty.style.display='none'; content.style.display='';
+  document.getElementById('p-dot').style.background=flow.color;
+  document.getElementById('p-name').textContent=flow.name;
+  document.getElementById('p-desc').textContent=flow.desc;
+  const stepsEl=document.getElementById('p-steps'); stepsEl.innerHTML='';
+  flow.steps.forEach((s,i)=>{
+    const d=document.createElement('div'); d.className='step';
+    d.innerHTML=`<span class="step-n">${String(i+1).padStart(2,'0')}</span><div><div class="step-lbl">${s.lbl}</div><div class="step-desc">${s.desc}</div></div>`;
+    stepsEl.appendChild(d);
+  });
+}
+
+function renderPills(){
+  const c=document.getElementById('flow-pills');
+  ARCH.flows.forEach(f=>{
+    const btn=document.createElement('button'); btn.className='fpill'; btn.dataset.flow=f.id;
+    btn.innerHTML=`<span class="fpill-dot" style="background:${f.color}"></span>${f.name}`;
+    btn.onclick=()=>applyFlow(activeFlow===f.id?null:f.id);
+    c.appendChild(btn);
+  });
+}
+
+renderEdges(); renderNodes(); renderPills();
+window.STAFFAXIS_ARCH=ARCH;
+</script>
+</body>
+</html>

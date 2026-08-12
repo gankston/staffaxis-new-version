@@ -1,0 +1,174 @@
+{
+  "meta": {
+    "project": "StaffAxis",
+    "version": "3.3.5",
+    "generated": "2026-07-27",
+    "description": "Architecture map for AI agents: nodes, edges, and interactive data flows"
+  },
+  "nodes": [
+    { "id": "bienvenida", "label": "Bienvenida", "sublabel": "Auth · Sector Select", "layer": "android", "type": "screen" },
+    { "id": "empleados", "label": "Empleados", "sublabel": "Employee list · Hours dialog", "layer": "android", "type": "screen" },
+    { "id": "ausencias", "label": "Ausencias", "sublabel": "Absence tracking", "layer": "android", "type": "screen" },
+    { "id": "tarja", "label": "Tarja", "sublabel": "Dashboard · Visualizador", "layer": "android", "type": "screen" },
+    { "id": "workmanager", "label": "WorkManager", "sublabel": "15-min periodic background sync", "layer": "android", "type": "service" },
+    { "id": "room", "label": "Room DB", "sublabel": "6 tables · offline-first outbox", "layer": "local-db", "type": "database",
+      "tables": ["SectorEntity", "EmployeeEntity", "OutboxSubmissionEntity", "AbsenceEntity", "TarjaStatusEntity", "TransferEntity"] },
+    { "id": "auth-api", "label": "Auth API", "sublabel": "/api/auth/* · /api/sectors", "layer": "backend", "type": "api-group",
+      "endpoints": ["POST /api/auth/device/register", "GET /api/sectors"] },
+    { "id": "employees-api", "label": "Employees API", "sublabel": "/api/employees/* · CRUD", "layer": "backend", "type": "api-group",
+      "endpoints": ["GET /api/employees", "POST /api/employees", "PUT /api/employees/:id", "DELETE /api/employees/:id"] },
+    { "id": "photos-api", "label": "Photos API", "sublabel": "/api/.../foto/* · multipart 8 MB", "layer": "backend", "type": "api-group",
+      "endpoints": ["GET /api/employees/:id/foto/:lado", "POST /api/employees/:id/foto/:lado", "DELETE /api/employees/:id/foto/:lado"] },
+    { "id": "submissions-api", "label": "Submissions API", "sublabel": "/api/submissions · UPSERT", "layer": "backend", "type": "api-group",
+      "endpoints": ["POST /api/submissions"] },
+    { "id": "absences-api", "label": "Absences API", "sublabel": "/api/absences/*", "layer": "backend", "type": "api-group",
+      "endpoints": ["GET /api/absences", "POST /api/absences", "DELETE /api/absences/:id"] },
+    { "id": "admin-api", "label": "Admin API", "sublabel": "/api/admin/* · x-admin-token", "layer": "backend", "type": "api-group",
+      "endpoints": ["GET /api/admin/report", "GET /api/admin/employees", "POST /api/admin/employees", "PUT /api/admin/employees/:id", "DELETE /api/admin/employees/:id"] },
+    { "id": "stats-api", "label": "Stats API", "sublabel": "23 endpoints · 2–5 min cache", "layer": "backend", "type": "api-group",
+      "endpoints": ["GET /api/stats/summary", "GET /api/stats/by-sector", "GET /api/stats/top-employees", "...23 total"] },
+    { "id": "google-oauth", "label": "Google OAuth", "sublabel": "Admin auth · tokeninfo verify", "layer": "external", "type": "external-service" },
+    { "id": "postgres", "label": "PostgreSQL", "sublabel": "Railway · 6 tables · SSL", "layer": "storage", "type": "database",
+      "tables": ["sectors", "employees", "devices", "submissions", "absences", "transfers"] },
+    { "id": "volume", "label": "Railway Volume", "sublabel": "/data/dni/ · JPEG files", "layer": "storage", "type": "file-storage",
+      "path": "/data/dni/", "format": "JPEG", "namingPattern": "{employeeId}_{frente|dorso}.jpg" }
+  ],
+  "edges": [
+    { "id": "e-bien-auth", "from": "bienvenida", "to": "auth-api", "label": "register / sectors", "protocol": "HTTP/JWT" },
+    { "id": "e-emp-emp", "from": "empleados", "to": "employees-api", "label": "sync / CRUD", "protocol": "HTTP/JWT" },
+    { "id": "e-emp-photo", "from": "empleados", "to": "photos-api", "label": "multipart upload", "protocol": "HTTP/JWT/multipart" },
+    { "id": "e-aus-abs", "from": "ausencias", "to": "absences-api", "label": "POST / GET", "protocol": "HTTP/JWT" },
+    { "id": "e-tarja-admin", "from": "tarja", "to": "admin-api", "label": "visualizador report", "protocol": "HTTP/admin-token" },
+    { "id": "e-work-sub", "from": "workmanager", "to": "submissions-api", "label": "push outbox", "protocol": "HTTP/JWT" },
+    { "id": "e-emp-room", "from": "empleados", "to": "room", "label": "outbox write", "protocol": "Room DAO", "local": true },
+    { "id": "e-aus-room", "from": "ausencias", "to": "room", "label": "absence write", "protocol": "Room DAO", "local": true },
+    { "id": "e-tarja-room", "from": "tarja", "to": "room", "label": "status read", "protocol": "Room DAO", "local": true },
+    { "id": "e-room-work", "from": "room", "to": "workmanager", "label": "pending queue", "protocol": "Room Flow", "local": true },
+    { "id": "e-auth-pg", "from": "auth-api", "to": "postgres", "label": "devices table", "protocol": "pg/SSL" },
+    { "id": "e-emp-pg", "from": "employees-api", "to": "postgres", "label": "employees table", "protocol": "pg/SSL" },
+    { "id": "e-photo-pg", "from": "photos-api", "to": "postgres", "label": "filename column", "protocol": "pg/SSL" },
+    { "id": "e-sub-pg", "from": "submissions-api", "to": "postgres", "label": "submissions UPSERT", "protocol": "pg/SSL" },
+    { "id": "e-abs-pg", "from": "absences-api", "to": "postgres", "label": "absences table", "protocol": "pg/SSL" },
+    { "id": "e-admin-pg", "from": "admin-api", "to": "postgres", "label": "report joins", "protocol": "pg/SSL" },
+    { "id": "e-stats-pg", "from": "stats-api", "to": "postgres", "label": "analytics queries", "protocol": "pg/SSL" },
+    { "id": "e-photo-vol", "from": "photos-api", "to": "volume", "label": "stream.pipeline JPEG", "protocol": "fs/Railway Volume" },
+    { "id": "e-admin-oauth", "from": "admin-api", "to": "google-oauth", "label": "tokeninfo verify", "protocol": "HTTPS/Google API" }
+  ],
+  "flows": [
+    {
+      "id": "device-auth",
+      "name": "Device Registration",
+      "description": "First launch: register the device and obtain a JWT saved to DataStore.",
+      "nodes": ["bienvenida", "auth-api", "postgres"],
+      "edges": ["e-bien-auth", "e-auth-pg"],
+      "steps": [
+        { "step": 1, "label": "App launch — no token", "description": "SessionViewModel reads DataStore → deviceToken is null → navigate to BienvenidaScreen" },
+        { "step": 2, "label": "Fetch public sectors", "description": "GET /api/sectors (no auth required) → returns all sectors for the picker" },
+        { "step": 3, "label": "POST /api/auth/device/register", "description": "Body: { device_id: ANDROID_ID, sector_id, encargado_name }" },
+        { "step": 4, "label": "JWT issued (365 days)", "description": "Backend inserts device row with approved=true → signs JWT with device payload" },
+        { "step": 5, "label": "Token persisted to DataStore", "description": "AppPreferences saves token + activeSectorId. Survives app reinstall." },
+        { "step": 6, "label": "Navigate to main", "description": "Next launch: token found → BienvenidaScreen skipped entirely" }
+      ]
+    },
+    {
+      "id": "employee-sync",
+      "name": "Employee Sync",
+      "description": "Fetches employees from the API and replaces the local Room cache for the sector.",
+      "nodes": ["empleados", "employees-api", "postgres", "room"],
+      "edges": ["e-emp-emp", "e-emp-pg", "e-emp-room"],
+      "steps": [
+        { "step": 1, "label": "loadData() on init", "description": "Reads activeSectorId from DataStore preferences" },
+        { "step": 2, "label": "GET /api/employees?sector_id=X", "description": "Bearer token in Authorization header. Returns DTOs with tieneFotoFrente/Dorso booleans." },
+        { "step": 3, "label": "PostgreSQL query", "description": "SELECT where sector_id = X AND is_active = true, ordered by last_name ASC" },
+        { "step": 4, "label": "DTO → EmployeeEntity", "description": "first_name + last_name merged into nombre; last_name stored separately as apellido" },
+        { "step": 5, "label": "Room: deleteBySector + insertAll", "description": "Full replace for the sector — always fresh data on sync" },
+        { "step": 6, "label": "Flow<List<Employee>> emits", "description": "getBySector() is a live Room query — UI recomposes automatically on any DB change" }
+      ]
+    },
+    {
+      "id": "record-tarja",
+      "name": "Record Tarja",
+      "description": "Write-to-outbox pattern: immediate local write, async background push every 15 min.",
+      "nodes": ["empleados", "room", "workmanager", "submissions-api", "postgres"],
+      "edges": ["e-emp-room", "e-room-work", "e-work-sub", "e-sub-pg"],
+      "minutesWorkedFormat": {
+        "examples": ["8", "C", "8|C:3", "8|AB:texto", "8|C:3|AB:texto", "$1500 (legacy, DB only)"],
+        "rules": "hours always first segment if present; C: prefix for cosecha+cachos; AB: prefix for abonada y otros"
+      },
+      "steps": [
+        { "step": 1, "label": "Hours dialog confirmed", "description": "guardarHoras() builds minutesWorked string: '8' | '8|C:3' | '8|C:3|AB:texto observacion'" },
+        { "step": 2, "label": "OutboxSubmission → Room", "description": "dedupKey = 'sectorId:employeeId:date'. INSERT OR IGNORE prevents duplicates." },
+        { "step": 3, "label": "UI updates instantly", "description": "empleadosConHorasHoy Set updated — card indicator changes without any network round-trip" },
+        { "step": 4, "label": "PushTarjaWorker fires (15 min)", "description": "WorkManager periodic task reads all status=pending entries from Room" },
+        { "step": 5, "label": "POST /api/submissions", "description": "Hours converted to minutes (h ≤ 16 → h × 60). Bearer JWT token in header." },
+        { "step": 6, "label": "PostgreSQL UPSERT", "description": "ON CONFLICT (employee_id, date) WHERE NOT is_deleted → UPDATE SET minutes_worked" },
+        { "step": 7, "label": "markSent() in Room", "description": "OutboxSubmission status → 'sent'. countPendingFlow() decrements the badge." }
+      ]
+    },
+    {
+      "id": "cerrar-tarja",
+      "name": "Cerrar Tarja",
+      "description": "Flushes all pending submissions in parallel batches of 10 and persists tarja status.",
+      "nodes": ["tarja", "room", "workmanager", "submissions-api", "postgres"],
+      "edges": ["e-tarja-room", "e-room-work", "e-work-sub", "e-sub-pg"],
+      "steps": [
+        { "step": 1, "label": "Cerrar Tarja button tapped", "description": "TarjaViewModel.cerrarTarja() — sets isCerrando=true immediately to block double-submit" },
+        { "step": 2, "label": "getAllNotSentForDate()", "description": "Fetches pending + failed entries for today AND any other pending dates" },
+        { "step": 3, "label": "Parallel batches of 10", "description": "chunked(10).map { async { ... } } + awaitAll(). Mutex protects DAO writes." },
+        { "step": 4, "label": "Each POST /api/submissions", "description": "markSent() on 2xx, markFailed() on 4xx (won't retry), incrementAttempt() on 5xx" },
+        { "step": 5, "label": "TarjaStatusEntity created", "description": "enviada=true, horaEnvio=now(), empleadosTarjados count, horasTarjadas sum" },
+        { "step": 6, "label": "Persisted to Room", "description": "tarjaStatusDao.upsert() → dashboard counters update via Flow observation" }
+      ]
+    },
+    {
+      "id": "visualizador",
+      "name": "Visualizador de Horas",
+      "description": "Period billing grid (21st → 20th): employees × dates, cosecha counts, notes.",
+      "nodes": ["tarja", "admin-api", "postgres", "room"],
+      "edges": ["e-tarja-admin", "e-admin-pg", "e-tarja-room"],
+      "billingPeriod": "21st of previous month to 20th of current month",
+      "steps": [
+        { "step": 1, "label": "Ver Horas tapped", "description": "abrirVisualizador() — calculates current billing period (21st of prev month → 20th of this month)" },
+        { "step": 2, "label": "Period offset navigation", "description": "periodoOffset lets the user scroll to past periods via arrows in the UI header" },
+        { "step": 3, "label": "GET /api/admin/report", "description": "Uses hardcoded ADMIN_TOKEN (not the device JWT). Returns rows with notes field." },
+        { "step": 4, "label": "Employees from Room", "description": "getEmployeesForSector().first() — uses local cache for employee metadata, avoids extra API call" },
+        { "step": 5, "label": "Group + compute totals", "description": "Grouped by employeeId → totalHoras (numeric), cosechaCount, horasPorDia Map<date, value>" },
+        { "step": 6, "label": "Sorted by apellido", "description": "Fallback: last space-token of nombre for employees with blank apellido field" },
+        { "step": 7, "label": "Grid rendered", "description": "Scrollable employees × dates table. celdaValor() parses '8|C:3|AB:...' into colored cells." }
+      ]
+    },
+    {
+      "id": "photo-upload",
+      "name": "DNI Photo Upload",
+      "description": "Camera or gallery picker → JPEG compress → multipart upload → Railway Volume.",
+      "nodes": ["empleados", "photos-api", "postgres", "volume"],
+      "edges": ["e-emp-photo", "e-photo-pg", "e-photo-vol"],
+      "storageNote": "Filenames stored as TEXT in employees.dni_foto_frente/dorso — NEVER bytea",
+      "steps": [
+        { "step": 1, "label": "Camera or gallery selected", "description": "Two launchers: TakePicture (camera) + GetContent (gallery). Gallery added so supervisors can use forwarded photo messages." },
+        { "step": 2, "label": "URI → InputStream", "description": "ContentResolver.openInputStream(uri) handles both camera temp file and gallery content URIs" },
+        { "step": 3, "label": "JPEG compression (quality 80)", "description": "BitmapFactory.decode → Bitmap.compress(JPEG, 80) — reduces upload payload" },
+        { "step": 4, "label": "POST multipart /api/employees/{id}/foto/{lado}", "description": "Max 8 MB. Bearer JWT token. lado = frente or dorso." },
+        { "step": 5, "label": "Written to Railway Volume", "description": "stream.pipeline(req.file, fs.createWriteStream('/data/dni/{id}_{lado}.jpg'))" },
+        { "step": 6, "label": "PostgreSQL updated", "description": "UPDATE employees SET dni_foto_frente = '{filename}' WHERE id = {id}" },
+        { "step": 7, "label": "Room flag updated", "description": "dao.updateFotoFrente(employeeId, true) → employee card indicator changes immediately" }
+      ]
+    },
+    {
+      "id": "create-employee",
+      "name": "Create Employee",
+      "description": "Local duplicate check → POST → optional sector transfer confirmation.",
+      "nodes": ["empleados", "employees-api", "postgres", "room"],
+      "edges": ["e-emp-emp", "e-emp-pg", "e-emp-room"],
+      "steps": [
+        { "step": 1, "label": "FAB tapped", "description": "abrirDialogoNuevo() clears all form state" },
+        { "step": 2, "label": "Local duplicate check", "description": "getByDniAndSector() in Room — immediate. If found+active: error. If found+inactive: reactivate prompt." },
+        { "step": 3, "label": "POST /api/employees", "description": "409 = exists in same sector. 422 + EXISTS_OTHER_SECTOR = exists in another sector." },
+        { "step": 4, "label": "Transfer confirmation dialog", "description": "On 422: dialog shown. User confirms → forceTransfer=true re-POST moves employee across sectors." },
+        { "step": 5, "label": "Backend creates/transfers", "description": "INSERT or UPDATE sector_id. If transfer: INSERT into transfers table (from/to/timestamp)." },
+        { "step": 6, "label": "Saved to Room", "description": "EmployeeEntity inserted via dao.insert() — immediately visible in list via Flow" },
+        { "step": 7, "label": "Photos uploaded (best-effort)", "description": "uploadFoto() called for each captured URI. Failure doesn't block creation." }
+      ]
+    }
+  ]
+}
