@@ -80,6 +80,31 @@ $sectorId = "<uuid-del-sector>"
 
 ## Reglas generales
 
-- Responder siempre en **español informal**
+- Responder siempre en **español informal**, directo y sin vueltas
 - No hacer commits ni push sin confirmación explícita del usuario
 - No cambiar el método de storage de fotos (Volume → archivos)
+- Si algo no cierra o falta un dato, **frenar y preguntar** en vez de adivinar
+
+## Compilar y publicar
+
+**Nunca compilar release, empaquetar ni publicar sin autorización explícita del usuario, cada vez.** Compilar en debug para chequear que algo compila está bien.
+
+Publicar la app Android tiene consecuencias grandes: la actualización llega a ~45 teléfonos del campo, y al cambiar el `versionCode` **todos vuelven a la pantalla de autorización** y hay que aprobarlos a mano desde StaffAdmin. No hacerlo un lunes a la mañana.
+
+Antes de publicar un APK, seguir sí o sí lo documentado en `SETUP.md` (sección 6):
+- Compilar **siempre** con `gradlew clean` — sin eso, Gradle puede dejar embebida en el bytecode una constante `BuildConfig.VERSION_CODE` vieja y el cartel de "actualizar" queda en loop
+- Verificar con `dexdump` el `versionCode` que quedó **realmente adentro del APK**, no confiar en el manifest
+- Subir el APK al repo de updates **antes** de tocar el `version.json`
+
+## Tocar la base de producción
+
+La base es de producción y de ahí sale la liquidación de sueldos. Antes de cualquier `INSERT`, `UPDATE` o `DELETE`:
+
+1. **Mostrar primero** qué filas se van a ver afectadas (un `SELECT` con el detalle y el total)
+2. **Hacer respaldo** a un `.json` en el Escritorio con lo que se va a modificar
+3. Recién ahí ejecutar, y **verificar después** que quedó como se esperaba
+4. Para cargas masivas, usar `ON CONFLICT DO NOTHING` para no pisar lo que ya está
+
+Para borrar tarjas usar `is_deleted = true` (borrado lógico), nunca `DELETE`: es reversible y el índice único ignora las borradas, así que se puede volver a cargar ese día sin conflicto.
+
+Los scripts sueltos de consulta se borran después de usarlos — no dejar archivos con la contraseña de la base en el repo.
