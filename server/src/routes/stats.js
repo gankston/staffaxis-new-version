@@ -5,19 +5,40 @@ function horas(minutos) {
   return Math.round(Number(minutos ?? 0) / 60 * 10) / 10;
 }
 
-// Extrae SOLO el segmento de horas antes de convertir a número — el valor puede venir
-// como compuesto "H 4|C:33" (horas + cosecha), "H 4|Cajas 32 Cajones 43", etc. Sin esto,
-// REGEXP_REPLACE borraba todo lo que no fuera dígito y pegaba "4" y "33" en un solo "433".
-const CAST_MW = `CAST(NULLIF(REGEXP_REPLACE(
+// Normaliza el valor de la tarja a MINUTOS, que es lo que espera horas().
+//
+// En la tabla conviven tres formatos y hay que distinguirlos, porque sumarlos crudos
+// mezcla horas con minutos y el total queda cualquier cosa:
+//   "H 8"        -> formato actual: son HORAS (desde 22/06/2026)
+//   "480"        -> numero > 16: son MINUTOS (formato viejo)
+//   "8" / "10.5" -> numero <= 16: son HORAS (media jornada incluida)
+//   "H 0|C:33"   -> compuesto: solo cuenta el primer segmento
+//   "C" / "$..." -> no aportan horas
+const MW_SEG = `NULLIF(REGEXP_REPLACE(REPLACE(SPLIT_PART(sub.minutes_worked, '|', 1), ',', '.'), '[^0-9.]', '', 'g'), '')`;
+const MW_NUM = `CAST(${MW_SEG} AS NUMERIC)`;
+const CAST_MW = `(
   CASE
-    WHEN sub.minutes_worked = 'C' THEN NULL
-    WHEN sub.minutes_worked LIKE '$%' THEN NULL
-    WHEN sub.minutes_worked LIKE '%|%' THEN SPLIT_PART(sub.minutes_worked, '|', 1)
-    ELSE sub.minutes_worked
-  END,
-  '[^0-9.,]', '', 'g'
-), '') AS NUMERIC)`;
+    WHEN sub.minutes_worked IS NULL OR sub.minutes_worked = 'C' OR sub.minutes_worked LIKE '$%' THEN NULL
+    WHEN ${MW_SEG} IS NULL THEN NULL
+    WHEN SPLIT_PART(sub.minutes_worked, '|', 1) LIKE 'H %' THEN ${MW_NUM} * 60
+    WHEN ${MW_NUM} > 16 THEN ${MW_NUM}
+    ELSE ${MW_NUM} * 60
+  END
+)`;
 const COUNT_COSECHA = `COUNT(sub.id) FILTER (WHERE sub.minutes_worked = 'C' OR sub.minutes_worked LIKE '%|C:%')`;
+
+// Importe en pesos: viene como "$36400" suelto o como segmento "AB:47573,53" del compuesto.
+// Va aparte de las horas — antes se sumaba todo junto y el mismo numero se reportaba
+// como horas y como importe a la vez.
+const CAST_IMPORTE = `(
+  CASE
+    WHEN sub.minutes_worked LIKE '$%'
+      THEN CAST(NULLIF(REGEXP_REPLACE(REPLACE(sub.minutes_worked, ',', '.'), '[^0-9.]', '', 'g'), '') AS NUMERIC)
+    WHEN sub.minutes_worked LIKE '%AB:%'
+      THEN CAST(NULLIF(REGEXP_REPLACE(REPLACE(SPLIT_PART(sub.minutes_worked, 'AB:', 2), ',', '.'), '[^0-9.]', '', 'g'), '') AS NUMERIC)
+    ELSE NULL
+  END
+)`;
 
 function resolvePeriod(periodo, fecha_desde, fecha_hasta) {
   const hoy = new Date();
@@ -485,8 +506,7 @@ export async function statsRoutes(app) {
     const e = emp.rows[0];
     const [dias, abs] = await Promise.all([
       db.query(`
-        SELECT sub.date, sub.minutes_worked, sub.notes,
-               CAST(NULLIF(REPLACE(REGEXP_REPLACE(NULLIF(sub.minutes_worked,'C'), '[^0-9.,]', '', 'g'), ',', '.'), '') AS NUMERIC) AS valor
+        SELECT sub.date, sub.minutes_worked, sub.notes, ${CAST_MW} AS valor, ${CAST_IMPORTE} AS importe
         FROM submissions sub
         WHERE sub.employee_id = $1 AND sub.date BETWEEN $2 AND $3 AND NOT sub.is_deleted
         ORDER BY sub.date
@@ -496,11 +516,12 @@ export async function statsRoutes(app) {
         FROM absences WHERE employee_id = $1 AND start_date <= $3 AND end_date >= $2
       `, [e.id, desde, hasta]),
     ]);
-    const diasCosecha  = dias.rows.filter(r => r.minutes_worked === 'C').length;
-    const totalValor   = dias.rows.reduce((s,r) => s + (+r.valor||0), 0);
+    const diasCosecha   = dias.rows.filter(r => r.minutes_worked === 'C' || String(r.minutes_worked ?? '').includes('|C:')).length;
+    const totalValor    = dias.rows.reduce((s,r) => s + (+r.valor||0), 0);
+    const totalImporte  = dias.rows.reduce((s,r) => s + (+r.importe||0), 0);
     return {
-      summary: { empleado_id: e.id, nombre: e.nombre, dni: e.dni, sector: e.sector, encargado: e.encargado, activo: e.activo, dias_trabajados: dias.rows.length, dias_cosecha: diasCosecha, ...(totalValor > 0 ? { horas_totales: horas(totalValor), importe_total: +totalValor.toFixed(2) } : {}), ausencias_en_periodo: abs.rows.reduce((s,r) => s + +r.dias, 0) },
-      rows: dias.rows.map(r => ({ fecha: r.date, minutes_worked: r.minutes_worked, valor: r.valor ? +r.valor : null, horas: r.valor ? horas(r.valor) : null, notas: r.notes || null })),
+      summary: { empleado_id: e.id, nombre: e.nombre, dni: e.dni, sector: e.sector, encargado: e.encargado, activo: e.activo, dias_trabajados: dias.rows.length, dias_cosecha: diasCosecha, ...(totalValor > 0 ? { horas_totales: horas(totalValor) } : {}), ...(totalImporte > 0 ? { importe_total: +totalImporte.toFixed(2) } : {}), ausencias_en_periodo: abs.rows.reduce((s,r) => s + +r.dias, 0) },
+      rows: dias.rows.map(r => ({ fecha: r.date, minutes_worked: r.minutes_worked, valor: r.valor ? +r.valor : null, horas: r.valor ? horas(r.valor) : null, importe: r.importe ? +r.importe : null, notas: r.notes || null })),
       ausencias: abs.rows,
       metadata: { periodo: { desde, hasta }, empleado_id: e.id },
     };
@@ -885,9 +906,11 @@ export async function statsRoutes(app) {
     auth: 'Header x-admin-token: staffaxis_admin_token_2024_prod',
     cache: { datos_historicos: '5 min', datos_del_dia: '2 min', metadata: '1 hora' },
     reglas_de_negocio: {
-      minutes_worked_C: 'Valor "C" indica día de cosecha',
-      minutes_worked_pesos: 'Valor con $ indica monto en pesos (ej: "$10625.6")',
-      minutes_worked_numero: 'Valor numérico indica minutos trabajados (480 = 8hs)',
+      minutes_worked_formato: 'Campo de texto, puede ser compuesto con partes separadas por "|" (ej: "H 8|C:33|Cajas 23 Cajones 55|AB:47573,53"). Las horas son siempre el primer segmento.',
+      minutes_worked_horas: 'Con prefijo "H " son HORAS (ej: "H 8" = 8hs). Sin prefijo: si el número es > 16 son MINUTOS (480 = 8hs), si es <= 16 son HORAS (8 = 8hs, 10.5 = media jornada).',
+      minutes_worked_C: 'Valor "C" solo, o segmento "C:33", indica cosecha (33 = cantidad de cachos)',
+      minutes_worked_pesos: 'Valor con $ o segmento "AB:" indica monto en pesos (ej: "$10625.6", "AB:47573,53"). No aporta horas.',
+      minutes_worked_cajas: 'Segmento "Cajas 23 Cajones 55" indica bultos embalados',
     },
     campos_no_disponibles: ['legajo','puesto','categoria','supervisor_directo'],
   })));
