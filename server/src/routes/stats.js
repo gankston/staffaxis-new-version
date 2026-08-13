@@ -79,7 +79,20 @@ function valRow(val, cosecha) {
   const obj = {};
   if (+cosecha > 0) obj.dias_cosecha = +cosecha;
   const v = +(+val ?? 0);
-  if (v > 0) { obj.horas_totales = horas(v); obj.importe_total = +v.toFixed(2); }
+  if (v > 0) obj.horas_totales = horas(v);
+  return obj;
+}
+
+// Totales de una fila agregada. Las horas y el importe salen de columnas
+// DISTINTAS: antes se reportaba el mismo numero como horas y como pesos
+// (324 horas se informaban tambien como "$19.440", que eran los minutos).
+function totalesRow(row) {
+  const obj = {};
+  if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
+  const min = +(row.total_valor ?? 0);
+  if (min > 0) obj.horas_totales = horas(min);
+  const imp = +(row.total_importe ?? 0);
+  if (imp > 0) obj.importe_total = +imp.toFixed(2);
   return obj;
 }
 
@@ -213,7 +226,8 @@ export async function statsRoutes(app) {
         COUNT(DISTINCT sub.date)        AS dias_activos,
         COUNT(sub.id)                   AS total_registros,
         ${COUNT_COSECHA}                AS dias_cosecha,
-        SUM(${CAST_MW})                 AS total_valor
+        SUM(${CAST_MW})                 AS total_valor,
+          SUM(${CAST_IMPORTE})            AS total_importe
       FROM submissions sub JOIN sectors s ON s.id = sub.sector_id
       WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${cond}
       GROUP BY s.id, s.name, s.tipo_carga, s.encargado
@@ -224,8 +238,7 @@ export async function statsRoutes(app) {
       sectores: r.rows.map(row => {
         const obj = { sector: row.sector, encargado: row.encargado, empleados_con_registro: +row.empleados, dias_activos: +row.dias_activos, total_registros: +row.total_registros };
         if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
-        const val = +(+row.total_valor ?? 0);
-        if (val > 0) { obj.horas_totales = horas(val); obj.importe_total = +val.toFixed(2); }
+        Object.assign(obj, totalesRow(row));
         return obj;
       }),
     };
@@ -270,7 +283,8 @@ export async function statsRoutes(app) {
       SELECT e.first_name||' '||e.last_name AS empleado, e.dni, s.name AS sector,
              COUNT(sub.id)    AS dias_trabajados,
              ${COUNT_COSECHA} AS dias_cosecha,
-             SUM(${CAST_MW})  AS total_valor
+             SUM(${CAST_MW})  AS total_valor,
+             SUM(${CAST_IMPORTE}) AS total_importe
       FROM submissions sub
       JOIN employees e ON e.id = sub.employee_id
       JOIN sectors s ON s.id = sub.sector_id
@@ -284,8 +298,7 @@ export async function statsRoutes(app) {
       ranking: r.rows.map((row, i) => {
         const obj = { posicion: i+1, empleado: row.empleado, dni: row.dni, sector: row.sector, dias_trabajados: +row.dias_trabajados };
         if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
-        const val = +(+row.total_valor ?? 0);
-        if (val > 0) { obj.horas_totales = horas(val); obj.importe_total = +val.toFixed(2); }
+        Object.assign(obj, totalesRow(row));
         return obj;
       }),
     };
@@ -300,6 +313,7 @@ export async function statsRoutes(app) {
         COUNT(DISTINCT sub.employee_id) AS empleados,
         ${COUNT_COSECHA}                AS dias_cosecha,
         SUM(${CAST_MW})                 AS total_valor,
+        SUM(${CAST_IMPORTE})            AS total_importe,
         (SELECT COUNT(*) FROM absences WHERE start_date <= $1 AND end_date >= $1)                          AS abs_total,
         (SELECT COUNT(*) FILTER (WHERE is_justified) FROM absences WHERE start_date <= $1 AND end_date >= $1) AS abs_cert
       FROM submissions sub JOIN sectors s ON s.id = sub.sector_id
@@ -314,8 +328,7 @@ export async function statsRoutes(app) {
       actividad: r.rows.map(row => {
         const obj = { sector: row.sector, encargado: row.encargado, empleados_registrados: +row.empleados };
         if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
-        const val = +(+row.total_valor ?? 0);
-        if (val > 0) { obj.horas_totales = horas(val); obj.importe_total = +val.toFixed(2); }
+        Object.assign(obj, totalesRow(row));
         return obj;
       }),
     };
@@ -337,7 +350,8 @@ export async function statsRoutes(app) {
           COUNT(DISTINCT sub.employee_id) AS empleados_unicos,
           COUNT(sub.id)                   AS registros,
           ${COUNT_COSECHA}                AS dias_cosecha,
-          SUM(${CAST_MW})                 AS total_valor
+          SUM(${CAST_MW})                 AS total_valor,
+          SUM(${CAST_IMPORTE})            AS total_importe
         FROM submissions sub JOIN sectors s ON s.id = sub.sector_id
         WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${cond}
         GROUP BY s.id, s.name, s.encargado
@@ -347,7 +361,8 @@ export async function statsRoutes(app) {
         SELECT e.first_name||' '||e.last_name AS empleado, s.name AS sector,
           COUNT(sub.id)    AS dias,
           ${COUNT_COSECHA} AS dias_cosecha,
-          SUM(${CAST_MW})  AS total_valor
+          SUM(${CAST_MW})  AS total_valor,
+             SUM(${CAST_IMPORTE}) AS total_importe
         FROM submissions sub
         JOIN employees e ON e.id = sub.employee_id
         JOIN sectors s ON s.id = sub.sector_id
@@ -363,15 +378,13 @@ export async function statsRoutes(app) {
       sectores: sectores.rows.map(row => {
         const obj = { sector: row.sector, encargado: row.encargado, dias_activos: +row.dias_activos, empleados_unicos: +row.empleados_unicos, registros: +row.registros };
         if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
-        const val = +(+row.total_valor ?? 0);
-        if (val > 0) { obj.horas_totales = horas(val); obj.importe_total = +val.toFixed(2); }
+        Object.assign(obj, totalesRow(row));
         return obj;
       }),
       top_10_empleados: top10.rows.map((row, i) => {
         const obj = { posicion: i+1, empleado: row.empleado, sector: row.sector, dias: +row.dias };
         if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
-        const val = +(+row.total_valor ?? 0);
-        if (val > 0) { obj.horas_totales = horas(val); obj.importe_total = +val.toFixed(2); }
+        Object.assign(obj, totalesRow(row));
         return obj;
       }),
     };
@@ -433,6 +446,7 @@ export async function statsRoutes(app) {
         COUNT(sub.id)                                    AS total_registros,
         ${COUNT_COSECHA}                                 AS dias_cosecha,
         SUM(${CAST_MW})                                  AS total_valor,
+        SUM(${CAST_IMPORTE})                             AS total_importe,
         AVG(${CAST_MW})                                  AS promedio_por_registro
       FROM sectors s
       LEFT JOIN employees e ON e.sector_id = s.id
@@ -446,9 +460,8 @@ export async function statsRoutes(app) {
       periodo: { desde, hasta },
       sectores: r.rows.map(row => {
         const obj = { sector: row.sector, encargado: row.encargado, empleados_activos: +row.empleados_activos, dias_activos_en_periodo: +(row.dias_activos??0), empleados_con_registro: +(row.empleados_con_registro??0) };
-        if (+row.dias_cosecha > 0) obj.dias_cosecha = +row.dias_cosecha;
-        const val = +(+row.total_valor ?? 0);
-        if (val > 0) { obj.horas_totales = horas(val); obj.importe_total = +val.toFixed(2); obj.promedio_por_registro = +(+row.promedio_por_registro??0).toFixed(2); }
+        Object.assign(obj, totalesRow(row));
+        if (+(row.total_valor ?? 0) > 0) obj.promedio_horas_por_registro = horas(+(+row.promedio_por_registro??0));
         return obj;
       }),
     };
@@ -539,7 +552,8 @@ export async function statsRoutes(app) {
       SELECT e.id AS empleado_id, e.first_name||' '||e.last_name AS nombre, e.dni, e.is_active AS activo,
              COUNT(sub.id)    AS dias_trabajados,
              ${COUNT_COSECHA} AS dias_cosecha,
-             SUM(${CAST_MW})  AS total_valor
+             SUM(${CAST_MW})  AS total_valor,
+             SUM(${CAST_IMPORTE}) AS total_importe
       FROM employees e
       LEFT JOIN submissions sub ON sub.employee_id = e.id
         AND sub.date BETWEEN $2 AND $3 AND NOT sub.is_deleted
@@ -547,10 +561,11 @@ export async function statsRoutes(app) {
       GROUP BY e.id, e.first_name, e.last_name, e.dni, e.is_active
       ORDER BY COALESCE(SUM(${CAST_MW}),0) + COALESCE(${COUNT_COSECHA},0) DESC
     `, [s.id, desde, hasta]);
-    const totalValor = r.rows.reduce((a,x) => a + (+x.total_valor||0), 0);
+    const totalValor   = r.rows.reduce((a,x) => a + (+x.total_valor||0), 0);
+    const totalImporte = r.rows.reduce((a,x) => a + (+x.total_importe||0), 0);
     return {
-      summary: { sector_id: s.id, sector: s.name, encargado: s.encargado, total_empleados: r.rows.length, empleados_activos: r.rows.filter(x=>x.activo).length, empleados_con_actividad: r.rows.filter(x=>+x.dias_trabajados>0).length, total_dias_trabajados: r.rows.reduce((a,x)=>a+ +x.dias_trabajados,0), total_dias_cosecha: r.rows.reduce((a,x)=>a+ +x.dias_cosecha,0), ...(totalValor > 0 ? { horas_totales: horas(totalValor), importe_total: +totalValor.toFixed(2) } : {}) },
-      rows: r.rows.map(x => ({ empleado_id: x.empleado_id, nombre: x.nombre, dni: x.dni, activo: x.activo, dias_trabajados: +x.dias_trabajados, ...valRow(x.total_valor, x.dias_cosecha) })),
+      summary: { sector_id: s.id, sector: s.name, encargado: s.encargado, total_empleados: r.rows.length, empleados_activos: r.rows.filter(x=>x.activo).length, empleados_con_actividad: r.rows.filter(x=>+x.dias_trabajados>0).length, total_dias_trabajados: r.rows.reduce((a,x)=>a+ +x.dias_trabajados,0), total_dias_cosecha: r.rows.reduce((a,x)=>a+ +x.dias_cosecha,0), ...(totalValor > 0 ? { horas_totales: horas(totalValor) } : {}), ...(totalImporte > 0 ? { importe_total: +totalImporte.toFixed(2) } : {}) },
+      rows: r.rows.map(x => ({ empleado_id: x.empleado_id, nombre: x.nombre, dni: x.dni, activo: x.activo, dias_trabajados: +x.dias_trabajados, ...totalesRow(x) })),
       metadata: { periodo: { desde, hasta }, sector_id: s.id },
     };
   }));
@@ -573,7 +588,8 @@ export async function statsRoutes(app) {
       SELECT DATE_TRUNC($4, sub.date)::DATE AS periodo,
              COUNT(sub.id)    AS registros,
              ${COUNT_COSECHA} AS dias_cosecha,
-             SUM(${CAST_MW})  AS total_valor
+             SUM(${CAST_MW})  AS total_valor,
+             SUM(${CAST_IMPORTE}) AS total_importe
       FROM submissions sub
       WHERE sub.employee_id = $1 AND sub.date BETWEEN $2 AND $3 AND NOT sub.is_deleted
       GROUP BY DATE_TRUNC($4, sub.date) ORDER BY periodo
@@ -597,7 +613,8 @@ export async function statsRoutes(app) {
              COUNT(DISTINCT sub.employee_id) AS empleados,
              COUNT(sub.id)    AS registros,
              ${COUNT_COSECHA} AS dias_cosecha,
-             SUM(${CAST_MW})  AS total_valor
+             SUM(${CAST_MW})  AS total_valor,
+             SUM(${CAST_IMPORTE}) AS total_importe
       FROM submissions sub JOIN sectors s ON s.id = sub.sector_id
       WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${cond}
       GROUP BY DATE_TRUNC($3, sub.date), s.id, s.name ORDER BY periodo, s.name
@@ -617,7 +634,7 @@ export async function statsRoutes(app) {
       const p = [desde, hasta]; const conds = [];
       if (sector)   { p.push(`%${sector}%`);   conds.push(`AND s.name ILIKE $${p.length}`); }
       if (empleado) { p.push(`%${empleado}%`);  conds.push(`AND (e.first_name ILIKE $${p.length} OR e.last_name ILIKE $${p.length} OR (e.first_name||' '||e.last_name) ILIKE $${p.length})`); }
-      return { sql: `SELECT COUNT(DISTINCT sub.employee_id) AS empleados, COUNT(DISTINCT sub.date) AS dias_activos, COUNT(sub.id) AS registros, ${COUNT_COSECHA} AS dias_cosecha, SUM(${CAST_MW}) AS total_valor FROM submissions sub JOIN employees e ON e.id = sub.employee_id JOIN sectors s ON s.id = sub.sector_id WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${conds.join(' ')}`, p };
+      return { sql: `SELECT COUNT(DISTINCT sub.employee_id) AS empleados, COUNT(DISTINCT sub.date) AS dias_activos, COUNT(sub.id) AS registros, ${COUNT_COSECHA} AS dias_cosecha, SUM(${CAST_MW}) AS total_valor, SUM(${CAST_IMPORTE}) AS total_importe FROM submissions sub JOIN employees e ON e.id = sub.employee_id JOIN sectors s ON s.id = sub.sector_id WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted ${conds.join(' ')}`, p };
     };
     const qa = buildQ(periodo_a_desde, periodo_a_hasta);
     const qb = buildQ(periodo_b_desde, periodo_b_hasta);
@@ -632,8 +649,8 @@ export async function statsRoutes(app) {
         dias_activos: { a: +a.dias_activos, b: +b.dias_activos, variacion_pct: diff(+a.dias_activos, +b.dias_activos) },
         registros:    { a: +a.registros,    b: +b.registros,    variacion_pct: diff(+a.registros,    +b.registros) },
         dias_cosecha: { a: +a.dias_cosecha, b: +b.dias_cosecha, variacion_pct: diff(+a.dias_cosecha, +b.dias_cosecha) },
-        importe_total: { a: +(+a.total_valor||0).toFixed(2), b: +(+b.total_valor||0).toFixed(2), variacion_pct: diff(+a.total_valor||0, +b.total_valor||0) },
-        horas_totales: { a: horas(+a.total_valor||0), b: horas(+b.total_valor||0) },
+        horas_totales:  { a: horas(+a.total_valor||0), b: horas(+b.total_valor||0), variacion_pct: diff(+a.total_valor||0, +b.total_valor||0) },
+        importe_total:  { a: +(+a.total_importe||0).toFixed(2), b: +(+b.total_importe||0).toFixed(2), variacion_pct: diff(+a.total_importe||0, +b.total_importe||0) },
       },
     };
   }));
@@ -693,7 +710,8 @@ export async function statsRoutes(app) {
       SELECT e.id AS empleado_id, e.first_name||' '||e.last_name AS nombre, e.dni,
              COUNT(sub.id)    AS dias_trabajados,
              ${COUNT_COSECHA} AS dias_cosecha,
-             SUM(${CAST_MW})  AS total_valor
+             SUM(${CAST_MW})  AS total_valor,
+             SUM(${CAST_IMPORTE}) AS total_importe
       FROM employees e
       LEFT JOIN submissions sub ON sub.employee_id = e.id
         AND sub.date BETWEEN $2 AND $3 AND NOT sub.is_deleted
@@ -724,7 +742,7 @@ export async function statsRoutes(app) {
       ),
       actual AS (
         SELECT COUNT(sub.id) AS dias, COUNT(sub.id) FILTER (WHERE sub.minutes_worked='C') AS cosecha,
-               SUM(${CAST_MW}) AS valor
+               SUM(${CAST_MW}) AS valor, SUM(${CAST_IMPORTE}) AS importe
         FROM submissions sub, emp WHERE sub.employee_id = emp.id AND sub.date BETWEEN $2 AND $3 AND NOT sub.is_deleted
       ),
       historico AS (
@@ -737,7 +755,7 @@ export async function statsRoutes(app) {
         SELECT COUNT(a.id) AS episodios, SUM(a.end_date - a.start_date + 1) AS dias
         FROM absences a, emp WHERE a.employee_id = emp.id AND a.start_date <= $3 AND a.end_date >= $2
       )
-      SELECT emp.*, a.dias AS a_dias, a.cosecha AS a_cosecha, a.valor AS a_valor,
+      SELECT emp.*, a.dias AS a_dias, a.cosecha AS a_cosecha, a.valor AS a_valor, a.importe AS a_importe,
              h.promedio_mes, ab.episodios AS ab_episodios, ab.dias AS ab_dias
       FROM emp, actual a, historico h, ausencias ab
     `, [`%${busqueda}%`, desde, hasta]);
@@ -749,7 +767,8 @@ export async function statsRoutes(app) {
       summary: {
         empleado_id: e.id, nombre: e.nombre, dni: e.dni, sector: e.sector, encargado: e.encargado, activo: e.activo,
         en_sistema_desde: e.created_at, dias_trabajados: +e.a_dias, dias_cosecha: +e.a_cosecha,
-        ...(+e.a_valor > 0 ? { horas_totales: horas(+e.a_valor), importe_total: +(+e.a_valor).toFixed(2) } : {}),
+        ...(+e.a_valor > 0 ? { horas_totales: horas(+e.a_valor) } : {}),
+        ...(+e.a_importe > 0 ? { importe_total: +(+e.a_importe).toFixed(2) } : {}),
         ausencias_episodios: +e.ab_episodios, ausencias_dias: +e.ab_dias||0,
         promedio_mensual_historico: +promMes.toFixed(2),
         tendencia_vs_historico_pct: promMes > 0 ? +((valorActual-promMes)/promMes*100).toFixed(1) : null,
@@ -767,7 +786,8 @@ export async function statsRoutes(app) {
       WITH sec AS (SELECT id, name, encargado FROM sectors WHERE name ILIKE $1 LIMIT 1),
       actual AS (
         SELECT COUNT(DISTINCT sub.employee_id) AS emps_activos, COUNT(sub.id) AS regs,
-               COUNT(sub.id) FILTER (WHERE sub.minutes_worked='C') AS cosecha, SUM(${CAST_MW}) AS valor
+               COUNT(sub.id) FILTER (WHERE sub.minutes_worked='C') AS cosecha,
+               SUM(${CAST_MW}) AS valor, SUM(${CAST_IMPORTE}) AS importe
         FROM submissions sub, sec WHERE sub.sector_id = sec.id AND sub.date BETWEEN $2 AND $3 AND NOT sub.is_deleted
       ),
       emp_count AS (SELECT COUNT(*) FILTER (WHERE e.is_active) AS activos FROM employees e, sec WHERE e.sector_id = sec.id),
@@ -783,7 +803,7 @@ export async function statsRoutes(app) {
         ) t
       )
       SELECT sec.id AS sector_id, sec.name AS sector, sec.encargado,
-             a.emps_activos, a.regs, a.cosecha, a.valor,
+             a.emps_activos, a.regs, a.cosecha, a.valor, a.importe,
              ec.activos AS emp_activos,
              ab.episodios AS ab_episodios, ab.dias AS ab_dias,
              h.promedio_mes
@@ -798,7 +818,8 @@ export async function statsRoutes(app) {
         sector_id: e.sector_id, sector: e.sector, encargado: e.encargado,
         empleados_totales: +e.emp_activos, empleados_con_actividad: +e.emps_activos,
         registros: +e.regs, dias_cosecha: +e.cosecha,
-        ...(+e.valor > 0 ? { horas_totales: horas(+e.valor), importe_total: +(+e.valor).toFixed(2) } : {}),
+        ...(+e.valor > 0 ? { horas_totales: horas(+e.valor) } : {}),
+        ...(+e.importe > 0 ? { importe_total: +(+e.importe).toFixed(2) } : {}),
         ausencias_episodios: +e.ab_episodios, ausencias_dias: +e.ab_dias||0,
         promedio_mensual_historico: +promMes.toFixed(2),
         tendencia_vs_historico_pct: promMes > 0 ? +((valorActual-promMes)/promMes*100).toFixed(1) : null,
