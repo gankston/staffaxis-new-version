@@ -439,22 +439,27 @@ export async function statsRoutes(app) {
     const params = [desde, hasta];
     const cond = tipo_carga ? (params.push(tipo_carga), `AND s.tipo_carga = $3`) : '';
     const r = await db.query(`
+      -- Los totales de tarjas van en un LATERAL aparte: uniendo employees y
+      -- submissions al mismo sector se multiplicaba cada tarja por la cantidad
+      -- de empleados del sector (PICHANAL, con 241, daba 7.396.875 horas).
       SELECT s.name AS sector, s.encargado,
-        COUNT(DISTINCT e.id) FILTER (WHERE e.is_active) AS empleados_activos,
-        COUNT(DISTINCT sub.date)                         AS dias_activos,
-        COUNT(DISTINCT sub.employee_id)                  AS empleados_con_registro,
-        COUNT(sub.id)                                    AS total_registros,
-        ${COUNT_COSECHA}                                 AS dias_cosecha,
-        SUM(${CAST_MW})                                  AS total_valor,
-        SUM(${CAST_IMPORTE})                             AS total_importe,
-        AVG(${CAST_MW})                                  AS promedio_por_registro
+        (SELECT COUNT(*) FROM employees e WHERE e.sector_id = s.id AND e.is_active) AS empleados_activos,
+        agg.dias_activos, agg.empleados_con_registro, agg.total_registros,
+        agg.dias_cosecha, agg.total_valor, agg.total_importe, agg.promedio_por_registro
       FROM sectors s
-      LEFT JOIN employees e ON e.sector_id = s.id
-      LEFT JOIN submissions sub ON sub.sector_id = s.id
-        AND sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted
+      LEFT JOIN LATERAL (
+        SELECT COUNT(DISTINCT sub.date)        AS dias_activos,
+               COUNT(DISTINCT sub.employee_id) AS empleados_con_registro,
+               COUNT(sub.id)                   AS total_registros,
+               ${COUNT_COSECHA}                AS dias_cosecha,
+               SUM(${CAST_MW})                 AS total_valor,
+               SUM(${CAST_IMPORTE})            AS total_importe,
+               AVG(${CAST_MW})                 AS promedio_por_registro
+        FROM submissions sub
+        WHERE sub.sector_id = s.id AND sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted
+      ) agg ON TRUE
       WHERE 1=1 ${cond}
-      GROUP BY s.id, s.name, s.encargado
-      ORDER BY COALESCE(SUM(${CAST_MW}), 0) + COALESCE(${COUNT_COSECHA}, 0) DESC
+      ORDER BY COALESCE(agg.total_valor, 0) + COALESCE(agg.dias_cosecha, 0) DESC
     `, params);
     return {
       periodo: { desde, hasta },
