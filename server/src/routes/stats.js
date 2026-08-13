@@ -843,11 +843,11 @@ export async function statsRoutes(app) {
         GROUP BY sub.employee_id
       ),
       historico AS (
-        SELECT sub.employee_id, AVG(val_mes) AS prom_mes FROM (
+        SELECT t.employee_id, AVG(t.val_mes) AS prom_mes FROM (
           SELECT sub.employee_id, DATE_TRUNC('month', sub.date) AS m,
                  SUM(${CAST_MW}) + COUNT(sub.id) FILTER (WHERE sub.minutes_worked='C') AS val_mes
           FROM submissions sub WHERE sub.date < $1 AND NOT sub.is_deleted GROUP BY sub.employee_id, m
-        ) t GROUP BY sub.employee_id
+        ) t GROUP BY t.employee_id
       )
       SELECT e.id AS empleado_id, e.first_name||' '||e.last_name AS nombre, e.dni,
              s.name AS sector, a.val_actual, h.prom_mes,
@@ -876,11 +876,11 @@ export async function statsRoutes(app) {
         FROM submissions sub WHERE sub.date BETWEEN $1 AND $2 AND NOT sub.is_deleted GROUP BY sub.sector_id
       ),
       historico AS (
-        SELECT sub.sector_id, AVG(val_mes) AS prom_mes FROM (
+        SELECT t.sector_id, AVG(t.val_mes) AS prom_mes FROM (
           SELECT sub.sector_id, DATE_TRUNC('month', sub.date) AS m,
                  SUM(${CAST_MW}) + COUNT(sub.id) FILTER (WHERE sub.minutes_worked='C') AS val_mes
           FROM submissions sub WHERE sub.date < $1 AND NOT sub.is_deleted GROUP BY sub.sector_id, m
-        ) t GROUP BY sub.sector_id
+        ) t GROUP BY t.sector_id
       )
       SELECT s.id AS sector_id, s.name AS sector, s.encargado, a.val_actual, h.prom_mes,
              ROUND(((a.val_actual - h.prom_mes) / h.prom_mes * 100)::NUMERIC, 1) AS variacion_pct
