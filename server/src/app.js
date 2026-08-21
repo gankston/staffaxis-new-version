@@ -11,6 +11,7 @@ import { employeeRoutes }   from './routes/employees.js';
 import { submissionRoutes } from './routes/submissions.js';
 import { absenceRoutes }    from './routes/absences.js';
 import { adminRoutes }      from './routes/admin.js';
+import { supervisorRoutes } from './routes/supervisor.js';
 import { statsRoutes }      from './routes/stats.js';
 import { photoRoutes }      from './routes/photos.js';
 
@@ -57,6 +58,7 @@ const start = async () => {
   await app.register(submissionRoutes);
   await app.register(absenceRoutes);
   await app.register(adminRoutes);
+  await app.register(supervisorRoutes);
   await app.register(statsRoutes);
   await app.register(photoRoutes);
 
