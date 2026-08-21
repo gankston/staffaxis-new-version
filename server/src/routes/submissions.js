@@ -6,7 +6,7 @@ export async function submissionRoutes(app) {
 
   // POST /api/submissions
   app.post('/api/submissions', { preHandler: verifyDevice }, async (req, reply) => {
-    const { employee_id, date, minutes_worked, notes, latitude, longitude } = req.body ?? {};
+    const { employee_id, date, minutes_worked, notes, latitude, longitude, datos_extra } = req.body ?? {};
     if (!employee_id || !date) {
       return reply.status(400).send({ error: 'Faltan campos requeridos' });
     }
@@ -16,15 +16,16 @@ export async function submissionRoutes(app) {
 
     const id = uuid();
     await db.query(
-      `INSERT INTO submissions (id, employee_id, sector_id, date, minutes_worked, notes, status, latitude, longitude)
-       VALUES ($1, $2, $3, $4, $5, $6, 'approved', $7, $8)
+      `INSERT INTO submissions (id, employee_id, sector_id, date, minutes_worked, notes, status, latitude, longitude, datos_extra)
+       VALUES ($1, $2, $3, $4, $5, $6, 'approved', $7, $8, $9)
        ON CONFLICT (employee_id, date) WHERE NOT is_deleted
        DO UPDATE SET minutes_worked = EXCLUDED.minutes_worked,
                      notes          = EXCLUDED.notes,
                      latitude       = EXCLUDED.latitude,
                      longitude      = EXCLUDED.longitude,
+                     datos_extra    = EXCLUDED.datos_extra,
                      updated_at     = NOW()`,
-      [id, employee_id, emp.rows[0].sector_id, date, minutes_worked ?? null, notes ?? null, latitude ?? null, longitude ?? null]
+      [id, employee_id, emp.rows[0].sector_id, date, minutes_worked ?? null, notes ?? null, latitude ?? null, longitude ?? null, datos_extra ?? null]
     );
 
     const saved = await db.query(
@@ -46,7 +47,7 @@ export async function submissionRoutes(app) {
     let result;
     if (sinceId) {
       result = await db.query(
-        `SELECT id, employee_id, sector_id, date, minutes_worked, notes,
+        `SELECT id, employee_id, sector_id, date, minutes_worked, notes, datos_extra,
                 (EXTRACT(EPOCH FROM updated_at) * 1000)::BIGINT AS updated_at_ms,
                 is_deleted
          FROM submissions
@@ -58,7 +59,7 @@ export async function submissionRoutes(app) {
       );
     } else {
       result = await db.query(
-        `SELECT id, employee_id, sector_id, date, minutes_worked, notes,
+        `SELECT id, employee_id, sector_id, date, minutes_worked, notes, datos_extra,
                 (EXTRACT(EPOCH FROM updated_at) * 1000)::BIGINT AS updated_at_ms,
                 is_deleted
          FROM submissions
@@ -81,6 +82,7 @@ export async function submissionRoutes(app) {
         date:          r.date,
         minutesWorked: r.minutes_worked,
         notes:         r.notes,
+        datosExtra:    r.datos_extra,
         updatedAt:     Number(r.updated_at_ms),
         isDeleted:     r.is_deleted,
       })),

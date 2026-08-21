@@ -6,7 +6,11 @@ export async function sectorRoutes(app) {
   app.get('/api/sectors', async (_req, reply) => {
     const result = await db.query(
       `SELECT s.id, s.name, s.tipo_carga, s.encargado,
-              COUNT(e.id) FILTER (WHERE e.is_active) AS employee_count
+              COUNT(e.id) FILTER (WHERE e.is_active) AS employee_count,
+              COALESCE(
+                (SELECT ARRAY_AGG(stc.tipo ORDER BY stc.tipo) FROM sector_tipos_carga stc WHERE stc.sector_id = s.id),
+                '{}'
+              ) AS tipos_carga
        FROM sectors s
        LEFT JOIN employees e ON e.sector_id = s.id
        GROUP BY s.id
@@ -17,6 +21,7 @@ export async function sectorRoutes(app) {
         id: s.id,
         name: s.name,
         tipoCarga: s.tipo_carga,
+        tiposCarga: s.tipos_carga,
         encargado: s.encargado ?? null,
         employee_count: parseInt(s.employee_count ?? '0', 10),
       })),
