@@ -67,6 +67,7 @@ export async function submissionRoutes(app) {
                      status                 = EXCLUDED.status,
                      aprobada_por           = NULL,
                      aprobada_en            = NULL,
+                     fue_editada            = true,
                      updated_at             = NOW()`,
       [
         id, employee_id, emp.rows[0].sector_id, date, minutes_worked ?? null, notes ?? null, statusInicial, latitude ?? null, longitude ?? null,

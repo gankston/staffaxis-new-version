@@ -30,9 +30,7 @@ export async function supervisorRoutes(app) {
 
     const r = await db.query(
       `SELECT s.id, s.employee_id, s.date, s.minutes_worked, s.notes, s.created_at,
-              -- Si se edito despues de cargarla, el supervisor tiene que saber que esta
-              -- revisando una modificacion y no una tarja nueva.
-              (s.updated_at > s.created_at + INTERVAL '1 minute') AS fue_modificada,
+              s.fue_editada,
               s.horas, s.cosecha, s.cajas, s.cajones, s.importe,
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
@@ -50,7 +48,7 @@ export async function supervisorRoutes(app) {
         id: x.id, employeeId: x.employee_id, empleado: `${x.last_name} ${x.first_name}`.trim(),
         sector: x.sector_name, date: x.date, minutesWorked: x.minutes_worked, notes: x.notes,
         createdAt: x.created_at,
-        fueModificada: x.fue_modificada === true,
+        fueModificada: x.fue_editada === true,
         kmViajes: x.km_viajes, hasFumigadas: x.has_fumigadas, siembraTrilla: x.siembra_trilla,
         bolseros: x.bolseros, etiquetado: x.etiquetado,
         cargaCamionKg50: x.carga_camion_kg50, cargaCamionKg25: x.carga_camion_kg25, cargaCamionOtro: x.carga_camion_otro,
