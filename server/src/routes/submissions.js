@@ -60,6 +60,13 @@ export async function submissionRoutes(app) {
                      movimiento_estiba_kg50 = EXCLUDED.movimiento_estiba_kg50,
                      movimiento_estiba_kg25 = EXCLUDED.movimiento_estiba_kg25,
                      movimiento_estiba_otro = EXCLUDED.movimiento_estiba_otro,
+                     -- Al editar una tarja ya cargada vuelve a quedar como recien enviada:
+                     -- si el sector requiere aprobacion pasa de nuevo a 'pending' y se borra
+                     -- la aprobacion anterior, porque el supervisor aprobo OTROS valores y
+                     -- tiene que poder revisar la modificacion.
+                     status                 = EXCLUDED.status,
+                     aprobada_por           = NULL,
+                     aprobada_en            = NULL,
                      updated_at             = NOW()`,
       [
         id, employee_id, emp.rows[0].sector_id, date, minutes_worked ?? null, notes ?? null, statusInicial, latitude ?? null, longitude ?? null,
