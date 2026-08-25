@@ -29,7 +29,7 @@ export async function supervisorRoutes(app) {
     if (!sectores.length) return reply.send({ items: [] });
 
     const r = await db.query(
-      `SELECT s.id, s.employee_id, s.date, s.minutes_worked, s.notes, s.datos_extra, s.created_at,
+      `SELECT s.id, s.employee_id, s.date, s.minutes_worked, s.notes, s.created_at,
               e.first_name, e.last_name, sec.name AS sector_name
        FROM submissions s
        JOIN employees e ON e.id = s.employee_id
@@ -42,7 +42,7 @@ export async function supervisorRoutes(app) {
       items: r.rows.map(x => ({
         id: x.id, employeeId: x.employee_id, empleado: `${x.last_name} ${x.first_name}`.trim(),
         sector: x.sector_name, date: x.date, minutesWorked: x.minutes_worked, notes: x.notes,
-        datosExtra: x.datos_extra, createdAt: x.created_at,
+        createdAt: x.created_at,
       })),
     });
   });
@@ -96,7 +96,11 @@ export async function supervisorRoutes(app) {
       `SELECT s.id AS submission_id, s.employee_id,
               e.first_name, e.last_name, e.dni,
               sec.id AS sector_id, sec.name AS sector_name,
-              s.date, s.minutes_worked, s.notes, s.status, s.datos_extra,
+              s.date, s.minutes_worked, s.notes, s.status,
+              s.horas, s.cosecha, s.cajas, s.cajones, s.importe,
+              s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
+              s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
+              s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
               s.latitude, s.longitude, s.created_at AS submitted_at
        FROM submissions s
        JOIN employees e  ON e.id  = s.employee_id

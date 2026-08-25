@@ -7,8 +7,11 @@ export async function submissionRoutes(app) {
   // POST /api/submissions
   app.post('/api/submissions', { preHandler: verifyDevice }, async (req, reply) => {
     const {
-      employee_id, date, minutes_worked, notes, latitude, longitude, datos_extra,
+      employee_id, date, minutes_worked, notes, latitude, longitude,
       horas, cosecha, cajas, cajones, importe,
+      km_viajes, has_fumigadas, siembra_trilla, bolseros, etiquetado,
+      carga_camion_kg50, carga_camion_kg25, carga_camion_otro,
+      movimiento_estiba_kg50, movimiento_estiba_kg25, movimiento_estiba_otro,
     } = req.body ?? {};
     if (!employee_id || !date) {
       return reply.status(400).send({ error: 'Faltan campos requeridos' });
@@ -28,23 +31,42 @@ export async function submissionRoutes(app) {
 
     const id = uuid();
     await db.query(
-      `INSERT INTO submissions (id, employee_id, sector_id, date, minutes_worked, notes, status, latitude, longitude, datos_extra, horas, cosecha, cajas, cajones, importe)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `INSERT INTO submissions (
+         id, employee_id, sector_id, date, minutes_worked, notes, status, latitude, longitude,
+         horas, cosecha, cajas, cajones, importe,
+         km_viajes, has_fumigadas, siembra_trilla, bolseros, etiquetado,
+         carga_camion_kg50, carga_camion_kg25, carga_camion_otro,
+         movimiento_estiba_kg50, movimiento_estiba_kg25, movimiento_estiba_otro
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
        ON CONFLICT (employee_id, date) WHERE NOT is_deleted
-       DO UPDATE SET minutes_worked = EXCLUDED.minutes_worked,
-                     notes          = EXCLUDED.notes,
-                     latitude       = EXCLUDED.latitude,
-                     longitude      = EXCLUDED.longitude,
-                     datos_extra    = EXCLUDED.datos_extra,
-                     horas          = EXCLUDED.horas,
-                     cosecha        = EXCLUDED.cosecha,
-                     cajas          = EXCLUDED.cajas,
-                     cajones        = EXCLUDED.cajones,
-                     importe        = EXCLUDED.importe,
-                     updated_at     = NOW()`,
+       DO UPDATE SET minutes_worked         = EXCLUDED.minutes_worked,
+                     notes                  = EXCLUDED.notes,
+                     latitude               = EXCLUDED.latitude,
+                     longitude              = EXCLUDED.longitude,
+                     horas                  = EXCLUDED.horas,
+                     cosecha                = EXCLUDED.cosecha,
+                     cajas                  = EXCLUDED.cajas,
+                     cajones                = EXCLUDED.cajones,
+                     importe                = EXCLUDED.importe,
+                     km_viajes              = EXCLUDED.km_viajes,
+                     has_fumigadas          = EXCLUDED.has_fumigadas,
+                     siembra_trilla         = EXCLUDED.siembra_trilla,
+                     bolseros               = EXCLUDED.bolseros,
+                     etiquetado             = EXCLUDED.etiquetado,
+                     carga_camion_kg50      = EXCLUDED.carga_camion_kg50,
+                     carga_camion_kg25      = EXCLUDED.carga_camion_kg25,
+                     carga_camion_otro      = EXCLUDED.carga_camion_otro,
+                     movimiento_estiba_kg50 = EXCLUDED.movimiento_estiba_kg50,
+                     movimiento_estiba_kg25 = EXCLUDED.movimiento_estiba_kg25,
+                     movimiento_estiba_otro = EXCLUDED.movimiento_estiba_otro,
+                     updated_at             = NOW()`,
       [
-        id, employee_id, emp.rows[0].sector_id, date, minutes_worked ?? null, notes ?? null, statusInicial, latitude ?? null, longitude ?? null, datos_extra ?? null,
+        id, employee_id, emp.rows[0].sector_id, date, minutes_worked ?? null, notes ?? null, statusInicial, latitude ?? null, longitude ?? null,
         horas ?? null, cosecha ?? null, cajas ?? null, cajones ?? null, importe ?? null,
+        km_viajes ?? null, has_fumigadas ?? null, siembra_trilla ?? null, bolseros ?? null, etiquetado ?? null,
+        carga_camion_kg50 ?? null, carga_camion_kg25 ?? null, carga_camion_otro ?? null,
+        movimiento_estiba_kg50 ?? null, movimiento_estiba_kg25 ?? null, movimiento_estiba_otro ?? null,
       ]
     );
 
@@ -67,7 +89,7 @@ export async function submissionRoutes(app) {
     let result;
     if (sinceId) {
       result = await db.query(
-        `SELECT id, employee_id, sector_id, date, minutes_worked, notes, datos_extra,
+        `SELECT id, employee_id, sector_id, date, minutes_worked, notes,
                 (EXTRACT(EPOCH FROM updated_at) * 1000)::BIGINT AS updated_at_ms,
                 is_deleted
          FROM submissions
@@ -79,7 +101,7 @@ export async function submissionRoutes(app) {
       );
     } else {
       result = await db.query(
-        `SELECT id, employee_id, sector_id, date, minutes_worked, notes, datos_extra,
+        `SELECT id, employee_id, sector_id, date, minutes_worked, notes,
                 (EXTRACT(EPOCH FROM updated_at) * 1000)::BIGINT AS updated_at_ms,
                 is_deleted
          FROM submissions
@@ -102,7 +124,6 @@ export async function submissionRoutes(app) {
         date:          r.date,
         minutesWorked: r.minutes_worked,
         notes:         r.notes,
-        datosExtra:    r.datos_extra,
         updatedAt:     Number(r.updated_at_ms),
         isDeleted:     r.is_deleted,
       })),
