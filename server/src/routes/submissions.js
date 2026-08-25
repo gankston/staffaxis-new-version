@@ -6,7 +6,10 @@ export async function submissionRoutes(app) {
 
   // POST /api/submissions
   app.post('/api/submissions', { preHandler: verifyDevice }, async (req, reply) => {
-    const { employee_id, date, minutes_worked, notes, latitude, longitude, datos_extra } = req.body ?? {};
+    const {
+      employee_id, date, minutes_worked, notes, latitude, longitude, datos_extra,
+      horas, cosecha, cajas, cajones, importe,
+    } = req.body ?? {};
     if (!employee_id || !date) {
       return reply.status(400).send({ error: 'Faltan campos requeridos' });
     }
@@ -25,16 +28,24 @@ export async function submissionRoutes(app) {
 
     const id = uuid();
     await db.query(
-      `INSERT INTO submissions (id, employee_id, sector_id, date, minutes_worked, notes, status, latitude, longitude, datos_extra)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO submissions (id, employee_id, sector_id, date, minutes_worked, notes, status, latitude, longitude, datos_extra, horas, cosecha, cajas, cajones, importe)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (employee_id, date) WHERE NOT is_deleted
        DO UPDATE SET minutes_worked = EXCLUDED.minutes_worked,
                      notes          = EXCLUDED.notes,
                      latitude       = EXCLUDED.latitude,
                      longitude      = EXCLUDED.longitude,
                      datos_extra    = EXCLUDED.datos_extra,
+                     horas          = EXCLUDED.horas,
+                     cosecha        = EXCLUDED.cosecha,
+                     cajas          = EXCLUDED.cajas,
+                     cajones        = EXCLUDED.cajones,
+                     importe        = EXCLUDED.importe,
                      updated_at     = NOW()`,
-      [id, employee_id, emp.rows[0].sector_id, date, minutes_worked ?? null, notes ?? null, statusInicial, latitude ?? null, longitude ?? null, datos_extra ?? null]
+      [
+        id, employee_id, emp.rows[0].sector_id, date, minutes_worked ?? null, notes ?? null, statusInicial, latitude ?? null, longitude ?? null, datos_extra ?? null,
+        horas ?? null, cosecha ?? null, cajas ?? null, cajones ?? null, importe ?? null,
+      ]
     );
 
     const saved = await db.query(
