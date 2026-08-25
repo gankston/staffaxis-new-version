@@ -85,6 +85,32 @@ export async function submissionRoutes(app) {
     return reply.send({ id: saved.rows[0].id, status: saved.rows[0].status });
   });
 
+  // GET /api/rechazadas — tarjas que el supervisor rechazo en el sector de este
+  // dispositivo y todavia no se corrigieron, para avisarle al que las cargo.
+  app.get('/api/rechazadas', { preHandler: verifyDevice }, async (req, reply) => {
+    const { sectorId } = req.device;
+    const r = await db.query(
+      `SELECT s.id, s.date, s.minutes_worked, s.motivo_rechazo, s.aprobada_en,
+              e.first_name, e.last_name, sup.full_name AS rechazada_por
+       FROM submissions s
+       JOIN employees e ON e.id = s.employee_id
+       LEFT JOIN supervisors sup ON sup.id = s.aprobada_por
+       WHERE s.sector_id = $1 AND s.status = 'rejected' AND NOT s.is_deleted
+       ORDER BY s.date DESC, e.last_name`,
+      [sectorId]
+    );
+    return reply.send({
+      items: r.rows.map(x => ({
+        id: x.id,
+        empleado: `${x.last_name ?? ''} ${x.first_name ?? ''}`.trim(),
+        date: x.date,
+        minutesWorked: x.minutes_worked,
+        motivo: x.motivo_rechazo,
+        rechazadaPor: x.rechazada_por,
+      })),
+    });
+  });
+
   // GET /api/approved?since=<epoch_ms>&since_id=<uuid>&limit=<n>
   app.get('/api/approved', { preHandler: verifyDevice }, async (req, reply) => {
     const since   = parseInt(req.query.since   ?? '0', 10);

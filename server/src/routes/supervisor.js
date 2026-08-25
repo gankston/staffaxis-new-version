@@ -78,18 +78,22 @@ export async function supervisorRoutes(app) {
     return reply.send({ ok: true, aprobadas: r.rowCount });
   });
 
-  // POST /api/supervisor/reject   body: { submission_ids: [uuid, ...] }
+  // POST /api/supervisor/reject   body: { submission_ids: [uuid, ...], motivo }
   app.post('/api/supervisor/reject', { preHandler: verifySupervisor }, async (req, reply) => {
-    const { submission_ids } = req.body ?? {};
+    const { submission_ids, motivo } = req.body ?? {};
     if (!Array.isArray(submission_ids) || !submission_ids.length) {
       return reply.status(400).send({ error: 'submission_ids requerido' });
     }
     const sectores = await misSectores(req.supervisor.supervisorId);
+    // El motivo es lo que ve el que tarjo para saber que corregir. rechazo_visto
+    // vuelve a false para que el aviso le aparezca aunque ya hubiera visto otro.
     const r = await db.query(
-      `UPDATE submissions SET status = 'rejected', aprobada_por = $3, aprobada_en = NOW(), updated_at = NOW()
+      `UPDATE submissions
+       SET status = 'rejected', aprobada_por = $3, aprobada_en = NOW(),
+           motivo_rechazo = $4, rechazo_visto = false, updated_at = NOW()
        WHERE id = ANY($1) AND sector_id = ANY($2) AND status = 'pending'
        RETURNING id`,
-      [submission_ids, sectores, req.supervisor.supervisorId]
+      [submission_ids, sectores, req.supervisor.supervisorId, (motivo ?? '').trim() || null]
     );
     return reply.send({ ok: true, rechazadas: r.rowCount });
   });

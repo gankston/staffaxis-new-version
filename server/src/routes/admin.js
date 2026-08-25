@@ -219,7 +219,7 @@ export async function adminRoutes(app) {
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
-              s.aprobada_en, sup.full_name AS aprobada_por_nombre,
+              s.aprobada_en, sup.full_name AS aprobada_por_nombre, s.motivo_rechazo,
               s.latitude, s.longitude, s.created_at AS submitted_at
        FROM submissions s
        JOIN employees e  ON e.id  = s.employee_id
