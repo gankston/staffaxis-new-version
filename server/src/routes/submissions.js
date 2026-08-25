@@ -38,7 +38,7 @@ export async function submissionRoutes(app) {
          carga_camion_kg50, carga_camion_kg25, carga_camion_otro,
          movimiento_estiba_kg50, movimiento_estiba_kg25, movimiento_estiba_otro
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
        ON CONFLICT (employee_id, date) WHERE NOT is_deleted
        DO UPDATE SET minutes_worked         = EXCLUDED.minutes_worked,
                      notes                  = EXCLUDED.notes,
