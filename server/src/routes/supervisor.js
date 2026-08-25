@@ -30,6 +30,10 @@ export async function supervisorRoutes(app) {
 
     const r = await db.query(
       `SELECT s.id, s.employee_id, s.date, s.minutes_worked, s.notes, s.created_at,
+              s.horas, s.cosecha, s.cajas, s.cajones, s.importe,
+              s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
+              s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
+              s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
               e.first_name, e.last_name, sec.name AS sector_name
        FROM submissions s
        JOIN employees e ON e.id = s.employee_id
@@ -43,6 +47,10 @@ export async function supervisorRoutes(app) {
         id: x.id, employeeId: x.employee_id, empleado: `${x.last_name} ${x.first_name}`.trim(),
         sector: x.sector_name, date: x.date, minutesWorked: x.minutes_worked, notes: x.notes,
         createdAt: x.created_at,
+        kmViajes: x.km_viajes, hasFumigadas: x.has_fumigadas, siembraTrilla: x.siembra_trilla,
+        bolseros: x.bolseros, etiquetado: x.etiquetado,
+        cargaCamionKg50: x.carga_camion_kg50, cargaCamionKg25: x.carga_camion_kg25, cargaCamionOtro: x.carga_camion_otro,
+        movimientoEstibaKg50: x.movimiento_estiba_kg50, movimientoEstibaKg25: x.movimiento_estiba_kg25, movimientoEstibaOtro: x.movimiento_estiba_otro,
       })),
     });
   });
