@@ -219,10 +219,12 @@ export async function adminRoutes(app) {
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
+              s.aprobada_en, sup.full_name AS aprobada_por_nombre,
               s.latitude, s.longitude, s.created_at AS submitted_at
        FROM submissions s
        JOIN employees e  ON e.id  = s.employee_id
        LEFT JOIN sectors cs ON cs.id = e.sector_id
+       LEFT JOIN supervisors sup ON sup.id = s.aprobada_por
        WHERE s.sector_id = $1
          AND s.date BETWEEN $2 AND $3
          AND NOT s.is_deleted

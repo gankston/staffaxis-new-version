@@ -56,11 +56,14 @@ export async function supervisorRoutes(app) {
     const sectores = await misSectores(req.supervisor.supervisorId);
     // Solo toca tarjas que caigan dentro de los sectores que este supervisor tiene asignados —
     // aunque le manden ids de otro sector desde la app, ac no se cuelan.
+    // Se guarda QUIEN aprobo y CUANDO: sin esto no habia forma de distinguir una tarja
+    // revisada por un supervisor de una auto-aprobada que nadie miro (las dos quedaban
+    // en 'approved' y StaffAdmin no podia mostrar nada util).
     const r = await db.query(
-      `UPDATE submissions SET status = 'approved', updated_at = NOW()
+      `UPDATE submissions SET status = 'approved', aprobada_por = $3, aprobada_en = NOW(), updated_at = NOW()
        WHERE id = ANY($1) AND sector_id = ANY($2) AND status = 'pending'
        RETURNING id`,
-      [submission_ids, sectores]
+      [submission_ids, sectores, req.supervisor.supervisorId]
     );
     return reply.send({ ok: true, aprobadas: r.rowCount });
   });
@@ -73,10 +76,10 @@ export async function supervisorRoutes(app) {
     }
     const sectores = await misSectores(req.supervisor.supervisorId);
     const r = await db.query(
-      `UPDATE submissions SET status = 'rejected', updated_at = NOW()
+      `UPDATE submissions SET status = 'rejected', aprobada_por = $3, aprobada_en = NOW(), updated_at = NOW()
        WHERE id = ANY($1) AND sector_id = ANY($2) AND status = 'pending'
        RETURNING id`,
-      [submission_ids, sectores]
+      [submission_ids, sectores, req.supervisor.supervisorId]
     );
     return reply.send({ ok: true, rechazadas: r.rowCount });
   });
