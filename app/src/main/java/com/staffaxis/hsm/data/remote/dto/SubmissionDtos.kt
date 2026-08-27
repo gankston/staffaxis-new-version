@@ -8,7 +8,40 @@ data class CreateSubmissionRequestDto(
     @SerializedName("minutes_worked") val minutesWorked: String? = null,
     @SerializedName("notes") val notes: String? = null,
     @SerializedName("latitude") val latitude: Double? = null,
-    @SerializedName("longitude") val longitude: Double? = null
+    @SerializedName("longitude") val longitude: Double? = null,
+    // Los mismos valores que ya arma minutes_worked, pero mandados aparte y tipados —
+    // asi el servidor no tiene que volver a parsear el texto compuesto.
+    @SerializedName("horas") val horas: Float? = null,
+    @SerializedName("cosecha") val cosecha: Float? = null,
+    @SerializedName("cajas") val cajas: Int? = null,
+    @SerializedName("cajones") val cajones: Int? = null,
+    @SerializedName("importe") val importe: Float? = null,
+    // Tipos de carga nuevos — cada uno con su columna propia en el servidor.
+    // 50kg/25kg son booleanos (el dato ES el peso, no una cantidad).
+    @SerializedName("km_viajes") val kmViajes: Float? = null,
+    @SerializedName("has_fumigadas") val hasFumigadas: Float? = null,
+    @SerializedName("siembra_trilla") val siembraTrilla: Float? = null,
+    @SerializedName("bolseros") val bolseros: Float? = null,
+    @SerializedName("etiquetado") val etiquetado: Float? = null,
+    @SerializedName("carga_camion_kg50") val cargaCamionKg50: Boolean? = null,
+    @SerializedName("carga_camion_kg25") val cargaCamionKg25: Boolean? = null,
+    @SerializedName("carga_camion_otro") val cargaCamionOtro: String? = null,
+    @SerializedName("movimiento_estiba_kg50") val movimientoEstibaKg50: Boolean? = null,
+    @SerializedName("movimiento_estiba_kg25") val movimientoEstibaKg25: Boolean? = null,
+    @SerializedName("movimiento_estiba_otro") val movimientoEstibaOtro: String? = null
+)
+
+data class RechazadaItemDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("empleado") val empleado: String,
+    @SerializedName("date") val date: String,
+    @SerializedName("minutesWorked") val minutesWorked: String?,
+    @SerializedName("motivo") val motivo: String?,
+    @SerializedName("rechazadaPor") val rechazadaPor: String?
+)
+
+data class RechazadasResponseDto(
+    @SerializedName("items") val items: List<RechazadaItemDto> = emptyList()
 )
 
 data class SubmissionResponseDto(

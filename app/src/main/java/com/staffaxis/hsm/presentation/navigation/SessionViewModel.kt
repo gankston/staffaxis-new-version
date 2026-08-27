@@ -10,8 +10,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -30,6 +33,23 @@ class SessionViewModel @Inject constructor(
     // La UI (AppNavigation) escucha esto para cortar en caliente y volver a
     // bienvenida apenas el backend contesta 403 revocado en cualquier pedido.
     val forceLogout: SharedFlow<Unit> = sessionEvents.forceLogout
+
+    // Boton para saltar entre modo tarja y modo supervisor sin cerrar sesion —
+    // SOLO existe en el telefono de Gaston (device_id fijo), a nadie mas le tiene
+    // que aparecer esto, aunque tenga las dos sesiones activas.
+    val esMiTelefono: StateFlow<Boolean> = prefs.deviceId
+        .map { it == MI_TELEFONO_DEVICE_ID }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val hasDeviceSession: StateFlow<Boolean> = prefs.deviceToken
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val hasSupervisorSession: StateFlow<Boolean> = prefs.supervisorToken
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    companion object {
+        private const val MI_TELEFONO_DEVICE_ID = "fbb9b66cbf60a6e7"
+    }
 
     fun handleForcedLogout() {
         viewModelScope.launch {
@@ -55,7 +75,12 @@ class SessionViewModel @Inject constructor(
 
                 val token = prefs.deviceToken.first()
                 val sectorId = prefs.activeSectorId.first()
-                if (token != null && sectorId != null) "main" else "bienvenida"
+                val supervisorToken = prefs.supervisorToken.first()
+                when {
+                    token != null && sectorId != null -> "main"
+                    supervisorToken != null -> "supervisor_main"
+                    else -> "bienvenida"
+                }
             }
             _startDestination.value = destino ?: "bienvenida"
         }

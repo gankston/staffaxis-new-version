@@ -49,9 +49,24 @@ interface SubmissionRepository {
         sectorId: String,
         date: String,
         minutesWorked: String?,
-        notes: String?
+        notes: String?,
+        horas: Float? = null,
+        cosecha: Float? = null,
+        cajas: Int? = null,
+        cajones: Int? = null,
+        importe: Float? = null,
+        tiposNuevos: TiposCargaNuevos = TiposCargaNuevos()
     ): AppResult<Unit>
-    suspend fun updateHoras(submissionId: String, minutesWorked: String?): AppResult<Unit>
+    suspend fun updateHoras(
+        submissionId: String,
+        minutesWorked: String?,
+        horas: Float? = null,
+        cosecha: Float? = null,
+        cajas: Int? = null,
+        cajones: Int? = null,
+        importe: Float? = null,
+        tiposNuevos: TiposCargaNuevos = TiposCargaNuevos()
+    ): AppResult<Unit>
     suspend fun getSubmissionsForEmployee(employeeId: String): List<OutboxSubmission>
     suspend fun pushPendingToServer(): AppResult<Int>
     suspend fun getSubmissionsForDate(date: String, sectorId: String): List<OutboxSubmission>
@@ -60,6 +75,7 @@ interface SubmissionRepository {
     fun countPending(): Flow<Int>
     suspend fun getSubmissionsForSectorPeriod(sectorId: String, startDate: String, endDate: String): List<OutboxSubmission>
     suspend fun fetchReport(sectorId: String, startDate: String, endDate: String): List<OutboxSubmission>
+    suspend fun getRechazadas(): List<TarjaRechazada>
 }
 
 interface AbsenceRepository {

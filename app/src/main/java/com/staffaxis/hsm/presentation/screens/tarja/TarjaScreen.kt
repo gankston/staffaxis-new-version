@@ -297,6 +297,57 @@ fun TarjaScreen(
                 }
             }
 
+            // Aviso de tarjas rechazadas por el supervisor, con el motivo para corregirlas.
+            if (uiState.rechazadas.isNotEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFF5252).copy(alpha = 0.15f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Warning, null, tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    if (uiState.rechazadas.size == 1) "1 tarja rechazada por el supervisor"
+                                    else "${uiState.rechazadas.size} tarjas rechazadas por el supervisor",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFF5252)
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            uiState.rechazadas.forEach { r ->
+                                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                                    Text(
+                                        "${r.empleado} — ${r.date}" + (r.minutesWorked?.let { " ($it)" } ?: ""),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                    if (!r.motivo.isNullOrBlank()) {
+                                        Text(
+                                            "Motivo: ${r.motivo}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color(0xFFFFAB91)
+                                        )
+                                    }
+                                    r.rechazadaPor?.let {
+                                        Text("Rechazada por $it", style = MaterialTheme.typography.labelSmall, color = Color(0xFF888888))
+                                    }
+                                }
+                            }
+                            Text(
+                                "Corregí la tarja desde Empleados y se vuelve a mandar al supervisor.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF888888)
+                            )
+                        }
+                    }
+                }
+            }
+
             if (uiState.pendingCount > 0) {
                 item {
                     Card(
@@ -603,7 +654,7 @@ private fun VisualizadorHorasDialog(
                         val dayW = 36.dp
                         val totalW = 50.dp
 
-                        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                        Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
                             // Cabecera de tabla
                             Row(
                                 modifier = Modifier.fillMaxWidth().background(Color(0xFF252545)).horizontalScroll(hScroll),
@@ -656,7 +707,9 @@ private fun VisualizadorHorasDialog(
                                         maxLines = 2
                                     )
                                     uiState.visualizadorFechas.forEach { date ->
-                                        val (text, color) = celdaValor(resumen.horasPorDia[date])
+                                        val (textBase, color) = celdaValor(resumen.horasPorDia[date])
+                                        val tiposDia = resumen.tiposPorDia[date]?.let { formatTiposNuevosCompacto(it) } ?: ""
+                                        val text = if (tiposDia.isNotBlank()) "$textBase\n$tiposDia" else textBase
                                         Text(
                                             text,
                                             modifier = Modifier.width(dayW).padding(2.dp),
@@ -683,6 +736,11 @@ private fun VisualizadorHorasDialog(
                                         if (resumen.importeTotal > 0f) {
                                             if (isNotEmpty()) append("\n")
                                             append(formatMonto(resumen.importeTotal))
+                                        }
+                                        val tiposTxt = formatTiposNuevosCompacto(resumen.tiposNuevosTotal)
+                                        if (tiposTxt.isNotBlank()) {
+                                            if (isNotEmpty()) append("\n")
+                                            append(tiposTxt)
                                         }
                                     }
                                     Text(
@@ -796,3 +854,16 @@ private fun formatMonto(monto: Float): String {
 // Cantidades sueltas (cachos de cosecha): sin decimales cuando son enteras.
 private fun formatCantidad(valor: Float): String =
     if (valor == valor.toLong().toFloat()) "${valor.toLong()}" else "%.1f".format(valor)
+
+// Resumen compacto de los tipos de carga nuevos para la columna TOTAL del visualizador.
+private fun formatTiposNuevosCompacto(t: com.staffaxis.hsm.domain.model.TiposCargaNuevos): String {
+    val partes = mutableListOf<String>()
+    t.kmViajes?.let { partes.add("Km${formatCantidad(it)}") }
+    t.hasFumigadas?.let { partes.add("Ha${formatCantidad(it)}") }
+    t.siembraTrilla?.let { partes.add("ST${formatCantidad(it)}") }
+    t.bolseros?.let { partes.add("Bol${formatCantidad(it)}") }
+    t.etiquetado?.let { partes.add("Et${formatCantidad(it)}") }
+    if (t.cargaCamionKg50 == true || t.cargaCamionKg25 == true || t.cargaCamionOtro != null) partes.add("CC")
+    if (t.movimientoEstibaKg50 == true || t.movimientoEstibaKg25 == true || t.movimientoEstibaOtro != null) partes.add("ME")
+    return partes.joinToString(" ")
+}

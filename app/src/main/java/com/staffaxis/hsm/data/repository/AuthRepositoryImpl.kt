@@ -25,7 +25,7 @@ class AuthRepositoryImpl @Inject constructor(
             val response = sectorsApi.getSectors()
             if (response.isSuccessful) {
                 val sectors = (response.body()?.sectors ?: emptyList())
-                    .map { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado) }
+                    .map { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado, it.tiposCarga ?: emptyList()) }
                 AppResult.Success(sectors)
             } else {
                 AppResult.Error("Error ${response.code()}")
@@ -77,7 +77,7 @@ class AuthRepositoryImpl @Inject constructor(
             // Dispositivo maestro: ve todos los sectores, sin la restriccion de grupo/encargado.
             if (esMaestro) {
                 return AppResult.Success(
-                    allSectors.map { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado) }
+                    allSectors.map { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado, it.tiposCarga ?: emptyList()) }
                         .sortedBy { it.name }
                 )
             }
@@ -90,11 +90,11 @@ class AuthRepositoryImpl @Inject constructor(
             val sectors = if (!encargado.isNullOrBlank()) {
                 allSectors
                     .filter { it.encargado?.trim().equals(encargado, ignoreCase = true) }
-                    .map { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado) }
+                    .map { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado, it.tiposCarga ?: emptyList()) }
                     .sortedBy { it.name }
             } else {
                 // Sin encargado → solo su propio sector
-                listOfNotNull(currentSector?.let { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado) })
+                listOfNotNull(currentSector?.let { Sector(it.id, it.name, it.tipoCarga ?: "importe", it.encargado, it.tiposCarga ?: emptyList()) })
             }
 
             AppResult.Success(sectors)

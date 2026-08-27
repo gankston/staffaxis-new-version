@@ -6,5 +6,6 @@ data class SectorDto(
     @SerializedName("id") val id: String = "",
     @SerializedName("name") val name: String = "",
     @SerializedName("encargado") val encargado: String? = null,
-    @SerializedName("tipoCarga") val tipoCarga: String? = null
+    @SerializedName("tipoCarga") val tipoCarga: String? = null,
+    @SerializedName("tiposCarga") val tiposCarga: List<String>? = null
 )

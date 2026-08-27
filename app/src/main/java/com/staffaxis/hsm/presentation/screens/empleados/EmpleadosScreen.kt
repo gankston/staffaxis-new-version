@@ -198,6 +198,26 @@ fun EmpleadosScreen(
                 onCajasCountChanged = viewModel::onCajasCountChanged,
                 onCajonesChanged = viewModel::onCajonesChanged,
                 onCajonesCountChanged = viewModel::onCajonesCountChanged,
+                onKmChanged = viewModel::onKmChanged,
+                onKmValorChanged = viewModel::onKmValorChanged,
+                onHasFumigadasChanged = viewModel::onHasFumigadasChanged,
+                onHasFumigadasValorChanged = viewModel::onHasFumigadasValorChanged,
+                onSiembraTrillaChanged = viewModel::onSiembraTrillaChanged,
+                onSiembraTrillaValorChanged = viewModel::onSiembraTrillaValorChanged,
+                onBolserosChanged = viewModel::onBolserosChanged,
+                onBolserosValorChanged = viewModel::onBolserosValorChanged,
+                onEtiquetadoChanged = viewModel::onEtiquetadoChanged,
+                onEtiquetadoValorChanged = viewModel::onEtiquetadoValorChanged,
+                onCargaCamionChanged = viewModel::onCargaCamionChanged,
+                onCargaCamion50Changed = viewModel::onCargaCamion50Changed,
+                onCargaCamion25Changed = viewModel::onCargaCamion25Changed,
+                onCargaCamionOtroCheckChanged = viewModel::onCargaCamionOtroCheckChanged,
+                onCargaCamionOtroChanged = viewModel::onCargaCamionOtroChanged,
+                onMovimientoEstibaChanged = viewModel::onMovimientoEstibaChanged,
+                onMovimientoEstiba50Changed = viewModel::onMovimientoEstiba50Changed,
+                onMovimientoEstiba25Changed = viewModel::onMovimientoEstiba25Changed,
+                onMovimientoEstibaOtroCheckChanged = viewModel::onMovimientoEstibaOtroCheckChanged,
+                onMovimientoEstibaOtroChanged = viewModel::onMovimientoEstibaOtroChanged,
                 onObservacionesChanged = viewModel::onObservacionesChanged,
                 onConfirm = viewModel::guardarHoras
             )
@@ -224,6 +244,26 @@ fun EmpleadosScreen(
                 onHorasEdicionCajasCountChanged = viewModel::onHorasEdicionCajasCountChanged,
                 onHorasEdicionPorCajonesChanged = viewModel::onHorasEdicionPorCajonesChanged,
                 onHorasEdicionCajonesCountChanged = viewModel::onHorasEdicionCajonesCountChanged,
+                onHorasEdicionPorKmChanged = viewModel::onHorasEdicionPorKmChanged,
+                onHorasEdicionKmValorChanged = viewModel::onHorasEdicionKmValorChanged,
+                onHorasEdicionPorHasFumigadasChanged = viewModel::onHorasEdicionPorHasFumigadasChanged,
+                onHorasEdicionHasFumigadasValorChanged = viewModel::onHorasEdicionHasFumigadasValorChanged,
+                onHorasEdicionPorSiembraTrillaChanged = viewModel::onHorasEdicionPorSiembraTrillaChanged,
+                onHorasEdicionSiembraTrillaValorChanged = viewModel::onHorasEdicionSiembraTrillaValorChanged,
+                onHorasEdicionPorBolserosChanged = viewModel::onHorasEdicionPorBolserosChanged,
+                onHorasEdicionBolserosValorChanged = viewModel::onHorasEdicionBolserosValorChanged,
+                onHorasEdicionPorEtiquetadoChanged = viewModel::onHorasEdicionPorEtiquetadoChanged,
+                onHorasEdicionEtiquetadoValorChanged = viewModel::onHorasEdicionEtiquetadoValorChanged,
+                onHorasEdicionPorCargaCamionChanged = viewModel::onHorasEdicionPorCargaCamionChanged,
+                onHorasEdicionCargaCamion50Changed = viewModel::onHorasEdicionCargaCamion50Changed,
+                onHorasEdicionCargaCamion25Changed = viewModel::onHorasEdicionCargaCamion25Changed,
+                onHorasEdicionCargaCamionOtroCheckChanged = viewModel::onHorasEdicionCargaCamionOtroCheckChanged,
+                onHorasEdicionCargaCamionOtroChanged = viewModel::onHorasEdicionCargaCamionOtroChanged,
+                onHorasEdicionPorMovimientoEstibaChanged = viewModel::onHorasEdicionPorMovimientoEstibaChanged,
+                onHorasEdicionMovimientoEstiba50Changed = viewModel::onHorasEdicionMovimientoEstiba50Changed,
+                onHorasEdicionMovimientoEstiba25Changed = viewModel::onHorasEdicionMovimientoEstiba25Changed,
+                onHorasEdicionMovimientoEstibaOtroCheckChanged = viewModel::onHorasEdicionMovimientoEstibaOtroCheckChanged,
+                onHorasEdicionMovimientoEstibaOtroChanged = viewModel::onHorasEdicionMovimientoEstibaOtroChanged,
                 onGuardarEdicionRegistro = viewModel::guardarEdicionRegistro,
                 onSubirFoto = viewModel::subirFoto,
                 onEliminarFoto = viewModel::eliminarFoto,
@@ -377,6 +417,30 @@ private fun FotoDniRow(
 
 // Traduce el string compuesto de minutes_worked ("H 4|C:33|Cajas 32 Cajones 43") a texto legible.
 // Compatible con formatos viejos: "C" solo, "$1500", número plano sin prefijo "H ".
+// Tipos de carga nuevos en texto legible, para la lista de registros del empleado.
+private fun formatTiposNuevosRegistro(t: com.staffaxis.hsm.domain.model.TiposCargaNuevos): String {
+    val partes = mutableListOf<String>()
+    fun num(v: Float) = if (v == v.toLong().toFloat()) v.toLong().toString() else v.toString()
+    t.kmViajes?.let { partes.add("Km ${num(it)}") }
+    t.hasFumigadas?.let { partes.add("Ha ${num(it)}") }
+    t.siembraTrilla?.let { partes.add("Siembra/Trilla ${num(it)}") }
+    t.bolseros?.let { partes.add("Bolseros ${num(it)}") }
+    t.etiquetado?.let { partes.add("Etiquetado ${num(it)}") }
+    val camion = listOfNotNull(
+        if (t.cargaCamionKg50 == true) "50kg" else null,
+        if (t.cargaCamionKg25 == true) "25kg" else null,
+        t.cargaCamionOtro?.let { "Otro: $it" }
+    ).joinToString(" ")
+    if (camion.isNotBlank()) partes.add("Carga Camión $camion")
+    val estiba = listOfNotNull(
+        if (t.movimientoEstibaKg50 == true) "50kg" else null,
+        if (t.movimientoEstibaKg25 == true) "25kg" else null,
+        t.movimientoEstibaOtro?.let { "Otro: $it" }
+    ).joinToString(" ")
+    if (estiba.isNotBlank()) partes.add("Mov. Estiba $estiba")
+    return partes.joinToString(" + ")
+}
+
 private fun formatMinutesWorkedDisplay(mw: String?): String {
     if (mw.isNullOrBlank()) return "?"
     val parts = mw.split("|")
@@ -404,6 +468,101 @@ private fun formatMinutesWorkedDisplay(mw: String?): String {
     return if (piezas.isEmpty()) mw else piezas.joinToString(" + ")
 }
 
+// Checkbox + campo numérico único — para los tipos de carga nuevos que son un solo valor
+// (km_viajes, has_fumigadas, siembra_trilla, bolseros, etiquetado).
+@Composable
+private fun CargaSimpleCheckbox(
+    label: String,
+    checked: Boolean,
+    valor: String,
+    onCheckedChange: (Boolean) -> Unit,
+    onValorChanged: (String) -> Unit,
+    fieldLabel: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontWeight = FontWeight.SemiBold)
+    }
+    if (checked) {
+        OutlinedTextField(
+            value = valor,
+            onValueChange = onValorChanged,
+            label = { Text(fieldLabel) },
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            isError = valor.isBlank()
+        )
+    }
+}
+
+// Checkbox + 3 campos (50kg / 25kg / Otro) — para Carga de Camión y Movimiento de Estiba.
+@Composable
+// 50kg/25kg son checks — el dato ES el peso, no una cantidad a ingresar.
+// "Otro" es el unico que necesita texto, para el caso excepcional.
+private fun CargaTripleCheckbox(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    check50: Boolean, onCheck50Changed: (Boolean) -> Unit,
+    check25: Boolean, onCheck25Changed: (Boolean) -> Unit,
+    checkOtro: Boolean, onCheckOtroChanged: (Boolean) -> Unit,
+    valorOtro: String, onValorOtroChanged: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontWeight = FontWeight.SemiBold)
+    }
+    if (checked) {
+        Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onCheck50Changed(!check50) },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = check50, onCheckedChange = onCheck50Changed)
+                Spacer(Modifier.width(8.dp))
+                Text("50 kg")
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onCheck25Changed(!check25) },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = check25, onCheckedChange = onCheck25Changed)
+                Spacer(Modifier.width(8.dp))
+                Text("25 kg")
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onCheckOtroChanged(!checkOtro) },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = checkOtro, onCheckedChange = onCheckOtroChanged)
+                Spacer(Modifier.width(8.dp))
+                Text("Otro")
+            }
+            if (checkOtro) {
+                OutlinedTextField(
+                    value = valorOtro, onValueChange = onValorOtroChanged,
+                    label = { Text("Detalle (obligatorio)") },
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                    singleLine = true,
+                    isError = valorOtro.isBlank()
+                )
+            }
+            if (!check50 && !check25 && !(checkOtro && valorOtro.isNotBlank())) {
+                Text("Marcá al menos una opción", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HorasDialog(
@@ -419,6 +578,26 @@ private fun HorasDialog(
     onCajasCountChanged: (String) -> Unit,
     onCajonesChanged: (Boolean) -> Unit,
     onCajonesCountChanged: (String) -> Unit,
+    onKmChanged: (Boolean) -> Unit,
+    onKmValorChanged: (String) -> Unit,
+    onHasFumigadasChanged: (Boolean) -> Unit,
+    onHasFumigadasValorChanged: (String) -> Unit,
+    onSiembraTrillaChanged: (Boolean) -> Unit,
+    onSiembraTrillaValorChanged: (String) -> Unit,
+    onBolserosChanged: (Boolean) -> Unit,
+    onBolserosValorChanged: (String) -> Unit,
+    onEtiquetadoChanged: (Boolean) -> Unit,
+    onEtiquetadoValorChanged: (String) -> Unit,
+    onCargaCamionChanged: (Boolean) -> Unit,
+    onCargaCamion50Changed: (Boolean) -> Unit,
+    onCargaCamion25Changed: (Boolean) -> Unit,
+    onCargaCamionOtroCheckChanged: (Boolean) -> Unit,
+    onCargaCamionOtroChanged: (String) -> Unit,
+    onMovimientoEstibaChanged: (Boolean) -> Unit,
+    onMovimientoEstiba50Changed: (Boolean) -> Unit,
+    onMovimientoEstiba25Changed: (Boolean) -> Unit,
+    onMovimientoEstibaOtroCheckChanged: (Boolean) -> Unit,
+    onMovimientoEstibaOtroChanged: (String) -> Unit,
     onObservacionesChanged: (String) -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -542,86 +721,127 @@ private fun HorasDialog(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                // — Cosecha —
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onCosechaChanged(!uiState.cargaPorCosecha) },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(checked = uiState.cargaPorCosecha, onCheckedChange = onCosechaChanged)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Cosecha", fontWeight = FontWeight.SemiBold)
-                }
-                if (uiState.cargaPorCosecha) {
-                    OutlinedTextField(
-                        value = uiState.cachosCount,
-                        onValueChange = onCachosCountChanged,
-                        label = { Text("Cantidad de cachos (obligatorio)") },
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        isError = uiState.cachosCount.isBlank()
-                    )
-                }
-
-                // — Abonada y Otros —
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onAbonadaChanged(!uiState.cargaPorAbonada) },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(checked = uiState.cargaPorAbonada, onCheckedChange = onAbonadaChanged)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Abonada y Otros", fontWeight = FontWeight.SemiBold)
-                }
-                if (uiState.cargaPorAbonada) {
-                    OutlinedTextField(
-                        value = uiState.abonadaValor,
-                        onValueChange = onAbonadaValorChanged,
-                        label = { Text("Valor (obligatorio)") },
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                        singleLine = true,
-                        isError = uiState.abonadaValor.isBlank()
-                    )
+                // — Cosecha — solo en los sectores configurados con este tipo de carga.
+                if (uiState.tiposCarga.contains("cosecha")) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onCosechaChanged(!uiState.cargaPorCosecha) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = uiState.cargaPorCosecha, onCheckedChange = onCosechaChanged)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cosecha", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (uiState.cargaPorCosecha) {
+                        OutlinedTextField(
+                            value = uiState.cachosCount,
+                            onValueChange = onCachosCountChanged,
+                            label = { Text("Cantidad de cachos (obligatorio)") },
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            isError = uiState.cachosCount.isBlank()
+                        )
+                    }
                 }
 
-                // — Cajas —
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onCajasChanged(!uiState.cargaPorCajas) },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(checked = uiState.cargaPorCajas, onCheckedChange = onCajasChanged)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Cajas", fontWeight = FontWeight.SemiBold)
-                }
-                if (uiState.cargaPorCajas) {
-                    OutlinedTextField(
-                        value = uiState.cajasCount,
-                        onValueChange = onCajasCountChanged,
-                        label = { Text("Cantidad de cajas (obligatorio)") },
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        isError = uiState.cajasCount.isBlank()
-                    )
+                // — Abonada y Otros — solo Solazuty/San Agustin/Colonia/Aguado/Pescado.
+                if (uiState.tiposCarga.contains("abonada")) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onAbonadaChanged(!uiState.cargaPorAbonada) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = uiState.cargaPorAbonada, onCheckedChange = onAbonadaChanged)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Abonada y Otros", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (uiState.cargaPorAbonada) {
+                        OutlinedTextField(
+                            value = uiState.abonadaValor,
+                            onValueChange = onAbonadaValorChanged,
+                            label = { Text("Valor (obligatorio)") },
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                            singleLine = true,
+                            isError = uiState.abonadaValor.isBlank()
+                        )
+                    }
                 }
 
-                // — Cajones —
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onCajonesChanged(!uiState.cargaPorCajones) },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(checked = uiState.cargaPorCajones, onCheckedChange = onCajonesChanged)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Cajones", fontWeight = FontWeight.SemiBold)
+                // — Cajas y Cajones — van siempre juntos bajo un solo tipo de sector.
+                if (uiState.tiposCarga.contains("cajas_cajones")) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onCajasChanged(!uiState.cargaPorCajas) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = uiState.cargaPorCajas, onCheckedChange = onCajasChanged)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cajas", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (uiState.cargaPorCajas) {
+                        OutlinedTextField(
+                            value = uiState.cajasCount,
+                            onValueChange = onCajasCountChanged,
+                            label = { Text("Cantidad de cajas (obligatorio)") },
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            isError = uiState.cajasCount.isBlank()
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onCajonesChanged(!uiState.cargaPorCajones) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = uiState.cargaPorCajones, onCheckedChange = onCajonesChanged)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cajones", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (uiState.cargaPorCajones) {
+                        OutlinedTextField(
+                            value = uiState.cajonesCount,
+                            onValueChange = onCajonesCountChanged,
+                            label = { Text("Cantidad de cajones (obligatorio)") },
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            isError = uiState.cajonesCount.isBlank()
+                        )
+                    }
                 }
-                if (uiState.cargaPorCajones) {
-                    OutlinedTextField(
-                        value = uiState.cajonesCount,
-                        onValueChange = onCajonesCountChanged,
-                        label = { Text("Cantidad de cajones (obligatorio)") },
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        isError = uiState.cajonesCount.isBlank()
+
+                if (uiState.tiposCarga.isNotEmpty()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                if (uiState.tiposCarga.contains("km_viajes")) {
+                    CargaSimpleCheckbox("Km / Viajes", uiState.cargaPorKm, uiState.kmValor, onKmChanged, onKmValorChanged, "Cantidad (obligatorio)")
+                }
+                if (uiState.tiposCarga.contains("has_fumigadas")) {
+                    CargaSimpleCheckbox("Hectáreas fumigadas", uiState.cargaPorHasFumigadas, uiState.hasFumigadasValor, onHasFumigadasChanged, onHasFumigadasValorChanged, "Hectáreas (obligatorio)")
+                }
+                if (uiState.tiposCarga.contains("siembra_trilla")) {
+                    CargaSimpleCheckbox("Siembra / Trilla", uiState.cargaPorSiembraTrilla, uiState.siembraTrillaValor, onSiembraTrillaChanged, onSiembraTrillaValorChanged, "Cantidad (obligatorio)")
+                }
+                if (uiState.tiposCarga.contains("bolseros")) {
+                    CargaSimpleCheckbox("Bolseros", uiState.cargaPorBolseros, uiState.bolserosValor, onBolserosChanged, onBolserosValorChanged, "Cantidad (obligatorio)")
+                }
+                if (uiState.tiposCarga.contains("etiquetado")) {
+                    CargaSimpleCheckbox("Etiquetado", uiState.cargaPorEtiquetado, uiState.etiquetadoValor, onEtiquetadoChanged, onEtiquetadoValorChanged, "Cantidad (obligatorio)")
+                }
+                if (uiState.tiposCarga.contains("carga_camion")) {
+                    CargaTripleCheckbox(
+                        "Carga de Camión", uiState.cargaPorCargaCamion, onCargaCamionChanged,
+                        uiState.cargaCamion50, onCargaCamion50Changed,
+                        uiState.cargaCamion25, onCargaCamion25Changed,
+                        uiState.cargaCamionOtroCheck, onCargaCamionOtroCheckChanged,
+                        uiState.cargaCamionOtro, onCargaCamionOtroChanged
+                    )
+                }
+                if (uiState.tiposCarga.contains("movimiento_estiba")) {
+                    CargaTripleCheckbox(
+                        "Movimiento de Estiba", uiState.cargaPorMovimientoEstiba, onMovimientoEstibaChanged,
+                        uiState.movimientoEstiba50, onMovimientoEstiba50Changed,
+                        uiState.movimientoEstiba25, onMovimientoEstiba25Changed,
+                        uiState.movimientoEstibaOtroCheck, onMovimientoEstibaOtroCheckChanged,
+                        uiState.movimientoEstibaOtro, onMovimientoEstibaOtroChanged
                     )
                 }
 
@@ -639,7 +859,14 @@ private fun HorasDialog(
                           (!uiState.cargaPorCosecha || uiState.cachosCount.isNotBlank()) &&
                           (!uiState.cargaPorAbonada || uiState.abonadaValor.isNotBlank()) &&
                           (!uiState.cargaPorCajas || uiState.cajasCount.isNotBlank()) &&
-                          (!uiState.cargaPorCajones || uiState.cajonesCount.isNotBlank())
+                          (!uiState.cargaPorCajones || uiState.cajonesCount.isNotBlank()) &&
+                          (!uiState.cargaPorKm || uiState.kmValor.isNotBlank()) &&
+                          (!uiState.cargaPorHasFumigadas || uiState.hasFumigadasValor.isNotBlank()) &&
+                          (!uiState.cargaPorSiembraTrilla || uiState.siembraTrillaValor.isNotBlank()) &&
+                          (!uiState.cargaPorBolseros || uiState.bolserosValor.isNotBlank()) &&
+                          (!uiState.cargaPorEtiquetado || uiState.etiquetadoValor.isNotBlank()) &&
+                          (!uiState.cargaPorCargaCamion || uiState.cargaCamion50 || uiState.cargaCamion25 || (uiState.cargaCamionOtroCheck && uiState.cargaCamionOtro.isNotBlank())) &&
+                          (!uiState.cargaPorMovimientoEstiba || uiState.movimientoEstiba50 || uiState.movimientoEstiba25 || (uiState.movimientoEstibaOtroCheck && uiState.movimientoEstibaOtro.isNotBlank()))
             Button(onClick = onConfirm, enabled = canSave) {
                 Icon(Icons.Default.Save, null)
                 Spacer(Modifier.width(8.dp))
@@ -671,6 +898,26 @@ private fun EditarEmpleadoDialog(
     onHorasEdicionCajasCountChanged: (String) -> Unit,
     onHorasEdicionPorCajonesChanged: (Boolean) -> Unit,
     onHorasEdicionCajonesCountChanged: (String) -> Unit,
+    onHorasEdicionPorKmChanged: (Boolean) -> Unit,
+    onHorasEdicionKmValorChanged: (String) -> Unit,
+    onHorasEdicionPorHasFumigadasChanged: (Boolean) -> Unit,
+    onHorasEdicionHasFumigadasValorChanged: (String) -> Unit,
+    onHorasEdicionPorSiembraTrillaChanged: (Boolean) -> Unit,
+    onHorasEdicionSiembraTrillaValorChanged: (String) -> Unit,
+    onHorasEdicionPorBolserosChanged: (Boolean) -> Unit,
+    onHorasEdicionBolserosValorChanged: (String) -> Unit,
+    onHorasEdicionPorEtiquetadoChanged: (Boolean) -> Unit,
+    onHorasEdicionEtiquetadoValorChanged: (String) -> Unit,
+    onHorasEdicionPorCargaCamionChanged: (Boolean) -> Unit,
+    onHorasEdicionCargaCamion50Changed: (Boolean) -> Unit,
+    onHorasEdicionCargaCamion25Changed: (Boolean) -> Unit,
+    onHorasEdicionCargaCamionOtroCheckChanged: (Boolean) -> Unit,
+    onHorasEdicionCargaCamionOtroChanged: (String) -> Unit,
+    onHorasEdicionPorMovimientoEstibaChanged: (Boolean) -> Unit,
+    onHorasEdicionMovimientoEstiba50Changed: (Boolean) -> Unit,
+    onHorasEdicionMovimientoEstiba25Changed: (Boolean) -> Unit,
+    onHorasEdicionMovimientoEstibaOtroCheckChanged: (Boolean) -> Unit,
+    onHorasEdicionMovimientoEstibaOtroChanged: (String) -> Unit,
     onGuardarEdicionRegistro: () -> Unit,
     onSubirFoto: (lado: String, uri: Uri) -> Unit,
     onEliminarFoto: (lado: String) -> Unit,
@@ -763,7 +1010,10 @@ private fun EditarEmpleadoDialog(
                         val fechaFormato = try {
                             LocalDate.parse(registro.date).format(dateFormatter)
                         } catch (_: Exception) { registro.date }
-                        val displayValue = formatMinutesWorkedDisplay(registro.minutesWorked)
+                        val displayValue = listOf(
+                            formatMinutesWorkedDisplay(registro.minutesWorked),
+                            formatTiposNuevosRegistro(registro.tiposNuevos)
+                        ).filter { it.isNotBlank() && it != "?" }.joinToString(" + ")
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -851,86 +1101,126 @@ private fun EditarEmpleadoDialog(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                    // — Cosecha —
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCosechaChanged(!uiState.horasEdicionPorCosecha) },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(checked = uiState.horasEdicionPorCosecha, onCheckedChange = onHorasEdicionPorCosechaChanged)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Cosecha", fontWeight = FontWeight.SemiBold)
-                    }
-                    if (uiState.horasEdicionPorCosecha) {
-                        OutlinedTextField(
-                            value = uiState.horasEdicionCachosCount,
-                            onValueChange = onHorasEdicionCachosCountChanged,
-                            label = { Text("Cantidad de cachos (obligatorio)") },
-                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            isError = uiState.horasEdicionCachosCount.isBlank()
-                        )
+                    // — Cosecha — solo en los sectores configurados con este tipo de carga.
+                    if (uiState.tiposCarga.contains("cosecha")) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCosechaChanged(!uiState.horasEdicionPorCosecha) },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = uiState.horasEdicionPorCosecha, onCheckedChange = onHorasEdicionPorCosechaChanged)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Cosecha", fontWeight = FontWeight.SemiBold)
+                        }
+                        if (uiState.horasEdicionPorCosecha) {
+                            OutlinedTextField(
+                                value = uiState.horasEdicionCachosCount,
+                                onValueChange = onHorasEdicionCachosCountChanged,
+                                label = { Text("Cantidad de cachos (obligatorio)") },
+                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                isError = uiState.horasEdicionCachosCount.isBlank()
+                            )
+                        }
                     }
 
                     // — Abonada y Otros —
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorAbonadaChanged(!uiState.horasEdicionPorAbonada) },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(checked = uiState.horasEdicionPorAbonada, onCheckedChange = onHorasEdicionPorAbonadaChanged)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Abonada y Otros", fontWeight = FontWeight.SemiBold)
-                    }
-                    if (uiState.horasEdicionPorAbonada) {
-                        OutlinedTextField(
-                            value = uiState.horasEdicionAbonadaValor,
-                            onValueChange = onHorasEdicionAbonadaValorChanged,
-                            label = { Text("Valor (obligatorio)") },
-                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                            singleLine = true,
-                            isError = uiState.horasEdicionAbonadaValor.isBlank()
-                        )
-                    }
-
-                    // — Cajas —
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCajasChanged(!uiState.horasEdicionPorCajas) },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(checked = uiState.horasEdicionPorCajas, onCheckedChange = onHorasEdicionPorCajasChanged)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Cajas", fontWeight = FontWeight.SemiBold)
-                    }
-                    if (uiState.horasEdicionPorCajas) {
-                        OutlinedTextField(
-                            value = uiState.horasEdicionCajasCount,
-                            onValueChange = onHorasEdicionCajasCountChanged,
-                            label = { Text("Cantidad de cajas (obligatorio)") },
-                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            isError = uiState.horasEdicionCajasCount.isBlank()
-                        )
+                    if (uiState.tiposCarga.contains("abonada")) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorAbonadaChanged(!uiState.horasEdicionPorAbonada) },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = uiState.horasEdicionPorAbonada, onCheckedChange = onHorasEdicionPorAbonadaChanged)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Abonada y Otros", fontWeight = FontWeight.SemiBold)
+                        }
+                        if (uiState.horasEdicionPorAbonada) {
+                            OutlinedTextField(
+                                value = uiState.horasEdicionAbonadaValor,
+                                onValueChange = onHorasEdicionAbonadaValorChanged,
+                                label = { Text("Valor (obligatorio)") },
+                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                                singleLine = true,
+                                isError = uiState.horasEdicionAbonadaValor.isBlank()
+                            )
+                        }
                     }
 
-                    // — Cajones —
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCajonesChanged(!uiState.horasEdicionPorCajones) },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(checked = uiState.horasEdicionPorCajones, onCheckedChange = onHorasEdicionPorCajonesChanged)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Cajones", fontWeight = FontWeight.SemiBold)
+                    // — Cajas y Cajones — van siempre juntos bajo un solo tipo de sector.
+                    if (uiState.tiposCarga.contains("cajas_cajones")) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCajasChanged(!uiState.horasEdicionPorCajas) },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = uiState.horasEdicionPorCajas, onCheckedChange = onHorasEdicionPorCajasChanged)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Cajas", fontWeight = FontWeight.SemiBold)
+                        }
+                        if (uiState.horasEdicionPorCajas) {
+                            OutlinedTextField(
+                                value = uiState.horasEdicionCajasCount,
+                                onValueChange = onHorasEdicionCajasCountChanged,
+                                label = { Text("Cantidad de cajas (obligatorio)") },
+                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                isError = uiState.horasEdicionCajasCount.isBlank()
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorCajonesChanged(!uiState.horasEdicionPorCajones) },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = uiState.horasEdicionPorCajones, onCheckedChange = onHorasEdicionPorCajonesChanged)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Cajones", fontWeight = FontWeight.SemiBold)
+                        }
+                        if (uiState.horasEdicionPorCajones) {
+                            OutlinedTextField(
+                                value = uiState.horasEdicionCajonesCount,
+                                onValueChange = onHorasEdicionCajonesCountChanged,
+                                label = { Text("Cantidad de cajones (obligatorio)") },
+                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                isError = uiState.horasEdicionCajonesCount.isBlank()
+                            )
+                        }
                     }
-                    if (uiState.horasEdicionPorCajones) {
-                        OutlinedTextField(
-                            value = uiState.horasEdicionCajonesCount,
-                            onValueChange = onHorasEdicionCajonesCountChanged,
-                            label = { Text("Cantidad de cajones (obligatorio)") },
-                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            isError = uiState.horasEdicionCajonesCount.isBlank()
+
+                    // — Tipos de carga nuevos, mismos que al cargar la tarja —
+                    if (uiState.tiposCarga.contains("km_viajes")) {
+                        CargaSimpleCheckbox("Km / Viajes", uiState.horasEdicionPorKm, uiState.horasEdicionKmValor, onHorasEdicionPorKmChanged, onHorasEdicionKmValorChanged, "Cantidad (obligatorio)")
+                    }
+                    if (uiState.tiposCarga.contains("has_fumigadas")) {
+                        CargaSimpleCheckbox("Hectáreas fumigadas", uiState.horasEdicionPorHasFumigadas, uiState.horasEdicionHasFumigadasValor, onHorasEdicionPorHasFumigadasChanged, onHorasEdicionHasFumigadasValorChanged, "Hectáreas (obligatorio)")
+                    }
+                    if (uiState.tiposCarga.contains("siembra_trilla")) {
+                        CargaSimpleCheckbox("Siembra / Trilla", uiState.horasEdicionPorSiembraTrilla, uiState.horasEdicionSiembraTrillaValor, onHorasEdicionPorSiembraTrillaChanged, onHorasEdicionSiembraTrillaValorChanged, "Cantidad (obligatorio)")
+                    }
+                    if (uiState.tiposCarga.contains("bolseros")) {
+                        CargaSimpleCheckbox("Bolseros", uiState.horasEdicionPorBolseros, uiState.horasEdicionBolserosValor, onHorasEdicionPorBolserosChanged, onHorasEdicionBolserosValorChanged, "Cantidad (obligatorio)")
+                    }
+                    if (uiState.tiposCarga.contains("etiquetado")) {
+                        CargaSimpleCheckbox("Etiquetado", uiState.horasEdicionPorEtiquetado, uiState.horasEdicionEtiquetadoValor, onHorasEdicionPorEtiquetadoChanged, onHorasEdicionEtiquetadoValorChanged, "Cantidad (obligatorio)")
+                    }
+                    if (uiState.tiposCarga.contains("carga_camion")) {
+                        CargaTripleCheckbox(
+                            "Carga de Camión", uiState.horasEdicionPorCargaCamion, onHorasEdicionPorCargaCamionChanged,
+                            uiState.horasEdicionCargaCamion50, onHorasEdicionCargaCamion50Changed,
+                            uiState.horasEdicionCargaCamion25, onHorasEdicionCargaCamion25Changed,
+                            uiState.horasEdicionCargaCamionOtroCheck, onHorasEdicionCargaCamionOtroCheckChanged,
+                            uiState.horasEdicionCargaCamionOtro, onHorasEdicionCargaCamionOtroChanged
+                        )
+                    }
+                    if (uiState.tiposCarga.contains("movimiento_estiba")) {
+                        CargaTripleCheckbox(
+                            "Movimiento de Estiba", uiState.horasEdicionPorMovimientoEstiba, onHorasEdicionPorMovimientoEstibaChanged,
+                            uiState.horasEdicionMovimientoEstiba50, onHorasEdicionMovimientoEstiba50Changed,
+                            uiState.horasEdicionMovimientoEstiba25, onHorasEdicionMovimientoEstiba25Changed,
+                            uiState.horasEdicionMovimientoEstibaOtroCheck, onHorasEdicionMovimientoEstibaOtroCheckChanged,
+                            uiState.horasEdicionMovimientoEstibaOtro, onHorasEdicionMovimientoEstibaOtroChanged
                         )
                     }
                 }
@@ -939,7 +1229,14 @@ private fun EditarEmpleadoDialog(
                 val canSaveEd = (!uiState.horasEdicionPorCosecha || uiState.horasEdicionCachosCount.isNotBlank()) &&
                                 (!uiState.horasEdicionPorAbonada || uiState.horasEdicionAbonadaValor.isNotBlank()) &&
                                 (!uiState.horasEdicionPorCajas || uiState.horasEdicionCajasCount.isNotBlank()) &&
-                                (!uiState.horasEdicionPorCajones || uiState.horasEdicionCajonesCount.isNotBlank())
+                                (!uiState.horasEdicionPorCajones || uiState.horasEdicionCajonesCount.isNotBlank()) &&
+                                (!uiState.horasEdicionPorKm || uiState.horasEdicionKmValor.isNotBlank()) &&
+                                (!uiState.horasEdicionPorHasFumigadas || uiState.horasEdicionHasFumigadasValor.isNotBlank()) &&
+                                (!uiState.horasEdicionPorSiembraTrilla || uiState.horasEdicionSiembraTrillaValor.isNotBlank()) &&
+                                (!uiState.horasEdicionPorBolseros || uiState.horasEdicionBolserosValor.isNotBlank()) &&
+                                (!uiState.horasEdicionPorEtiquetado || uiState.horasEdicionEtiquetadoValor.isNotBlank()) &&
+                                (!uiState.horasEdicionPorCargaCamion || uiState.horasEdicionCargaCamion50 || uiState.horasEdicionCargaCamion25 || (uiState.horasEdicionCargaCamionOtroCheck && uiState.horasEdicionCargaCamionOtro.isNotBlank())) &&
+                                (!uiState.horasEdicionPorMovimientoEstiba || uiState.horasEdicionMovimientoEstiba50 || uiState.horasEdicionMovimientoEstiba25 || (uiState.horasEdicionMovimientoEstibaOtroCheck && uiState.horasEdicionMovimientoEstibaOtro.isNotBlank()))
                 Button(onClick = onGuardarEdicionRegistro, enabled = canSaveEd) { Text("Guardar") }
             },
             dismissButton = { TextButton(onClick = onCerrarEdicionRegistro) { Text("Cancelar") } }

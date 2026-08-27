@@ -74,7 +74,7 @@ class BienvenidaViewModel @Inject constructor(
                         is AppResult.Success -> {
                             val sectors = result.data
                             if (sectors.size == 1) {
-                                prefs.saveActiveSector(sectors[0].id, sectors[0].name, sectors[0].tipoCarga)
+                                prefs.saveActiveSector(sectors[0].id, sectors[0].name, sectors[0].tipoCarga, tiposCarga = sectors[0].tiposCarga)
                                 _uiState.update { it.copy(isLoading = false, navegarAMain = true) }
                             } else {
                                 _uiState.update { it.copy(isLoading = false, mostrarFormulario = true, sectores = sectors) }
@@ -145,7 +145,7 @@ class BienvenidaViewModel @Inject constructor(
             when (result) {
                 is AppResult.Success -> when (val r = result.data) {
                     is AccessRequestResult.Authorized -> {
-                        prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado)
+                        prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado, sector.tiposCarga)
                         _uiState.update { it.copy(isLoading = false, navegarAMain = true) }
                     }
                     is AccessRequestResult.Pending -> {
@@ -168,7 +168,7 @@ class BienvenidaViewModel @Inject constructor(
                     is AppResult.Success -> when (val status = result.data) {
                         is AccessStatus.Pending -> { /* seguir esperando */ }
                         is AccessStatus.Authorized -> {
-                            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado)
+                            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado, sector.tiposCarga)
                             _uiState.update { it.copy(esperandoAutorizacion = false, navegarAMain = true) }
                             return@launch
                         }
@@ -190,7 +190,7 @@ class BienvenidaViewModel @Inject constructor(
     fun confirmarSector() {
         val sector = _uiState.value.sectorSeleccionado ?: return
         viewModelScope.launch {
-            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado)
+            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado, sector.tiposCarga)
             _uiState.update { it.copy(navegarAMain = true) }
         }
     }

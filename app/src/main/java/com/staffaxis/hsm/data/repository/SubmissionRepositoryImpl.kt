@@ -8,6 +8,8 @@ import com.staffaxis.hsm.data.remote.api.SubmissionApiService
 import com.staffaxis.hsm.data.remote.dto.CreateSubmissionRequestDto
 import com.staffaxis.hsm.domain.model.AppResult
 import com.staffaxis.hsm.domain.model.OutboxSubmission
+import com.staffaxis.hsm.domain.model.TarjaRechazada
+import com.staffaxis.hsm.domain.model.TiposCargaNuevos
 import com.staffaxis.hsm.domain.repository.SubmissionRepository
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
@@ -27,7 +29,13 @@ class SubmissionRepositoryImpl @Inject constructor(
         sectorId: String,
         date: String,
         minutesWorked: String?,
-        notes: String?
+        notes: String?,
+        horas: Float?,
+        cosecha: Float?,
+        cajas: Int?,
+        cajones: Int?,
+        importe: Float?,
+        tiposNuevos: TiposCargaNuevos
     ): AppResult<Unit> {
         return try {
             val ubicacion = locationHelper.getLocation()
@@ -41,7 +49,23 @@ class SubmissionRepositoryImpl @Inject constructor(
                 notes = notes,
                 createdAt = System.currentTimeMillis(),
                 latitude = ubicacion?.latitude,
-                longitude = ubicacion?.longitude
+                longitude = ubicacion?.longitude,
+                horas = horas,
+                cosecha = cosecha,
+                cajas = cajas,
+                cajones = cajones,
+                importe = importe,
+                kmViajes = tiposNuevos.kmViajes,
+                hasFumigadas = tiposNuevos.hasFumigadas,
+                siembraTrilla = tiposNuevos.siembraTrilla,
+                bolseros = tiposNuevos.bolseros,
+                etiquetado = tiposNuevos.etiquetado,
+                cargaCamionKg50 = tiposNuevos.cargaCamionKg50,
+                cargaCamionKg25 = tiposNuevos.cargaCamionKg25,
+                cargaCamionOtro = tiposNuevos.cargaCamionOtro,
+                movimientoEstibaKg50 = tiposNuevos.movimientoEstibaKg50,
+                movimientoEstibaKg25 = tiposNuevos.movimientoEstibaKg25,
+                movimientoEstibaOtro = tiposNuevos.movimientoEstibaOtro
             )
             val inserted = dao.insert(entity)
             if (inserted == -1L) {
@@ -54,9 +78,19 @@ class SubmissionRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun updateHoras(submissionId: String, minutesWorked: String?): AppResult<Unit> {
+    override suspend fun updateHoras(
+        submissionId: String, minutesWorked: String?,
+        horas: Float?, cosecha: Float?, cajas: Int?, cajones: Int?, importe: Float?,
+        tiposNuevos: TiposCargaNuevos
+    ): AppResult<Unit> {
         return try {
-            dao.updateMinutesWorked(submissionId, minutesWorked)
+            dao.updateMinutesWorked(
+                submissionId, minutesWorked, horas, cosecha, cajas, cajones, importe,
+                tiposNuevos.kmViajes, tiposNuevos.hasFumigadas, tiposNuevos.siembraTrilla,
+                tiposNuevos.bolseros, tiposNuevos.etiquetado,
+                tiposNuevos.cargaCamionKg50, tiposNuevos.cargaCamionKg25, tiposNuevos.cargaCamionOtro,
+                tiposNuevos.movimientoEstibaKg50, tiposNuevos.movimientoEstibaKg25, tiposNuevos.movimientoEstibaOtro
+            )
             AppResult.Success(Unit)
         } catch (e: Exception) {
             AppResult.Error("Error al actualizar", e)
@@ -65,14 +99,16 @@ class SubmissionRepositoryImpl @Inject constructor(
 
     override suspend fun getSubmissionsForEmployee(employeeId: String): List<OutboxSubmission> =
         dao.getByEmployee(employeeId).map {
-            OutboxSubmission(it.id, it.employeeId, it.sectorId, it.date, it.minutesWorked, it.notes, it.status)
+            OutboxSubmission(
+                it.id, it.employeeId, it.sectorId, it.date, it.minutesWorked, it.notes, it.status,
+                TiposCargaNuevos(
+                    kmViajes = it.kmViajes, hasFumigadas = it.hasFumigadas, siembraTrilla = it.siembraTrilla,
+                    bolseros = it.bolseros, etiquetado = it.etiquetado,
+                    cargaCamionKg50 = it.cargaCamionKg50, cargaCamionKg25 = it.cargaCamionKg25, cargaCamionOtro = it.cargaCamionOtro,
+                    movimientoEstibaKg50 = it.movimientoEstibaKg50, movimientoEstibaKg25 = it.movimientoEstibaKg25, movimientoEstibaOtro = it.movimientoEstibaOtro
+                )
+            )
         }
-
-    private fun toApiMinutes(minutesWorked: String?): String? {
-        if (minutesWorked == null || minutesWorked == "C" || minutesWorked.startsWith("$")) return minutesWorked
-        val num = minutesWorked.toIntOrNull() ?: return minutesWorked
-        return if (num <= 16) (num * 60).toString() else minutesWorked
-    }
 
     override suspend fun pushPendingToServer(): AppResult<Int> {
         val pending = dao.getPending(500)
@@ -80,16 +116,7 @@ class SubmissionRepositoryImpl @Inject constructor(
         var sent = 0
         for (submission in pending) {
             try {
-                val response = api.createSubmission(
-                    CreateSubmissionRequestDto(
-                        employeeId = submission.employeeId,
-                        date = submission.date,
-                        minutesWorked = toApiMinutes(submission.minutesWorked),
-                        notes = submission.notes,
-                        latitude = submission.latitude,
-                        longitude = submission.longitude
-                    )
-                )
+                val response = api.createSubmission(submission.toCreateRequest())
                 when {
                     response.isSuccessful -> { dao.markSent(submission.id); sent++ }
                     response.code() in 400..499 -> dao.markFailed(submission.id, "HTTP ${response.code()}")
@@ -121,6 +148,16 @@ class SubmissionRepositoryImpl @Inject constructor(
             OutboxSubmission(it.id, it.employeeId, it.sectorId, it.date, it.minutesWorked, it.notes, it.status)
         }
 
+    override suspend fun getRechazadas(): List<TarjaRechazada> = try {
+        val r = api.getRechazadas()
+        if (!r.isSuccessful) emptyList()
+        else r.body()?.items?.map {
+            TarjaRechazada(it.id, it.empleado, it.date.take(10), it.minutesWorked, it.motivo, it.rechazadaPor)
+        } ?: emptyList()
+    } catch (e: Exception) {
+        emptyList()   // sin conexion no molestamos: se reintenta al recargar la pantalla
+    }
+
     override suspend fun fetchReport(sectorId: String, startDate: String, endDate: String): List<OutboxSubmission> {
         val response = adminApi.getReport(
             adminToken = ADMIN_TOKEN,
@@ -147,7 +184,13 @@ class SubmissionRepositoryImpl @Inject constructor(
             }
             // La fecha viene como "2026-07-13T03:00:00.000Z" — tomamos solo los primeros 10 chars
             val dateStr = row.date.take(10)
-            OutboxSubmission(row.submissionId, row.employeeId, sectorId, dateStr, mw, row.notes, "sent")
+            val tiposNuevos = TiposCargaNuevos(
+                kmViajes = row.kmViajes, hasFumigadas = row.hasFumigadas, siembraTrilla = row.siembraTrilla,
+                bolseros = row.bolseros, etiquetado = row.etiquetado,
+                cargaCamionKg50 = row.cargaCamionKg50, cargaCamionKg25 = row.cargaCamionKg25, cargaCamionOtro = row.cargaCamionOtro,
+                movimientoEstibaKg50 = row.movimientoEstibaKg50, movimientoEstibaKg25 = row.movimientoEstibaKg25, movimientoEstibaOtro = row.movimientoEstibaOtro
+            )
+            OutboxSubmission(row.submissionId, row.employeeId, sectorId, dateStr, mw, row.notes, row.status ?: "sent", tiposNuevos)
         }
     }
 }

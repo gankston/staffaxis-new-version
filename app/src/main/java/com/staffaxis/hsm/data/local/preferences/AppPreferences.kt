@@ -27,12 +27,18 @@ class AppPreferences @Inject constructor(@ApplicationContext private val context
         private val KEY_ACTIVE_SECTOR_ID = stringPreferencesKey("active_sector_id")
         private val KEY_ACTIVE_SECTOR_NAME = stringPreferencesKey("active_sector_name")
         private val KEY_ACTIVE_SECTOR_TIPO = stringPreferencesKey("active_sector_tipo")
+        private val KEY_ACTIVE_SECTOR_TIPOS = stringPreferencesKey("active_sector_tipos")
         private val KEY_ACTIVE_SECTOR_ENCARGADO = stringPreferencesKey("active_sector_encargado")
         private val KEY_LAST_SYNC_EPOCH = longPreferencesKey("last_sync_epoch")
         private val KEY_LAST_SYNC_ID = stringPreferencesKey("last_sync_id")
         private val KEY_IS_MASTER = booleanPreferencesKey("is_master_device")
         private val KEY_FULL_NAME = stringPreferencesKey("user_full_name")
         private val KEY_LAST_SEEN_VERSION_CODE = intPreferencesKey("last_seen_version_code")
+        // Modo supervisor: token/identidad separados del dispositivo normal — un mismo
+        // telefono podria en teoria tener las dos sesiones activas a la vez.
+        private val KEY_SUPERVISOR_TOKEN = stringPreferencesKey("supervisor_token")
+        private val KEY_SUPERVISOR_ID = stringPreferencesKey("supervisor_id")
+        private val KEY_SUPERVISOR_NAME = stringPreferencesKey("supervisor_name")
     }
 
     val deviceToken: Flow<String?> = context.dataStore.data.map { it[KEY_DEVICE_TOKEN] }
@@ -44,7 +50,29 @@ class AppPreferences @Inject constructor(@ApplicationContext private val context
     val activeSectorId: Flow<String?> = context.dataStore.data.map { it[KEY_ACTIVE_SECTOR_ID] }
     val activeSectorName: Flow<String?> = context.dataStore.data.map { it[KEY_ACTIVE_SECTOR_NAME] }
     val activeSectorTipo: Flow<String?> = context.dataStore.data.map { it[KEY_ACTIVE_SECTOR_TIPO] }
+    val activeSectorTipos: Flow<List<String>> = context.dataStore.data.map {
+        it[KEY_ACTIVE_SECTOR_TIPOS]?.split(",")?.filter { t -> t.isNotBlank() } ?: emptyList()
+    }
     val activeSectorEncargado: Flow<String?> = context.dataStore.data.map { it[KEY_ACTIVE_SECTOR_ENCARGADO] }
+    val supervisorToken: Flow<String?> = context.dataStore.data.map { it[KEY_SUPERVISOR_TOKEN] }
+    val supervisorId: Flow<String?> = context.dataStore.data.map { it[KEY_SUPERVISOR_ID] }
+    val supervisorName: Flow<String?> = context.dataStore.data.map { it[KEY_SUPERVISOR_NAME] }
+
+    suspend fun saveSupervisorToken(token: String, supervisorId: String, fullName: String) {
+        context.dataStore.edit {
+            it[KEY_SUPERVISOR_TOKEN] = token
+            it[KEY_SUPERVISOR_ID] = supervisorId
+            it[KEY_SUPERVISOR_NAME] = fullName
+        }
+    }
+
+    suspend fun clearSupervisorSession() {
+        context.dataStore.edit {
+            it.remove(KEY_SUPERVISOR_TOKEN)
+            it.remove(KEY_SUPERVISOR_ID)
+            it.remove(KEY_SUPERVISOR_NAME)
+        }
+    }
 
     suspend fun saveDeviceToken(token: String, deviceId: String, isMaster: Boolean = false) {
         context.dataStore.edit {
@@ -62,6 +90,7 @@ class AppPreferences @Inject constructor(@ApplicationContext private val context
             it.remove(KEY_ACTIVE_SECTOR_ID)
             it.remove(KEY_ACTIVE_SECTOR_NAME)
             it.remove(KEY_ACTIVE_SECTOR_TIPO)
+            it.remove(KEY_ACTIVE_SECTOR_TIPOS)
             it.remove(KEY_ACTIVE_SECTOR_ENCARGADO)
             it.remove(KEY_IS_MASTER)
             // KEY_DEVICE_ID se mantiene a proposito: es el mismo Settings.Secure.ANDROID_ID
@@ -87,11 +116,12 @@ class AppPreferences @Inject constructor(@ApplicationContext private val context
         context.dataStore.edit { it[KEY_LAST_SEEN_VERSION_CODE] = code }
     }
 
-    suspend fun saveActiveSector(id: String, name: String, tipoCarga: String, encargado: String? = null) {
+    suspend fun saveActiveSector(id: String, name: String, tipoCarga: String, encargado: String? = null, tiposCarga: List<String> = emptyList()) {
         context.dataStore.edit {
             it[KEY_ACTIVE_SECTOR_ID] = id
             it[KEY_ACTIVE_SECTOR_NAME] = name
             it[KEY_ACTIVE_SECTOR_TIPO] = tipoCarga
+            it[KEY_ACTIVE_SECTOR_TIPOS] = tiposCarga.joinToString(",")
             if (encargado != null) it[KEY_ACTIVE_SECTOR_ENCARGADO] = encargado
         }
     }
@@ -115,6 +145,7 @@ class AppPreferences @Inject constructor(@ApplicationContext private val context
             it.remove(KEY_ACTIVE_SECTOR_ID)
             it.remove(KEY_ACTIVE_SECTOR_NAME)
             it.remove(KEY_ACTIVE_SECTOR_TIPO)
+            it.remove(KEY_ACTIVE_SECTOR_TIPOS)
             it.remove(KEY_ACTIVE_SECTOR_ENCARGADO)
         }
     }

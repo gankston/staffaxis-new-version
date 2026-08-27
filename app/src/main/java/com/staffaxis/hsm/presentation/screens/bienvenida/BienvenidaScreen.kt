@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,7 @@ import com.staffaxis.hsm.presentation.components.GradientButton
 @Composable
 fun BienvenidaScreen(
     onNavegar: () -> Unit,
+    onEntrarComoSupervisor: () -> Unit = {},
     viewModel: BienvenidaViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -165,6 +167,18 @@ fun BienvenidaScreen(
             uiState.error?.let { err ->
                 Spacer(Modifier.height(16.dp))
                 Text(err, color = Color(0xFFFF5252), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            }
+
+            // Entrada al modo supervisor — visible siempre, discreto, no compite con el
+            // flujo normal de "solicitar autorización" que usa la gran mayoría.
+            if (!uiState.esperandoAutorizacion && !uiState.rechazado) {
+                Spacer(Modifier.height(28.dp))
+                Text(
+                    "Entrar como supervisor",
+                    color = Color(0xFF888888),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.clickable(onClick = onEntrarComoSupervisor)
+                )
             }
         }
     }

@@ -2,6 +2,7 @@ package com.staffaxis.hsm.data.remote.api
 
 import com.staffaxis.hsm.data.remote.dto.ApprovedResponseDto
 import com.staffaxis.hsm.data.remote.dto.CreateSubmissionRequestDto
+import com.staffaxis.hsm.data.remote.dto.RechazadasResponseDto
 import com.staffaxis.hsm.data.remote.dto.SubmissionResponseDto
 import retrofit2.Response
 import retrofit2.http.Body
@@ -12,6 +13,9 @@ import retrofit2.http.Query
 interface SubmissionApiService {
     @POST("api/submissions")
     suspend fun createSubmission(@Body request: CreateSubmissionRequestDto): Response<SubmissionResponseDto>
+
+    @GET("api/rechazadas")
+    suspend fun getRechazadas(): Response<RechazadasResponseDto>
 
     @GET("api/approved")
     suspend fun getApproved(

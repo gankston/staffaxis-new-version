@@ -3,17 +3,22 @@ package com.staffaxis.hsm.presentation.navigation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.NoMeetingRoom
+import androidx.compose.material.icons.filled.SupervisorAccount
+import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -24,11 +29,15 @@ import androidx.navigation.compose.rememberNavController
 import com.staffaxis.hsm.presentation.screens.ausencias.AusenciasScreen
 import com.staffaxis.hsm.presentation.screens.bienvenida.BienvenidaScreen
 import com.staffaxis.hsm.presentation.screens.empleados.EmpleadosScreen
+import com.staffaxis.hsm.presentation.screens.supervisor.SupervisorEntryScreen
+import com.staffaxis.hsm.presentation.screens.supervisor.SupervisorScreen
 import com.staffaxis.hsm.presentation.screens.tarja.TarjaScreen
 
 private sealed class Destination(val route: String) {
     object Bienvenida : Destination("bienvenida")
     object Main : Destination("main")
+    object SupervisorEntry : Destination("supervisor_entry")
+    object SupervisorMain : Destination("supervisor_main")
 }
 
 private sealed class Tab(val route: String, val label: String, val icon: ImageVector) {
@@ -59,13 +68,20 @@ fun AppNavigation(sessionViewModel: SessionViewModel = hiltViewModel()) {
 
     NavHost(navController = rootNav, startDestination = startDestination!!) {
         composable(Destination.Bienvenida.route) {
-            BienvenidaScreen(onNavegar = {
-                rootNav.navigate(Destination.Main.route) {
-                    popUpTo(Destination.Bienvenida.route) { inclusive = true }
+            BienvenidaScreen(
+                onNavegar = {
+                    rootNav.navigate(Destination.Main.route) {
+                        popUpTo(Destination.Bienvenida.route) { inclusive = true }
+                    }
+                },
+                onEntrarComoSupervisor = {
+                    rootNav.navigate(Destination.SupervisorEntry.route)
                 }
-            })
+            )
         }
         composable(Destination.Main.route) {
+            val hasSupervisorSession by sessionViewModel.hasSupervisorSession.collectAsState()
+            val esMiTelefono by sessionViewModel.esMiTelefono.collectAsState()
             MainScreen(
                 onCambiarSector = {
                     rootNav.navigate(Destination.Bienvenida.route) {
@@ -76,6 +92,41 @@ fun AppNavigation(sessionViewModel: SessionViewModel = hiltViewModel()) {
                     rootNav.navigate(Destination.Main.route) {
                         popUpTo(Destination.Main.route) { inclusive = true }
                     }
+                },
+                // El boton de cambio de modo es SOLO para el telefono de Gaston,
+                // sin importar si otro dispositivo tiene las dos sesiones activas.
+                hasSupervisorSession = hasSupervisorSession && esMiTelefono,
+                onCambiarASupervisor = {
+                    rootNav.navigate(Destination.SupervisorMain.route) { launchSingleTop = true }
+                }
+            )
+        }
+        composable(Destination.SupervisorEntry.route) {
+            SupervisorEntryScreen(onNavegar = {
+                rootNav.navigate(Destination.SupervisorMain.route) {
+                    popUpTo(Destination.Bienvenida.route) { inclusive = true }
+                }
+            })
+        }
+        composable(Destination.SupervisorMain.route) {
+            val hasDeviceSession by sessionViewModel.hasDeviceSession.collectAsState()
+            val esMiTelefono by sessionViewModel.esMiTelefono.collectAsState()
+            SupervisorScreen(
+                onCerrarSesion = {
+                    rootNav.navigate(Destination.Bienvenida.route) {
+                        popUpTo(Destination.SupervisorMain.route) { inclusive = true }
+                    }
+                },
+                // Mismo criterio: solo el telefono de Gaston ve este boton.
+                hasDeviceSession = esMiTelefono,
+                onCambiarATarja = {
+                    // Si ya hay sesion de tarja en este telefono, se salta directo; si no,
+                    // pasa por Bienvenida (con dispositivo maestro se autoaprueba al toque).
+                    if (hasDeviceSession) {
+                        rootNav.navigate(Destination.Main.route) { launchSingleTop = true }
+                    } else {
+                        rootNav.navigate(Destination.Bienvenida.route) { launchSingleTop = true }
+                    }
                 }
             )
         }
@@ -83,12 +134,29 @@ fun AppNavigation(sessionViewModel: SessionViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun MainScreen(onCambiarSector: () -> Unit, onRecargarMain: () -> Unit) {
+private fun MainScreen(
+    onCambiarSector: () -> Unit,
+    onRecargarMain: () -> Unit,
+    hasSupervisorSession: Boolean = false,
+    onCambiarASupervisor: () -> Unit = {}
+) {
     val tabNav = rememberNavController()
     val tabs = listOf(Tab.Empleados, Tab.Ausencias, Tab.Tarja)
 
     Scaffold(
         containerColor = Color(0xFF1E1E2E),
+        topBar = {
+            if (hasSupervisorSession) {
+                Box(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+                    IconButton(
+                        onClick = onCambiarASupervisor,
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.CenterEnd).padding(end = 4.dp)
+                    ) {
+                        Icon(Icons.Default.SupervisorAccount, contentDescription = "Cambiar a modo supervisor", tint = Color(0xFF9C27B0))
+                    }
+                }
+            }
+        },
         bottomBar = {
             NavigationBar(
                 containerColor = Color(0xFF12121E),

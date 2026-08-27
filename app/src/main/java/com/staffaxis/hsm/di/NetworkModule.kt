@@ -9,6 +9,7 @@ import com.staffaxis.hsm.data.remote.api.AuthApiService
 import com.staffaxis.hsm.data.remote.api.EmployeeApiService
 import com.staffaxis.hsm.data.remote.api.SectorsApiService
 import com.staffaxis.hsm.data.remote.api.SubmissionApiService
+import com.staffaxis.hsm.data.remote.api.SupervisorApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -31,7 +32,12 @@ object NetworkModule {
     @Singleton
     fun provideOkHttpClient(prefs: AppPreferences, sessionEvents: SessionEvents): OkHttpClient {
         val authInterceptor = Interceptor { chain ->
-            val token = runBlocking { prefs.deviceToken.first() }
+            // /api/supervisor/* usa su propio token, separado del de dispositivo —
+            // un mismo telefono podria tener las dos sesiones activas a la vez.
+            val esSupervisor = chain.request().url.encodedPath.startsWith("/api/supervisor")
+            val token = runBlocking {
+                if (esSupervisor) prefs.supervisorToken.first() else prefs.deviceToken.first()
+            }
             val request = chain.request().newBuilder().apply {
                 if (token != null) {
                     addHeader("Authorization", "Bearer $token")
@@ -95,4 +101,5 @@ object NetworkModule {
     @Provides @Singleton fun provideSubmissionApi(r: Retrofit): SubmissionApiService = r.create(SubmissionApiService::class.java)
     @Provides @Singleton fun provideAbsenceApi(r: Retrofit): AbsenceApiService = r.create(AbsenceApiService::class.java)
     @Provides @Singleton fun provideAdminApi(r: Retrofit): AdminApiService = r.create(AdminApiService::class.java)
+    @Provides @Singleton fun provideSupervisorApi(r: Retrofit): SupervisorApiService = r.create(SupervisorApiService::class.java)
 }

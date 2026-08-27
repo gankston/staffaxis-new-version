@@ -45,8 +45,24 @@ interface OutboxSubmissionDao {
     @Query("SELECT * FROM outbox_submissions WHERE employeeId = :employeeId AND status != 'failed_permanent' ORDER BY date DESC LIMIT 60")
     suspend fun getByEmployee(employeeId: String): List<OutboxSubmissionEntity>
 
-    @Query("UPDATE outbox_submissions SET minutesWorked = :minutesWorked, status = 'pending', attempts = 0 WHERE id = :id")
-    suspend fun updateMinutesWorked(id: String, minutesWorked: String?)
+    @Query("""
+        UPDATE outbox_submissions
+        SET minutesWorked = :minutesWorked, horas = :horas, cosecha = :cosecha, cajas = :cajas, cajones = :cajones, importe = :importe,
+            kmViajes = :kmViajes, hasFumigadas = :hasFumigadas, siembraTrilla = :siembraTrilla,
+            bolseros = :bolseros, etiquetado = :etiquetado,
+            cargaCamionKg50 = :cargaCamionKg50, cargaCamionKg25 = :cargaCamionKg25, cargaCamionOtro = :cargaCamionOtro,
+            movimientoEstibaKg50 = :movimientoEstibaKg50, movimientoEstibaKg25 = :movimientoEstibaKg25, movimientoEstibaOtro = :movimientoEstibaOtro,
+            status = 'pending', attempts = 0
+        WHERE id = :id
+    """)
+    suspend fun updateMinutesWorked(
+        id: String, minutesWorked: String?,
+        horas: Float? = null, cosecha: Float? = null, cajas: Int? = null, cajones: Int? = null, importe: Float? = null,
+        kmViajes: Float? = null, hasFumigadas: Float? = null, siembraTrilla: Float? = null,
+        bolseros: Float? = null, etiquetado: Float? = null,
+        cargaCamionKg50: Boolean? = null, cargaCamionKg25: Boolean? = null, cargaCamionOtro: String? = null,
+        movimientoEstibaKg50: Boolean? = null, movimientoEstibaKg25: Boolean? = null, movimientoEstibaOtro: String? = null
+    )
 
     @Query("SELECT * FROM outbox_submissions WHERE sectorId = :sectorId AND date >= :startDate AND date <= :endDate AND status != 'failed_permanent' ORDER BY date ASC")
     suspend fun getForSectorBetween(sectorId: String, startDate: String, endDate: String): List<OutboxSubmissionEntity>

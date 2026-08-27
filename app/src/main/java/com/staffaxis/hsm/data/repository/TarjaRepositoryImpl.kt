@@ -55,13 +55,6 @@ class TarjaRepositoryImpl @Inject constructor(
         return AppResult.Success(status.toDomain())
     }
 
-    // Convierte horas (≤16) a minutos para la API. "C" e importes ("$xxx") se dejan tal cual.
-    private fun toApiMinutes(minutesWorked: String?): String? {
-        if (minutesWorked == null || minutesWorked == "C" || minutesWorked.startsWith("$")) return minutesWorked
-        val num = minutesWorked.toIntOrNull() ?: return minutesWorked
-        return if (num <= 16) (num * 60).toString() else minutesWorked
-    }
-
     private suspend fun sendParallel(submissions: List<com.staffaxis.hsm.data.local.entity.OutboxSubmissionEntity>) {
         if (submissions.isEmpty()) return
         val mutex = Mutex()
@@ -71,16 +64,7 @@ class TarjaRepositoryImpl @Inject constructor(
                 chunk.map { submission ->
                     async {
                         try {
-                            val response = api.createSubmission(
-                                CreateSubmissionRequestDto(
-                                    employeeId = submission.employeeId,
-                                    date = submission.date,
-                                    minutesWorked = toApiMinutes(submission.minutesWorked),
-                                    notes = submission.notes,
-                                    latitude = submission.latitude,
-                                    longitude = submission.longitude
-                                )
-                            )
+                            val response = api.createSubmission(submission.toCreateRequest())
                             mutex.withLock {
                                 when {
                                     response.isSuccessful -> outboxDao.markSent(submission.id)

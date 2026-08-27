@@ -8,8 +8,10 @@ import com.staffaxis.hsm.domain.model.Employee
 import com.staffaxis.hsm.domain.model.EmployeeTransfer
 import com.staffaxis.hsm.domain.model.OutboxSubmission
 import com.staffaxis.hsm.domain.model.Sector
+import com.staffaxis.hsm.domain.model.TarjaRechazada
 import com.staffaxis.hsm.domain.model.TarjaStatus
 import com.staffaxis.hsm.domain.model.TarjaValores
+import com.staffaxis.hsm.domain.model.TiposCargaNuevos
 import com.staffaxis.hsm.domain.repository.AbsenceRepository
 import com.staffaxis.hsm.domain.repository.AuthRepository
 import com.staffaxis.hsm.domain.repository.EmployeeRepository
@@ -54,7 +56,9 @@ data class TarjaUiState(
     val visualizadorData: List<ResumenEmpleadoHoras> = emptyList(),
     val visualizadorFechas: List<String> = emptyList(),
     val visualizadorLoading: Boolean = false,
-    val visualizadorError: String? = null
+    val visualizadorError: String? = null,
+    // Tarjas que el supervisor rechazo en este sector, para corregirlas
+    val rechazadas: List<TarjaRechazada> = emptyList()
 )
 
 data class ResumenEmpleadoHoras(
@@ -65,7 +69,10 @@ data class ResumenEmpleadoHoras(
     val cosechaTotal: Float,
     val importeTotal: Float,
     val cajasTotal: Int = 0,
-    val cajonesTotal: Int = 0
+    val cajonesTotal: Int = 0,
+    val tiposNuevosTotal: TiposCargaNuevos = TiposCargaNuevos(),
+    // Tipos de carga nuevos de cada dia, para mostrarlos tambien en la celda del dia
+    val tiposPorDia: Map<String, TiposCargaNuevos> = emptyMap()
 )
 
 @HiltViewModel
@@ -87,6 +94,16 @@ class TarjaViewModel @Inject constructor(
         loadData()
         loadAllowedSectors()
         actualizarPeriodoLabel(0)
+        cargarRechazadas()
+    }
+
+    // Trae del servidor las tarjas que el supervisor rechazo, para avisarle
+    // al que las cargo que hay algo para corregir.
+    fun cargarRechazadas() {
+        viewModelScope.launch {
+            val lista = submissionRepository.getRechazadas()
+            _uiState.update { it.copy(rechazadas = lista) }
+        }
     }
 
     private fun loadData() {
@@ -188,7 +205,7 @@ class TarjaViewModel @Inject constructor(
                 deviceId = deviceId, sectorId = sector.id, fullName = nombre,
                 phoneModel = null, latitude = null, longitude = null
             )
-            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado)
+            prefs.saveActiveSector(sector.id, sector.name, sector.tipoCarga, sector.encargado, sector.tiposCarga)
             _uiState.update { it.copy(isLoading = false, recargarMain = true) }
         }
     }
@@ -242,7 +259,9 @@ class TarjaViewModel @Inject constructor(
                     val emp = empleadoMap[empId] ?: return@mapNotNull null
                     val horasPorDia = subs.associate { it.date to it.minutesWorked }
                     val v = TarjaValores.sumar(subs.map { it.minutesWorked })
-                    ResumenEmpleadoHoras(emp, horasPorDia, v.horas, v.cosecha, v.importe, v.cajas, v.cajones)
+                    val tiposNuevos = TiposCargaNuevos.sumar(subs.map { it.tiposNuevos })
+                    val tiposPorDia = subs.associate { it.date to it.tiposNuevos }
+                    ResumenEmpleadoHoras(emp, horasPorDia, v.horas, v.cosecha, v.importe, v.cajas, v.cajones, tiposNuevos, tiposPorDia)
                 }
                 .sortedBy { emp ->
                     emp.empleado.apellido.ifBlank {

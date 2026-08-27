@@ -21,7 +21,23 @@ data class OutboxSubmissionEntity(
     val lastError: String? = null,
     val status: String = STATUS_PENDING,
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val horas: Float? = null,
+    val cosecha: Float? = null,
+    val cajas: Int? = null,
+    val cajones: Int? = null,
+    val importe: Float? = null,
+    val kmViajes: Float? = null,
+    val hasFumigadas: Float? = null,
+    val siembraTrilla: Float? = null,
+    val bolseros: Float? = null,
+    val etiquetado: Float? = null,
+    val cargaCamionKg50: Boolean? = null,
+    val cargaCamionKg25: Boolean? = null,
+    val cargaCamionOtro: String? = null,
+    val movimientoEstibaKg50: Boolean? = null,
+    val movimientoEstibaKg25: Boolean? = null,
+    val movimientoEstibaOtro: String? = null
 ) {
     companion object {
         const val STATUS_PENDING = "pending"

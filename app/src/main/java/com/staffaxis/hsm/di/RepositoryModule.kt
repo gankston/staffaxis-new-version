@@ -16,4 +16,5 @@ abstract class RepositoryModule {
     @Binds @Singleton abstract fun bindSubmissionRepo(impl: SubmissionRepositoryImpl): SubmissionRepository
     @Binds @Singleton abstract fun bindAbsenceRepo(impl: AbsenceRepositoryImpl): AbsenceRepository
     @Binds @Singleton abstract fun bindTarjaRepo(impl: TarjaRepositoryImpl): TarjaRepository
+    @Binds @Singleton abstract fun bindSupervisorRepo(impl: SupervisorRepositoryImpl): SupervisorRepository
 }
