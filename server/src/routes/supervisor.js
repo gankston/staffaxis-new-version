@@ -35,7 +35,12 @@ export async function supervisorRoutes(app) {
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
-              e.first_name, e.last_name, sec.name AS sector_name
+              e.first_name, e.last_name, sec.id AS sector_id, sec.name AS sector_name,
+              COALESCE(
+                (SELECT ARRAY_AGG(stc.tipo ORDER BY stc.tipo)
+                   FROM sector_tipos_carga stc WHERE stc.sector_id = sec.id),
+                '{}'
+              ) AS tipos_carga
        FROM submissions s
        JOIN employees e ON e.id = s.employee_id
        JOIN sectors sec ON sec.id = s.sector_id
@@ -46,7 +51,8 @@ export async function supervisorRoutes(app) {
     return reply.send({
       items: r.rows.map(x => ({
         id: x.id, employeeId: x.employee_id, empleado: `${x.last_name} ${x.first_name}`.trim(),
-        sector: x.sector_name, date: x.date, minutesWorked: x.minutes_worked, notes: x.notes,
+        sectorId: x.sector_id, sector: x.sector_name, tiposCarga: x.tipos_carga ?? [],
+        date: x.date, minutesWorked: x.minutes_worked, notes: x.notes,
         createdAt: x.created_at,
         fueModificada: x.fue_editada === true,
         kmViajes: x.km_viajes, hasFumigadas: x.has_fumigadas, siembraTrilla: x.siembra_trilla,
