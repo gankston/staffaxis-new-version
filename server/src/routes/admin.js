@@ -212,7 +212,7 @@ export async function adminRoutes(app) {
     const result = await db.query(
       `SELECT s.id AS submission_id, s.employee_id,
               e.first_name, e.last_name, e.dni,
-              e.sector_id AS current_sector_id,
+              e.sector_id AS current_sector_id, e.is_active,
               cs.name     AS current_sector_name,
               s.date, s.minutes_worked, s.notes, s.status,
               s.horas, s.cosecha, s.cajas, s.cajones, s.importe,
@@ -228,7 +228,8 @@ export async function adminRoutes(app) {
        WHERE s.sector_id = $1
          AND s.date BETWEEN $2 AND $3
          AND NOT s.is_deleted
-         AND e.is_active = true
+       -- Sin filtro de is_active: un empleado dado de baja igual tiene que aparecer
+       -- si trabajo dentro del periodo consultado, o esas horas no se liquidan.
        ORDER BY e.last_name, e.first_name, s.date`,
       [sector_id, start_date, end_date]
     );
