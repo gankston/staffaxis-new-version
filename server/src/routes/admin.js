@@ -158,18 +158,70 @@ export async function adminRoutes(app) {
   });
 
   app.post('/api/admin/employees', { preHandler: verifyAdmin }, async (req, reply) => {
-    const { first_name, last_name, dni, sector_id } = req.body ?? {};
+    const { first_name, last_name, dni, sector_id, force_transfer } = req.body ?? {};
     if (!first_name || !sector_id) return reply.status(400).send({ error: 'Faltan campos' });
+
+    const dniValue = dni?.trim() || null;
+
+    // Mismo chequeo que ya tiene /api/employees (la app) desde siempre. Esta ruta
+    // (StaffAdmin) hacia un INSERT directo sin mirar si el DNI ya existia en algun
+    // lado, y asi termino habiendo gente con dos fichas de empleado en paralelo.
+    if (dniValue) {
+      const same = await db.query(
+        'SELECT id FROM employees WHERE dni = $1 AND sector_id = $2 AND is_active = true',
+        [dniValue, sector_id]
+      );
+      if (same.rows[0]) return reply.status(409).send({ error: 'Empleado ya existe en este sector' });
+
+      const other = await db.query(
+        'SELECT id, sector_id FROM employees WHERE dni = $1 AND sector_id != $2 AND is_active = true',
+        [dniValue, sector_id]
+      );
+      if (other.rows[0] && !force_transfer) {
+        return reply.status(422).send({ error: 'Empleado existe en otro sector', code: 'EXISTS_OTHER_SECTOR' });
+      }
+      if (other.rows[0] && force_transfer) {
+        const fromSectorId = other.rows[0].sector_id;
+        const updated = await db.query(
+          `UPDATE employees SET sector_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+          [sector_id, other.rows[0].id]
+        );
+        await db.query(
+          `INSERT INTO transfers (employee_id, from_sector_id, to_sector_id) VALUES ($1, $2, $3)`,
+          [other.rows[0].id, fromSectorId, sector_id]
+        ).catch(() => {});
+        return reply.send(updated.rows[0]);
+      }
+    }
+
     const result = await db.query(
       `INSERT INTO employees (id, sector_id, first_name, last_name, dni)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [uuid(), sector_id, first_name, last_name ?? '', dni?.trim() || null]
+      [uuid(), sector_id, first_name, last_name ?? '', dniValue]
     );
     return reply.status(201).send(result.rows[0]);
   });
 
   app.put('/api/admin/employees/:id', { preHandler: verifyAdmin }, async (req, reply) => {
     const { first_name, last_name, dni, is_active, sector_id } = req.body ?? {};
+
+    // Si se cambia de sector, chequear que no quede duplicado con otro activo del
+    // mismo DNI en el sector destino — mismo motivo que en el POST de arriba.
+    if (sector_id !== undefined) {
+      const dniEfectivo = dni !== undefined
+        ? (dni || null)
+        : (await db.query('SELECT dni FROM employees WHERE id = $1', [req.params.id])).rows[0]?.dni ?? null;
+      if (dniEfectivo) {
+        const choca = await db.query(
+          'SELECT id FROM employees WHERE dni = $1 AND sector_id = $2 AND is_active = true AND id != $3',
+          [dniEfectivo, sector_id, req.params.id]
+        );
+        if (choca.rows[0]) {
+          return reply.status(409).send({ error: 'Ya hay un empleado activo con ese DNI en el sector destino' });
+        }
+      }
+    }
+
     const fields = [], values = [];
     let idx = 1;
     if (first_name !== undefined) { fields.push(`first_name = $${idx++}`); values.push(first_name); }
