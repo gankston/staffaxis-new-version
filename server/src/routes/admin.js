@@ -205,19 +205,33 @@ export async function adminRoutes(app) {
   app.put('/api/admin/employees/:id', { preHandler: verifyAdmin }, async (req, reply) => {
     const { first_name, last_name, dni, is_active, sector_id } = req.body ?? {};
 
-    // Si se cambia de sector, chequear que no quede duplicado con otro activo del
-    // mismo DNI en el sector destino — mismo motivo que en el POST de arriba.
-    if (sector_id !== undefined) {
-      const dniEfectivo = dni !== undefined
-        ? (dni || null)
-        : (await db.query('SELECT dni FROM employees WHERE id = $1', [req.params.id])).rows[0]?.dni ?? null;
-      if (dniEfectivo) {
-        const choca = await db.query(
+    // Validar el DNI cada vez que se lo toca, cambie o no el sector en el mismo
+    // pedido. Antes solo se chequeaba si sector_id tambien venia en el body — eso
+    // dejaba colar duplicados: alguien creaba el empleado sin DNI (o con uno
+    // provisorio) y despues, al completarlo/corregirlo desde "Editar Empleado" sin
+    // tocar el sector, no habia ningun control. Asi nacieron duplicados reales con
+    // tarjas cargadas en las dos fichas (ver auditoria de DNIs duplicados).
+    if (dni !== undefined) {
+      const dniValue = dni?.trim() || null;
+      if (dniValue) {
+        const current = await db.query('SELECT sector_id FROM employees WHERE id = $1', [req.params.id]);
+        if (!current.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
+        const sectorEfectivo = sector_id !== undefined ? sector_id : current.rows[0].sector_id;
+
+        const mismoSector = await db.query(
           'SELECT id FROM employees WHERE dni = $1 AND sector_id = $2 AND is_active = true AND id != $3',
-          [dniEfectivo, sector_id, req.params.id]
+          [dniValue, sectorEfectivo, req.params.id]
         );
-        if (choca.rows[0]) {
+        if (mismoSector.rows[0]) {
           return reply.status(409).send({ error: 'Ya hay un empleado activo con ese DNI en el sector destino' });
+        }
+
+        const otroSector = await db.query(
+          'SELECT id, sector_id FROM employees WHERE dni = $1 AND sector_id != $2 AND is_active = true AND id != $3',
+          [dniValue, sectorEfectivo, req.params.id]
+        );
+        if (otroSector.rows[0]) {
+          return reply.status(422).send({ error: 'Ese DNI ya pertenece a un empleado activo en otro sector', code: 'EXISTS_OTHER_SECTOR' });
         }
       }
     }

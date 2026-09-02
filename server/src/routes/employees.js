@@ -117,6 +117,36 @@ export async function employeeRoutes(app) {
     const { id } = req.params;
     const { first_name, last_name, dni, is_active } = req.body ?? {};
 
+    // Validar el DNI si se lo esta editando — este endpoint nunca lo chequeaba, a
+    // diferencia del POST de arriba que si valida al crear. Completar/corregir el DNI
+    // de un empleado ya existente (p.ej. desde "Editar Empleado") con uno que ya
+    // pertenece a otro activo se guardaba sin avisar, y asi terminaban dos fichas
+    // reales con tarjas cargadas en las dos (ver auditoria de DNIs duplicados).
+    if (dni !== undefined) {
+      const dniValue = dni?.trim() || null;
+      if (dniValue) {
+        const current = await db.query('SELECT sector_id FROM employees WHERE id = $1', [id]);
+        if (!current.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
+        const sectorId = current.rows[0].sector_id;
+
+        const mismoSector = await db.query(
+          'SELECT id FROM employees WHERE dni = $1 AND sector_id = $2 AND is_active = true AND id != $3',
+          [dniValue, sectorId, id]
+        );
+        if (mismoSector.rows[0]) {
+          return reply.status(409).send({ error: 'Ya hay un empleado activo con ese DNI en este sector' });
+        }
+
+        const otroSector = await db.query(
+          'SELECT id FROM employees WHERE dni = $1 AND sector_id != $2 AND is_active = true AND id != $3',
+          [dniValue, sectorId, id]
+        );
+        if (otroSector.rows[0]) {
+          return reply.status(422).send({ error: 'Ese DNI ya pertenece a un empleado activo en otro sector', code: 'EXISTS_OTHER_SECTOR' });
+        }
+      }
+    }
+
     const fields = [];
     const values = [];
     let idx = 1;
