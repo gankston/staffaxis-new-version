@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { v4 as uuid } from 'uuid';
 import { verifyDevice } from '../middleware/auth.js';
+import { normalizarDni, formatoDniValido } from '../lib/dniUtils.js';
 
 function toDto(row) {
   return {
@@ -65,7 +66,16 @@ export async function employeeRoutes(app) {
       return reply.status(400).send({ error: 'Faltan campos requeridos' });
     }
 
-    const dniValue = dni?.trim() || null;
+    const dniValue = normalizarDni(dni);
+    // Pedido de IT Salvita: la via de alta sin DNI es la que generaba fichas
+    // imposibles de cruzar con el padron de RRHH. Ya no se puede dar de alta
+    // a nadie sin documento por esta ruta.
+    if (!dniValue) {
+      return reply.status(400).send({ error: 'El DNI es obligatorio' });
+    }
+    if (!formatoDniValido(dniValue)) {
+      return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
+    }
 
     // ¿Existe en el mismo sector?
     if (!force_transfer && dniValue) {
@@ -122,9 +132,13 @@ export async function employeeRoutes(app) {
     // de un empleado ya existente (p.ej. desde "Editar Empleado") con uno que ya
     // pertenece a otro activo se guardaba sin avisar, y asi terminaban dos fichas
     // reales con tarjas cargadas en las dos (ver auditoria de DNIs duplicados).
+    let dniValue;
     if (dni !== undefined) {
-      const dniValue = dni?.trim() || null;
+      dniValue = normalizarDni(dni);
       if (dniValue) {
+        if (!formatoDniValido(dniValue)) {
+          return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
+        }
         const current = await db.query('SELECT sector_id FROM employees WHERE id = $1', [id]);
         if (!current.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
         const sectorId = current.rows[0].sector_id;
@@ -153,7 +167,7 @@ export async function employeeRoutes(app) {
 
     if (first_name !== undefined) { fields.push(`first_name = $${idx++}`); values.push(first_name); }
     if (last_name  !== undefined) { fields.push(`last_name  = $${idx++}`); values.push(last_name);  }
-    if (dni        !== undefined) { fields.push(`dni        = $${idx++}`); values.push(dni || null); }
+    if (dni        !== undefined) { fields.push(`dni        = $${idx++}`); values.push(dniValue);  }
     if (is_active  !== undefined) { fields.push(`is_active  = $${idx++}`); values.push(is_active);  }
 
     if (!fields.length) return reply.status(400).send({ error: 'Nada para actualizar' });

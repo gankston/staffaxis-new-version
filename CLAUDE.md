@@ -40,13 +40,17 @@ DELETE /api/employees/:id/foto/:lado         → eliminar foto
 ```
 
 ### Insertar empleados en bulk (PowerShell)
+**El DNI ahora es obligatorio y tiene que tener formato válido (7 a 9 dígitos,
+sin patrones como todos-los-dígitos-iguales o secuencias) — pedido de IT
+Salvita para que ninguna ficha quede sin poder cruzarse con el padrón de
+RRHH. Un alta con `dni=""` o un DNI inválido devuelve 400.**
 ```powershell
 $token = "staffaxis_admin_token_2024_prod"
 $base  = "https://staffaxis-new-version-production.up.railway.app"
 $sectorId = "<uuid-del-sector>"
-@("Apellido, Nombre") | ForEach-Object {
+@("Apellido, Nombre, DNI") | ForEach-Object {
     $parts = $_ -split ", "
-    $body = @{ last_name=$parts[0]; first_name=$parts[1]; dni=""; sector_id=$sectorId } | ConvertTo-Json
+    $body = @{ last_name=$parts[0]; first_name=$parts[1]; dni=$parts[2]; sector_id=$sectorId } | ConvertTo-Json
     Invoke-RestMethod "$base/api/admin/employees" -Method POST -Headers @{"x-admin-token"=$token;"Content-Type"="application/json"} -Body $body
 }
 ```

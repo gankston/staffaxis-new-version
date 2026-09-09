@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import jwt from 'jsonwebtoken';
 import { v4 as uuid } from 'uuid';
 import { verifyAdmin } from '../middleware/auth.js';
+import { normalizarDni, formatoDniValido } from '../lib/dniUtils.js';
 
 export async function adminRoutes(app) {
 
@@ -161,7 +162,16 @@ export async function adminRoutes(app) {
     const { first_name, last_name, dni, sector_id, force_transfer } = req.body ?? {};
     if (!first_name || !sector_id) return reply.status(400).send({ error: 'Faltan campos' });
 
-    const dniValue = dni?.trim() || null;
+    const dniValue = normalizarDni(dni);
+    // Pedido de IT Salvita: la via de alta sin DNI es la que generaba fichas
+    // imposibles de cruzar con el padron de RRHH. Ya no se puede dar de alta
+    // a nadie sin documento por esta ruta.
+    if (!dniValue) {
+      return reply.status(400).send({ error: 'El DNI es obligatorio' });
+    }
+    if (!formatoDniValido(dniValue)) {
+      return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
+    }
 
     // Mismo chequeo que ya tiene /api/employees (la app) desde siempre. Esta ruta
     // (StaffAdmin) hacia un INSERT directo sin mirar si el DNI ya existia en algun
@@ -211,9 +221,13 @@ export async function adminRoutes(app) {
     // provisorio) y despues, al completarlo/corregirlo desde "Editar Empleado" sin
     // tocar el sector, no habia ningun control. Asi nacieron duplicados reales con
     // tarjas cargadas en las dos fichas (ver auditoria de DNIs duplicados).
+    let dniValue;
     if (dni !== undefined) {
-      const dniValue = dni?.trim() || null;
+      dniValue = normalizarDni(dni);
       if (dniValue) {
+        if (!formatoDniValido(dniValue)) {
+          return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
+        }
         const current = await db.query('SELECT sector_id FROM employees WHERE id = $1', [req.params.id]);
         if (!current.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
         const sectorEfectivo = sector_id !== undefined ? sector_id : current.rows[0].sector_id;
@@ -240,7 +254,7 @@ export async function adminRoutes(app) {
     let idx = 1;
     if (first_name !== undefined) { fields.push(`first_name = $${idx++}`); values.push(first_name); }
     if (last_name  !== undefined) { fields.push(`last_name  = $${idx++}`); values.push(last_name); }
-    if (dni        !== undefined) { fields.push(`dni        = $${idx++}`); values.push(dni || null); }
+    if (dni        !== undefined) { fields.push(`dni        = $${idx++}`); values.push(dniValue); }
     if (is_active  !== undefined) { fields.push(`is_active  = $${idx++}`); values.push(is_active); }
     if (sector_id  !== undefined) { fields.push(`sector_id  = $${idx++}`); values.push(sector_id); }
     if (!fields.length) return reply.status(400).send({ error: 'Nada para actualizar' });
