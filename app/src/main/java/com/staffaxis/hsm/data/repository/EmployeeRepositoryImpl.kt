@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.map
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import retrofit2.Response
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -33,6 +35,16 @@ class EmployeeRepositoryImpl @Inject constructor(
 ) : EmployeeRepository {
 
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+
+    // El body de un error trae { "error": "mensaje" } — sin esto, cualquier
+    // rechazo del servidor que no sea 409/422 (ej. DNI invalido) le llegaba al
+    // supervisor como el mudo "Error 400" en vez del motivo real.
+    private fun mensajeDeError(response: Response<*>): String =
+        try {
+            JSONObject(response.errorBody()?.string() ?: "").optString("error").ifBlank { "Error ${response.code()}" }
+        } catch (e: Exception) {
+            "Error ${response.code()}"
+        }
 
     override fun getEmployeesForSector(sectorId: String): Flow<List<Employee>> =
         dao.getBySector(sectorId).map { list -> list.map { it.toDomain() } }
@@ -122,7 +134,7 @@ class EmployeeRepositoryImpl @Inject constructor(
                     AppResult.Success(entity.toDomain())
                 }
                 response.code() == 409 || response.code() == 422 -> AppResult.Error("EXISTS_OTHER_SECTOR")
-                else -> AppResult.Error("Error ${response.code()}")
+                else -> AppResult.Error(mensajeDeError(response))
             }
         } catch (e: Exception) {
             AppResult.Error("Sin conexión", e)
@@ -159,10 +171,23 @@ class EmployeeRepositoryImpl @Inject constructor(
     override suspend fun updateEmployee(id: String, firstName: String, lastName: String, dni: String?, observacion: String?): AppResult<Unit> {
         val nombreCompleto = if (lastName.isBlank()) firstName.trim() else "${firstName.trim()} ${lastName.trim()}"
         return try {
-            api.updateEmployee(id, UpdateEmployeeRequestDto(firstName = firstName.trim(), lastName = lastName.trim().ifBlank { null }, dni = dni?.ifBlank { null }))
-            dao.updateNombreObservacion(id, nombreCompleto, dni?.ifBlank { null }, observacion)
-            AppResult.Success(Unit)
+            val response = api.updateEmployee(id, UpdateEmployeeRequestDto(firstName = firstName.trim(), lastName = lastName.trim().ifBlank { null }, dni = dni?.ifBlank { null }))
+            when {
+                // El resultado se ignoraba por completo: pasara lo que pasara en el
+                // servidor, se aplicaba local y se avisaba "listo". Asi se podia poner
+                // un DNI que ya era de otro empleado activo sin que nadie se enterara
+                // (ver auditoria de DNIs duplicados) — ahora se respeta el rechazo.
+                response.isSuccessful -> {
+                    dao.updateNombreObservacion(id, nombreCompleto, dni?.ifBlank { null }, observacion)
+                    AppResult.Success(Unit)
+                }
+                response.code() == 409 -> AppResult.Error("EXISTS_SAME_SECTOR")
+                response.code() == 422 -> AppResult.Error("EXISTS_OTHER_SECTOR")
+                else -> AppResult.Error(mensajeDeError(response))
+            }
         } catch (e: Exception) {
+            // Sin conexion de verdad (no un rechazo del servidor): se aplica local y
+            // se sincroniza despues, como venia funcionando.
             dao.updateNombreObservacion(id, nombreCompleto, dni?.ifBlank { null }, observacion)
             AppResult.Success(Unit)
         }

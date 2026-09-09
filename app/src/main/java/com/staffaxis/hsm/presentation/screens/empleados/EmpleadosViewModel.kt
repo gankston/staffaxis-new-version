@@ -570,14 +570,26 @@ class EmpleadosViewModel @Inject constructor(
         val state = _uiState.value
         val empleado = state.empleadoParaEditar ?: return
         viewModelScope.launch {
-            employeeRepository.updateEmployee(
+            when (val result = employeeRepository.updateEmployee(
                 empleado.id,
                 state.editNombre.trim(),
                 state.editApellido.trim(),
                 state.editDni.ifBlank { null },
                 state.editObservacion.ifBlank { null }
-            )
-            _uiState.update { it.copy(mostrarDialogoEditar = false, empleadoParaEditar = null, mensajeExito = "Empleado actualizado") }
+            )) {
+                is AppResult.Success -> _uiState.update {
+                    it.copy(mostrarDialogoEditar = false, empleadoParaEditar = null, mensajeExito = "Empleado actualizado")
+                }
+                is AppResult.Error -> when (result.message) {
+                    "EXISTS_SAME_SECTOR" -> _uiState.update {
+                        it.copy(mensajeError = "Ya hay otro empleado con ese DNI en este sector")
+                    }
+                    "EXISTS_OTHER_SECTOR" -> _uiState.update {
+                        it.copy(mensajeError = "Ese DNI ya pertenece a un empleado activo en otro sector")
+                    }
+                    else -> _uiState.update { it.copy(mensajeError = result.message) }
+                }
+            }
         }
     }
 

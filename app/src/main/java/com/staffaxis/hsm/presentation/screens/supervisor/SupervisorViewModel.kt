@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.staffaxis.hsm.domain.model.AppResult
 import com.staffaxis.hsm.domain.model.SupervisorPendingItem
 import com.staffaxis.hsm.domain.model.SupervisorResumenRow
+import com.staffaxis.hsm.domain.model.TarjaDelDia
+import com.staffaxis.hsm.domain.model.TipoCargaFiltro
+import com.staffaxis.hsm.domain.model.agruparEnTarjasDelDia
 import com.staffaxis.hsm.domain.repository.SupervisorRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,13 +37,28 @@ data class SupervisorUiState(
     val sectorFiltro: String? = null,
     val tipoFiltro: String? = null,
     val fechaFiltro: String? = null,
+    // ── Vista nueva: carteles por sector/dia, y el detalle al tocar uno ──────
+    // Un cartel por sector: se aprueba entero desde la lista, o se abre para
+    // revisar empleado por empleado y aprobar solo algunos.
+    val tarjas: List<TarjaDelDia> = emptyList(),
+    // Cartel abierto (clave "sectorId|fecha"); null = estamos en la lista.
+    val tarjaAbierta: String? = null,
+    // Buscador y filtro del detalle. El filtro se arma con los tipos del sector.
+    val busquedaDetalle: String = "",
+    val filtroDetalle: TipoCargaFiltro? = null,
     // Dialogo para escribir el motivo al rechazar
     val pidiendoMotivo: Boolean = false,
     val motivoRechazo: String = ""
 )
 
 // Tipos de carga por los que se puede filtrar el resumen (coinciden con TarjaValores).
-val TIPOS_FILTRO_RESUMEN = listOf("Horas", "Cosecha", "Cajas", "Cajones", "Importe")
+// "Importe" ya no existe como concepto — lo que antes se llamaba asi es la parte
+// numerica de "Abonada" (TarjaValores.importe sigue siendo ese numero,
+// solo cambia como se lo llama en la UI).
+val TIPOS_FILTRO_RESUMEN = listOf(
+    "Horas", "Cosecha", "Cajas", "Cajones", "Abonada",
+    "Km/Viajes", "Has Fumigadas", "Siembra/Trilla", "Bolseros", "Etiquetado", "Carga Camión", "Mov. Estiba"
+)
 
 @HiltViewModel
 class SupervisorViewModel @Inject constructor(
@@ -83,7 +101,14 @@ class SupervisorViewModel @Inject constructor(
                         fechas.contains(hoy) -> hoy
                         else -> null
                     }
-                    st.copy(pendientes = r.data, seleccionadas = emptySet(), fechaFiltro = filtroInicial)
+                    val tarjas = agruparEnTarjasDelDia(r.data)
+                    // Si el cartel que estaba abierto se aprobo entero ya no existe:
+                    // hay que volver a la lista en vez de quedar en una pantalla vacia.
+                    val sigueAbierta = st.tarjaAbierta?.takeIf { k -> tarjas.any { it.clave == k } }
+                    st.copy(
+                        pendientes = r.data, seleccionadas = emptySet(), fechaFiltro = filtroInicial,
+                        tarjas = tarjas, tarjaAbierta = sigueAbierta
+                    )
                 }
                 is AppResult.Error -> _uiState.update { it.copy(error = r.message) }
             }
@@ -96,11 +121,32 @@ class SupervisorViewModel @Inject constructor(
         it.copy(seleccionadas = nuevas)
     }
 
+    // ── Navegacion entre el cartel y el detalle ────────────────────────────────
+
+    fun abrirTarja(clave: String) = _uiState.update {
+        // Entrar limpio: el buscador y el filtro del cartel anterior no se arrastran.
+        it.copy(tarjaAbierta = clave, seleccionadas = emptySet(), busquedaDetalle = "", filtroDetalle = null)
+    }
+
+    fun volverALista() = _uiState.update {
+        it.copy(tarjaAbierta = null, seleccionadas = emptySet(), busquedaDetalle = "", filtroDetalle = null)
+    }
+
+    fun onBusquedaDetalleChanged(v: String) = _uiState.update { it.copy(busquedaDetalle = v) }
+    fun onFiltroDetalleChanged(f: TipoCargaFiltro?) = _uiState.update { it.copy(filtroDetalle = f) }
+
+    /** Aprueba el cartel entero sin necesidad de entrar al detalle. */
+    fun aprobarTarjaCompleta(clave: String) {
+        val tarja = _uiState.value.tarjas.firstOrNull { it.clave == clave } ?: return
+        aprobar(tarja.items.map { it.id })
+    }
+
     fun seleccionarTodas(ids: List<String>) = _uiState.update { it.copy(seleccionadas = ids.toSet()) }
     fun deseleccionarTodas() = _uiState.update { it.copy(seleccionadas = emptySet()) }
 
-    fun aprobarSeleccionadas() {
-        val ids = _uiState.value.seleccionadas.toList()
+    fun aprobarSeleccionadas() = aprobar(_uiState.value.seleccionadas.toList())
+
+    private fun aprobar(ids: List<String>) {
         if (ids.isEmpty()) return
         viewModelScope.launch {
             _uiState.update { it.copy(procesando = true) }

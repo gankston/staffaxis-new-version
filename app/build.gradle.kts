@@ -15,8 +15,8 @@ android {
         applicationId = "com.registro.empleados"
         minSdk = 26
         targetSdk = 35
-        versionCode = 62
-        versionName = "3.5.0"
+        versionCode = 65
+        versionName = "4.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

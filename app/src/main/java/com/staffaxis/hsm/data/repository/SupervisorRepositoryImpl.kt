@@ -44,7 +44,7 @@ class SupervisorRepositoryImpl @Inject constructor(
                 "authorized" -> {
                     val token = body.token ?: return AppResult.Error("Respuesta inválida del servidor")
                     val nombre = listSupervisors().let { res -> (res as? AppResult.Success)?.data?.find { it.id == supervisorId }?.fullName } ?: ""
-                    prefs.saveSupervisorToken(token, supervisorId, nombre)
+                    prefs.saveSupervisorToken(token, supervisorId, nombre, deviceId)
                     AppResult.Success(SupervisorAccessResult.Authorized(token))
                 }
                 "pending" -> {
@@ -56,7 +56,7 @@ class SupervisorRepositoryImpl @Inject constructor(
         } catch (e: Exception) { AppResult.Error("Sin conexión: ${e.message}", e) }
     }
 
-    override suspend fun checkAccessStatus(requestId: String, supervisorId: String, fullName: String): AppResult<SupervisorAccessStatus> {
+    override suspend fun checkAccessStatus(requestId: String, supervisorId: String, fullName: String, deviceId: String): AppResult<SupervisorAccessStatus> {
         return try {
             val r = api.checkAccessStatus(requestId)
             if (!r.isSuccessful) return AppResult.Error("Error ${r.code()}")
@@ -68,7 +68,7 @@ class SupervisorRepositoryImpl @Inject constructor(
                     val token = body.token ?: return AppResult.Error("Respuesta inválida del servidor")
                     // Antes no se guardaba el token en esta rama y quedaba vacio hasta cerrar
                     // y volver a abrir la app (recien ahi requestAccess lo guardaba, al reintentar).
-                    prefs.saveSupervisorToken(token, supervisorId, fullName)
+                    prefs.saveSupervisorToken(token, supervisorId, fullName, deviceId)
                     AppResult.Success(SupervisorAccessStatus.Authorized(token))
                 }
                 else -> AppResult.Error("Respuesta inesperada del servidor")
@@ -93,7 +93,9 @@ class SupervisorRepositoryImpl @Inject constructor(
                 SupervisorPendingItem(
                     // La fecha llega como "2026-08-25T03:00:00.000Z" — se corta aca para
                     // que el filtro por dia y lo que se muestra usen siempre "2026-08-25".
-                    it.id, it.employeeId, it.empleado, it.sector, it.date.take(10), it.minutesWorked, it.notes,
+                    it.id, it.employeeId, it.empleado, it.sectorId, it.sector,
+                    it.tiposCarga.orEmpty(),
+                    it.date.take(10), it.minutesWorked, it.notes,
                     TiposCargaNuevos(
                         kmViajes = it.kmViajes, hasFumigadas = it.hasFumigadas, siembraTrilla = it.siembraTrilla,
                         bolseros = it.bolseros, etiquetado = it.etiquetado,

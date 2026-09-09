@@ -458,7 +458,7 @@ private fun EstadoTarjaCard(uiState: TarjaUiState, fechaCorta: String) {
                             if (uiState.cosechaDelDia > 0f) TarjaEnviadaStat(formatCantidad(uiState.cosechaDelDia), "Cosecha")
                             if (uiState.cajasDelDia > 0) TarjaEnviadaStat("${uiState.cajasDelDia}", "Cajas")
                             if (uiState.cajonesDelDia > 0) TarjaEnviadaStat("${uiState.cajonesDelDia}", "Cajones")
-                            if (uiState.montoDelDia > 0f) TarjaEnviadaStat(formatMonto(uiState.montoDelDia), "Importe")
+                            if (uiState.montoDelDia > 0f) TarjaEnviadaStat(formatMonto(uiState.montoDelDia), "Abonada")
                         }
                     }
                     status.horaEnvio?.let { millis ->
@@ -632,19 +632,40 @@ private fun VisualizadorHorasDialog(
                         val totalImporte = uiState.visualizadorData.sumOf { it.importeTotal.toDouble() }.toFloat()
                         val totalCajas = uiState.visualizadorData.sumOf { it.cajasTotal }
                         val totalCajones = uiState.visualizadorData.sumOf { it.cajonesTotal }
+                        // "Importe" ya no existe como concepto propio — lo que llega aca es
+                        // la parte numerica de "abonada y otros" (no todo lo que se carga ahi
+                        // es un numero, ver TarjaValores), asi que se muestra con ese nombre.
+                        val tiposNuevosTotal = com.staffaxis.hsm.domain.model.TiposCargaNuevos.sumar(
+                            uiState.visualizadorData.map { it.tiposNuevosTotal }
+                        )
 
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3E)),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceAround) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp)
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                            ) {
                                 ResumenStat("${uiState.visualizadorData.size}", "Empleados")
                                 ResumenStat(formatHoras(totalHoras), "Total horas")
                                 if (totalCosecha > 0f) ResumenStat(formatCantidad(totalCosecha), "Cosecha")
                                 if (totalCajas > 0) ResumenStat("$totalCajas", "Cajas")
                                 if (totalCajones > 0) ResumenStat("$totalCajones", "Cajones")
-                                if (totalImporte > 0f) ResumenStat(formatMonto(totalImporte), "Importe")
+                                if (totalImporte > 0f) ResumenStat(formatMonto(totalImporte), "Abonada")
+                                tiposNuevosTotal.kmViajes?.let { if (it > 0f) ResumenStat(formatCantidad(it), "Km/Viajes") }
+                                tiposNuevosTotal.hasFumigadas?.let { if (it > 0f) ResumenStat(formatCantidad(it), "Has Fumigadas") }
+                                tiposNuevosTotal.siembraTrilla?.let { if (it > 0f) ResumenStat(formatCantidad(it), "Siembra/Trilla") }
+                                tiposNuevosTotal.bolseros?.let { if (it > 0f) ResumenStat(formatCantidad(it), "Bolseros") }
+                                tiposNuevosTotal.etiquetado?.let { if (it > 0f) ResumenStat(formatCantidad(it), "Etiquetado") }
+                                if (tiposNuevosTotal.cargaCamionKg50 == true || tiposNuevosTotal.cargaCamionKg25 == true || !tiposNuevosTotal.cargaCamionOtro.isNullOrBlank()) {
+                                    ResumenStat("✓", "Carga Camión")
+                                }
+                                if (tiposNuevosTotal.movimientoEstibaKg50 == true || tiposNuevosTotal.movimientoEstibaKg25 == true || !tiposNuevosTotal.movimientoEstibaOtro.isNullOrBlank()) {
+                                    ResumenStat("✓", "Mov. Estiba")
+                                }
                             }
                         }
 

@@ -642,11 +642,12 @@ private fun HorasDialog(
                 val datePickerState = rememberDatePickerState(
                     initialSelectedDateMillis = uiState.fechaSeleccionada
                         .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+                    // Solo se puede cargar hoy o ayer — ver esFechaCargable().
                     selectableDates = object : SelectableDates {
                         override fun isSelectableDate(utcTimeMillis: Long): Boolean {
                             val selectedDay = java.time.Instant.ofEpochMilli(utcTimeMillis)
                                 .atZone(java.time.ZoneOffset.UTC).toLocalDate()
-                            return !selectedDay.isAfter(today)
+                            return com.staffaxis.hsm.domain.model.esFechaCargable(selectedDay, today)
                         }
                     }
                 )
@@ -672,10 +673,11 @@ private fun HorasDialog(
                     }
                 }
 
+                // "Anteayer" ya no es alcanzable desde el selector (solo hoy/ayer), pero se
+                // deja el caso general por si algo externo deja fechaSeleccionada mas vieja.
                 val labelFecha = when (uiState.fechaSeleccionada) {
                     today -> "Hoy"
                     today.minusDays(1) -> "Ayer"
-                    today.minusDays(2) -> "Anteayer"
                     else -> uiState.fechaSeleccionada.format(
                         DateTimeFormatter.ofPattern("d 'de' MMMM", Locale("es"))
                     )
@@ -744,7 +746,7 @@ private fun HorasDialog(
                     }
                 }
 
-                // — Abonada y Otros — solo Solazuty/San Agustin/Colonia/Aguado/Pescado.
+                // — Abonada — solo Solazuty/San Agustin/Colonia/Aguado/Pescado.
                 if (uiState.tiposCarga.contains("abonada")) {
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { onAbonadaChanged(!uiState.cargaPorAbonada) },
@@ -752,7 +754,7 @@ private fun HorasDialog(
                     ) {
                         Checkbox(checked = uiState.cargaPorAbonada, onCheckedChange = onAbonadaChanged)
                         Spacer(Modifier.width(8.dp))
-                        Text("Abonada y Otros", fontWeight = FontWeight.SemiBold)
+                        Text("Abonada", fontWeight = FontWeight.SemiBold)
                     }
                     if (uiState.cargaPorAbonada) {
                         OutlinedTextField(
@@ -760,6 +762,7 @@ private fun HorasDialog(
                             onValueChange = onAbonadaValorChanged,
                             label = { Text("Valor (obligatorio)") },
                             modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             isError = uiState.abonadaValor.isBlank()
                         )
@@ -1124,7 +1127,7 @@ private fun EditarEmpleadoDialog(
                         }
                     }
 
-                    // — Abonada y Otros —
+                    // — Abonada —
                     if (uiState.tiposCarga.contains("abonada")) {
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable { onHorasEdicionPorAbonadaChanged(!uiState.horasEdicionPorAbonada) },
@@ -1132,7 +1135,7 @@ private fun EditarEmpleadoDialog(
                         ) {
                             Checkbox(checked = uiState.horasEdicionPorAbonada, onCheckedChange = onHorasEdicionPorAbonadaChanged)
                             Spacer(Modifier.width(8.dp))
-                            Text("Abonada y Otros", fontWeight = FontWeight.SemiBold)
+                            Text("Abonada", fontWeight = FontWeight.SemiBold)
                         }
                         if (uiState.horasEdicionPorAbonada) {
                             OutlinedTextField(
@@ -1140,6 +1143,7 @@ private fun EditarEmpleadoDialog(
                                 onValueChange = onHorasEdicionAbonadaValorChanged,
                                 label = { Text("Valor (obligatorio)") },
                                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true,
                                 isError = uiState.horasEdicionAbonadaValor.isBlank()
                             )

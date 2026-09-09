@@ -122,7 +122,12 @@ class MainActivity : ComponentActivity() {
                     versionName = json.getString("versionName"),
                     apkUrl = json.getString("apkUrl"),
                     mandatory = json.optBoolean("mandatory", false),
-                    notes = json.optString("notes", "")
+                    notes = json.optString("notes", ""),
+                    // Tamano y hash del APK real, para poder verificar que la descarga
+                    // llego entera antes de instalar. Si version.json no los trae (version
+                    // vieja publicada sin estos campos), quedan null y se salta el chequeo.
+                    expectedSize = if (json.has("size")) json.optLong("size") else null,
+                    expectedSha256 = json.optString("sha256").takeIf { it.isNotBlank() }
                 )
             } else null
         } catch (e: Exception) {

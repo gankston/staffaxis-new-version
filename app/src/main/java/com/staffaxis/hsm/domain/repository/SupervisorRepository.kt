@@ -20,7 +20,7 @@ interface SupervisorRepository {
         phoneModel: String?, latitude: Double?, longitude: Double?
     ): AppResult<SupervisorAccessResult>
 
-    suspend fun checkAccessStatus(requestId: String, supervisorId: String, fullName: String): AppResult<SupervisorAccessStatus>
+    suspend fun checkAccessStatus(requestId: String, supervisorId: String, fullName: String, deviceId: String): AppResult<SupervisorAccessStatus>
 
     suspend fun me(): AppResult<SupervisorMe>
     suspend fun pending(): AppResult<List<SupervisorPendingItem>>

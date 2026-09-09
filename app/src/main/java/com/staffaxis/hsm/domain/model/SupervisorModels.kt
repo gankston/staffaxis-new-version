@@ -10,7 +10,11 @@ data class SupervisorPendingItem(
     val id: String,
     val employeeId: String,
     val empleado: String,
+    val sectorId: String? = null,
     val sector: String,
+    // Tipos de carga habilitados en el sector de esta tarja: con esto se arma el
+    // filtro del detalle, para no ofrecer tipos que ese sector no carga.
+    val tiposCarga: List<String> = emptyList(),
     val date: String,
     val minutesWorked: String?,
     val notes: String?,

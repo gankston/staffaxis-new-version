@@ -256,7 +256,20 @@ class TarjaViewModel @Inject constructor(
             val resumen = periodSubmissions
                 .groupBy { it.employeeId }
                 .mapNotNull { (empId, subs) ->
-                    val emp = empleadoMap[empId] ?: return@mapNotNull null
+                    // El empleado ya no esta en la lista actual del sector (se traslado
+                    // despues de tarjar). Antes esas horas se descartaban en silencio;
+                    // ahora se arma una fila con el nombre que trajo el propio registro,
+                    // igual criterio que ya usa el Excel de StaffAdmin para este caso.
+                    val emp = empleadoMap[empId] ?: run {
+                        val primero = subs.first()
+                        val nombre = "${primero.firstNameServidor ?: ""} ${primero.lastNameServidor ?: ""}".trim()
+                        if (nombre.isBlank()) return@mapNotNull null
+                        Employee(
+                            id = empId, nombre = nombre, apellido = primero.lastNameServidor ?: "",
+                            dni = null, sectorId = state.sectorId, sectorName = state.sectorName,
+                            observacion = "Se trasladó a otro sector"
+                        )
+                    }
                     val horasPorDia = subs.associate { it.date to it.minutesWorked }
                     val v = TarjaValores.sumar(subs.map { it.minutesWorked })
                     val tiposNuevos = TiposCargaNuevos.sumar(subs.map { it.tiposNuevos })

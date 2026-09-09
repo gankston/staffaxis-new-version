@@ -80,7 +80,7 @@ class SupervisorEntryViewModel @Inject constructor(
                     is SupervisorAccessResult.Authorized -> _uiState.update { it.copy(isLoading = false, navegarAlPanel = true) }
                     is SupervisorAccessResult.Pending -> {
                         _uiState.update { it.copy(isLoading = false, esperandoAutorizacion = true) }
-                        esperarAutorizacion(r.requestId, supervisor.id, supervisor.fullName)
+                        esperarAutorizacion(r.requestId, supervisor.id, supervisor.fullName, deviceId())
                     }
                 }
                 is AppResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
@@ -88,11 +88,11 @@ class SupervisorEntryViewModel @Inject constructor(
         }
     }
 
-    private fun esperarAutorizacion(requestId: String, supervisorId: String, fullName: String) {
+    private fun esperarAutorizacion(requestId: String, supervisorId: String, fullName: String, deviceId: String) {
         viewModelScope.launch {
             while (isActive) {
                 delay(3_000)
-                when (val result = repo.checkAccessStatus(requestId, supervisorId, fullName)) {
+                when (val result = repo.checkAccessStatus(requestId, supervisorId, fullName, deviceId)) {
                     is AppResult.Success -> when (result.data) {
                         is SupervisorAccessStatus.Pending -> { /* seguir esperando */ }
                         is SupervisorAccessStatus.Authorized -> {

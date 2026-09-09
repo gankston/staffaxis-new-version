@@ -24,8 +24,13 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.staffaxis.hsm.domain.model.SupervisorPendingItem
 import com.staffaxis.hsm.domain.model.SupervisorResumenRow
+import com.staffaxis.hsm.domain.model.TarjaDelDia
 import com.staffaxis.hsm.domain.model.TarjaValores
+import com.staffaxis.hsm.domain.model.TipoCargaFiltro
 import com.staffaxis.hsm.domain.model.TiposCargaNuevos
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Search
 
 // Una fila del resumen del periodo: empleado + sector con todos sus totales sumados.
 private data class ResumenFila(
@@ -49,16 +54,28 @@ fun SupervisorScreen(
         uiState.pendientes.map { it.date }.distinct().sortedDescending()
     }
 
-    // Pendientes filtrados por sector y fecha, y agrupados — para que se vea claro de
-    // que sector es cada tarja en vez de una lista larga toda mezclada.
-    val pendientesFiltrados = remember(uiState.pendientes, uiState.sectorFiltro, uiState.fechaFiltro) {
-        uiState.pendientes.filter {
-            (uiState.sectorFiltro == null || it.sector == uiState.sectorFiltro) &&
-            (uiState.fechaFiltro == null || it.date == uiState.fechaFiltro)
+    // Un cartel por sector y dia. Los filtros de arriba recortan que carteles se ven.
+    val tarjasFiltradas = remember(uiState.tarjas, uiState.sectorFiltro, uiState.fechaFiltro) {
+        uiState.tarjas.filter {
+            (uiState.sectorFiltro == null || it.sectorName == uiState.sectorFiltro) &&
+            (uiState.fechaFiltro == null || it.fecha == uiState.fechaFiltro)
         }
     }
-    val pendientesPorSector = remember(pendientesFiltrados) {
-        pendientesFiltrados.groupBy { it.sector }.toSortedMap()
+
+    // El cartel abierto, si estamos adentro del detalle.
+    val tarjaAbierta = remember(uiState.tarjas, uiState.tarjaAbierta) {
+        uiState.tarjas.firstOrNull { it.clave == uiState.tarjaAbierta }
+    }
+
+    // Detalle: empleado por empleado, recortado por el buscador y por el filtro de
+    // tipo de carga. El filtro solo ofrece los tipos que ese sector tiene habilitados.
+    val detalleFiltrado = remember(tarjaAbierta, uiState.busquedaDetalle, uiState.filtroDetalle) {
+        val q = uiState.busquedaDetalle.trim()
+        val filtro = uiState.filtroDetalle
+        (tarjaAbierta?.items ?: emptyList()).filter { item ->
+            (q.isBlank() || item.empleado.contains(q, ignoreCase = true)) &&
+            (filtro == null || filtro.tieneDato(item))
+        }
     }
 
     // Resumen agrupado por empleado+sector — mismo criterio de parseo que Tarja/Excel.
@@ -73,7 +90,7 @@ fun SupervisorScreen(
                 val tipos = TiposCargaNuevos.sumar(filas.map { f -> f.tiposNuevos })
                 ResumenFila(nombre, key.second, valores, tipos)
             }
-            .filter { cumpleTipoFiltro(it.valores, uiState.tipoFiltro) }
+            .filter { cumpleTipoFiltro(it.valores, it.tipos, uiState.tipoFiltro) }
             .sortedWith(compareBy({ it.sector }, { it.nombre }))
     }
 
@@ -117,7 +134,7 @@ fun SupervisorScreen(
         LazyColumn(modifier = Modifier.fillMaxSize().weight(1f), contentPadding = PaddingValues(16.dp)) {
 
             // Filtro por sector — aplica tanto a pendientes como al resumen de abajo.
-            if (uiState.sectores.size > 1) {
+            if (uiState.sectores.size > 1 && tarjaAbierta == null) {
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 12.dp),
@@ -133,7 +150,7 @@ fun SupervisorScreen(
 
             // Dropdown de fechas — arranca mostrando el dia de hoy y desde ahi se
             // puede pasar a los dias anteriores que tengan tarjas sin aprobar.
-            if (fechasDisponibles.isNotEmpty()) {
+            if (fechasDisponibles.isNotEmpty() && tarjaAbierta == null) {
                 item {
                     FechaDropdown(
                         fechas = fechasDisponibles,
@@ -144,48 +161,126 @@ fun SupervisorScreen(
                 }
             }
 
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
-                ) {
+            if (tarjaAbierta == null) {
+                // ── Lista: un cartel por sector y dia, con el total de lo tarjado ──
+                item {
                     Text(
-                        "${pendientesFiltrados.size} pendientes por aprobar",
-                        color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold
+                        if (tarjasFiltradas.isEmpty()) "No hay tarjas pendientes en tus sectores"
+                        else "${tarjasFiltradas.size} tarja(s) para revisar",
+                        color = if (tarjasFiltradas.isEmpty()) Color(0xFF888888) else Color.White,
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 12.dp)
                     )
-                    if (pendientesFiltrados.isNotEmpty()) {
-                        TextButton(onClick = {
-                            if (uiState.seleccionadas.size == pendientesFiltrados.size) viewModel.deseleccionarTodas()
-                            else viewModel.seleccionarTodas(pendientesFiltrados.map { it.id })
-                        }) {
+                }
+                items(tarjasFiltradas, key = { it.clave }) { tarja ->
+                    TarjaDelDiaCard(
+                        tarja = tarja,
+                        procesando = uiState.procesando,
+                        onAbrir = { viewModel.abrirTarja(tarja.clave) },
+                        onAprobarTodo = { viewModel.aprobarTarjaCompleta(tarja.clave) }
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
+            } else {
+                // ── Detalle: recien aca se ve empleado por empleado ────────────────
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = viewModel::volverALista) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = Color(0xFF26C6DA))
+                        }
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                if (uiState.seleccionadas.size == pendientesFiltrados.size) "Deseleccionar todas" else "Seleccionar todas",
-                                color = Color(0xFF26C6DA), fontSize = 12.sp
+                                tarjaAbierta.sectorName, color = Color.White,
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "${fechaLegible(tarjaAbierta.fecha)}  ·  ${tarjaAbierta.cantidadEmpleados} empleados",
+                                color = Color(0xFFB0B0B0), fontSize = 12.sp
                             )
                         }
                     }
                 }
-            }
 
-            if (pendientesFiltrados.isEmpty()) {
+                // Totales del dia, para tenerlos a mano mientras se revisa uno por uno.
                 item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No hay tarjas pendientes en tus sectores", color = Color(0xFF888888))
+                    if (tarjaAbierta.totales.lineas.isNotEmpty()) {
+                        Text(
+                            tarjaAbierta.totales.lineas.joinToString("  ·  "),
+                            color = Color(0xFF26C6DA), fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
                     }
                 }
-            }
 
-            pendientesPorSector.forEach { (sector, itemsDelSector) ->
-                item(key = "header_$sector") {
-                    Text(
-                        sector, color = Color(0xFF26C6DA), fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                // Buscador de empleado.
+                item {
+                    OutlinedTextField(
+                        value = uiState.busquedaDetalle,
+                        onValueChange = viewModel::onBusquedaDetalleChanged,
+                        placeholder = { Text("Buscar empleado", color = Color(0xFF777777)) },
+                        leadingIcon = { Icon(Icons.Default.Search, null, tint = Color(0xFF777777)) },
+                        trailingIcon = {
+                            if (uiState.busquedaDetalle.isNotBlank()) {
+                                IconButton(onClick = { viewModel.onBusquedaDetalleChanged("") }) {
+                                    Icon(Icons.Default.Close, "Limpiar", tint = Color(0xFF777777))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF26C6DA), unfocusedBorderColor = Color(0xFF444444),
+                            cursorColor = Color(0xFF26C6DA)
+                        )
                     )
                 }
-                items(itemsDelSector, key = { it.id }) { item ->
+
+                // Filtro por tipo de carga — SOLO los tipos habilitados en este sector.
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FiltroChip("Todo", uiState.filtroDetalle == null) { viewModel.onFiltroDetalleChanged(null) }
+                        tarjaAbierta.filtrosDisponibles.forEach { f ->
+                            FiltroChip(f.etiqueta, uiState.filtroDetalle == f) { viewModel.onFiltroDetalleChanged(f) }
+                        }
+                    }
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("${detalleFiltrado.size} empleados", color = Color(0xFFB0B0B0), fontSize = 12.sp)
+                        if (detalleFiltrado.isNotEmpty()) {
+                            TextButton(onClick = {
+                                if (uiState.seleccionadas.size == detalleFiltrado.size) viewModel.deseleccionarTodas()
+                                else viewModel.seleccionarTodas(detalleFiltrado.map { it.id })
+                            }) {
+                                Text(
+                                    if (uiState.seleccionadas.size == detalleFiltrado.size) "Deseleccionar todos" else "Seleccionar todos",
+                                    color = Color(0xFF26C6DA), fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (detalleFiltrado.isEmpty()) {
+                    item {
+                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                            Text("Ningun empleado con ese criterio", color = Color(0xFF888888))
+                        }
+                    }
+                }
+
+                items(detalleFiltrado, key = { it.id }) { item ->
                     PendienteCard(
                         item = item,
                         seleccionado = uiState.seleccionadas.contains(item.id),
@@ -193,35 +288,35 @@ fun SupervisorScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                 }
-            }
 
-            if (uiState.seleccionadas.isNotEmpty()) {
-                item {
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(
-                            onClick = viewModel::pedirMotivoRechazo,
-                            enabled = !uiState.procesando,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))
-                        ) {
-                            Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Rechazar (${uiState.seleccionadas.size})", color = Color.White)
-                        }
-                        Button(
-                            onClick = viewModel::aprobarSeleccionadas,
-                            enabled = !uiState.procesando,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                        ) {
-                            Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Aprobar (${uiState.seleccionadas.size})", color = Color.White)
+                // Aprobacion parcial: se aprueban o rechazan solo los seleccionados.
+                if (uiState.seleccionadas.isNotEmpty()) {
+                    item {
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Button(
+                                onClick = viewModel::pedirMotivoRechazo,
+                                enabled = !uiState.procesando,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))
+                            ) {
+                                Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Rechazar (${uiState.seleccionadas.size})", color = Color.White)
+                            }
+                            Button(
+                                onClick = viewModel::aprobarSeleccionadas,
+                                enabled = !uiState.procesando,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                            ) {
+                                Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Aprobar (${uiState.seleccionadas.size})", color = Color.White)
+                            }
                         }
                     }
                 }
             }
-
             item { HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 16.dp)) }
 
             // ── Resumen del período, mismo dato que "Mostrar horas cargadas" ──
@@ -338,6 +433,91 @@ fun SupervisorScreen(
     }
 }
 
+/**
+ * El cartel de la lista: nombre del sector, fecha, y el total de lo tarjado ese
+ * dia. Se aprueba entero desde aca; tocarlo abre el detalle empleado por empleado.
+ */
+@Composable
+private fun TarjaDelDiaCard(
+    tarja: TarjaDelDia,
+    procesando: Boolean,
+    onAbrir: () -> Unit,
+    onAprobarTodo: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(enabled = !procesando, onClick = onAbrir),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3E)),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                // Izquierda: de que sector es y de que dia.
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tarja.sectorName, color = Color.White,
+                        fontSize = 18.sp, fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(fechaLegible(tarja.fecha), color = Color(0xFFB0B0B0), fontSize = 13.sp)
+                    Text("${tarja.cantidadEmpleados} empleados", color = Color(0xFF888888), fontSize = 12.sp)
+                    if (tarja.tieneModificadas) {
+                        Spacer(Modifier.height(6.dp))
+                        Box(
+                            Modifier.background(Color(0xFFFFA000).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("MODIFICADA", color = Color(0xFFFFA000), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                // Derecha: el total de lo cargado, que es lo que el supervisor mira primero.
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "DATOS DE CARGA", color = Color(0xFF888888),
+                        fontSize = 9.sp, fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    if (tarja.totales.lineas.isEmpty()) {
+                        Text("Sin datos", color = Color(0xFF666666), fontSize = 13.sp)
+                    } else {
+                        tarja.totales.lineas.forEach { linea ->
+                            Text(
+                                linea, color = Color(0xFF26C6DA), fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold, textAlign = TextAlign.End
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = onAbrir,
+                    enabled = !procesando,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF26C6DA))
+                ) { Text("Ver detalle", fontSize = 13.sp) }
+                Button(
+                    onClick = onAprobarTodo,
+                    enabled = !procesando,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                ) {
+                    Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Aprobar todo", color = Color.White, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
+/** "2026-08-27" -> "27/08/2026". Si no matchea se devuelve tal cual. */
+private fun fechaLegible(iso: String): String {
+    val p = iso.take(10).split("-")
+    return if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else iso
+}
+
 @Composable
 private fun PendienteCard(item: SupervisorPendingItem, seleccionado: Boolean, onToggle: () -> Unit) {
     Card(
@@ -431,13 +611,20 @@ private fun FiltroChip(label: String, seleccionado: Boolean, onClick: () -> Unit
     )
 }
 
-private fun cumpleTipoFiltro(v: TarjaValores, tipo: String?): Boolean = when (tipo) {
+private fun cumpleTipoFiltro(v: TarjaValores, t: com.staffaxis.hsm.domain.model.TiposCargaNuevos, tipo: String?): Boolean = when (tipo) {
     null -> true
     "Horas" -> v.horas > 0f
     "Cosecha" -> v.cosecha > 0f
     "Cajas" -> v.cajas > 0
     "Cajones" -> v.cajones > 0
-    "Importe" -> v.importe > 0f
+    "Abonada" -> v.importe > 0f
+    "Km/Viajes" -> (t.kmViajes ?: 0f) > 0f
+    "Has Fumigadas" -> (t.hasFumigadas ?: 0f) > 0f
+    "Siembra/Trilla" -> (t.siembraTrilla ?: 0f) > 0f
+    "Bolseros" -> (t.bolseros ?: 0f) > 0f
+    "Etiquetado" -> (t.etiquetado ?: 0f) > 0f
+    "Carga Camión" -> t.cargaCamionKg50 == true || t.cargaCamionKg25 == true || !t.cargaCamionOtro.isNullOrBlank()
+    "Mov. Estiba" -> t.movimientoEstibaKg50 == true || t.movimientoEstibaKg25 == true || !t.movimientoEstibaOtro.isNullOrBlank()
     else -> true
 }
 

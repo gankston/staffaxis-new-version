@@ -49,7 +49,12 @@ data class OutboxSubmission(
     val status: String,
     // Solo vienen cargados cuando el registro sale de fetchReport() (server) —
     // el resto de las lecturas (outbox local) no los necesita todavia.
-    val tiposNuevos: TiposCargaNuevos = TiposCargaNuevos()
+    val tiposNuevos: TiposCargaNuevos = TiposCargaNuevos(),
+    // Nombre tal cual lo tenia el servidor al momento de tarjar. Se usa en el
+    // visualizador cuando el empleado ya no esta en la lista actual del sector
+    // (se traslado despues) — sin esto esas horas se descartaban en silencio.
+    val firstNameServidor: String? = null,
+    val lastNameServidor: String? = null
 )
 
 // Tipos de carga nuevos (km_viajes, bolseros, carga_camion, etc.) — cada uno con

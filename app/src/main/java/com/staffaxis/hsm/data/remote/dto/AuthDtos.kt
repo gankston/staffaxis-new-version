@@ -79,7 +79,13 @@ data class SupervisorPendingItemDto(
     @SerializedName("id") val id: String,
     @SerializedName("employeeId") val employeeId: String,
     @SerializedName("empleado") val empleado: String,
+    @SerializedName("sectorId") val sectorId: String? = null,
     @SerializedName("sector") val sector: String,
+    // Tipos de carga habilitados en ESE sector — el filtro del detalle se arma con
+    // estos, no con una lista fija que ofrezca cosas que el sector no carga.
+    // Nullable a proposito: Gson NO aplica los defaults de Kotlin, asi que si el
+    // server no manda el campo (version vieja) esto llega null igual.
+    @SerializedName("tiposCarga") val tiposCarga: List<String>? = null,
     @SerializedName("date") val date: String,
     @SerializedName("minutesWorked") val minutesWorked: String?,
     @SerializedName("notes") val notes: String?,

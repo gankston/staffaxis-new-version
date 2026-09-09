@@ -190,7 +190,10 @@ class SubmissionRepositoryImpl @Inject constructor(
                 cargaCamionKg50 = row.cargaCamionKg50, cargaCamionKg25 = row.cargaCamionKg25, cargaCamionOtro = row.cargaCamionOtro,
                 movimientoEstibaKg50 = row.movimientoEstibaKg50, movimientoEstibaKg25 = row.movimientoEstibaKg25, movimientoEstibaOtro = row.movimientoEstibaOtro
             )
-            OutboxSubmission(row.submissionId, row.employeeId, sectorId, dateStr, mw, row.notes, row.status ?: "sent", tiposNuevos)
+            OutboxSubmission(
+                row.submissionId, row.employeeId, sectorId, dateStr, mw, row.notes, row.status ?: "sent", tiposNuevos,
+                firstNameServidor = row.firstName, lastNameServidor = row.lastName
+            )
         }
     }
 }

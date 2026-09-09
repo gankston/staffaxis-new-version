@@ -58,11 +58,17 @@ class AppPreferences @Inject constructor(@ApplicationContext private val context
     val supervisorId: Flow<String?> = context.dataStore.data.map { it[KEY_SUPERVISOR_ID] }
     val supervisorName: Flow<String?> = context.dataStore.data.map { it[KEY_SUPERVISOR_NAME] }
 
-    suspend fun saveSupervisorToken(token: String, supervisorId: String, fullName: String) {
+    // deviceId es el ANDROID_ID de hardware del telefono, el mismo que usa Bienvenida.
+    // Se guarda igual en la sesion de supervisor porque esMiTelefono (el gate del boton
+    // para cambiar de modo) lee de ahi: si este telefono entro SOLO como supervisor y
+    // nunca paso por el registro de tarjador, KEY_DEVICE_ID quedaba vacio para siempre
+    // y el boton de "cambiar a tarjador" nunca llegaba a mostrarse.
+    suspend fun saveSupervisorToken(token: String, supervisorId: String, fullName: String, deviceId: String) {
         context.dataStore.edit {
             it[KEY_SUPERVISOR_TOKEN] = token
             it[KEY_SUPERVISOR_ID] = supervisorId
             it[KEY_SUPERVISOR_NAME] = fullName
+            it[KEY_DEVICE_ID] = deviceId
         }
     }
 

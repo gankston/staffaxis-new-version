@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.staffaxis.hsm.data.update.ApkVerifier
 import kotlinx.coroutines.delay
 import java.io.File
 
@@ -30,7 +31,13 @@ data class UpdateInfo(
     val versionName: String,
     val apkUrl: String,
     val mandatory: Boolean = false,
-    val notes: String = ""
+    val notes: String = "",
+    // Para verificar que la descarga llego entera antes de instalar. DownloadManager
+    // marca "exitosa" con solo que la conexion HTTP haya terminado sin error — con
+    // señal debil en el campo eso puede pasar con el archivo truncado, y ahi Android
+    // tira "hay un problema con el archivo de la app" al intentar instalar.
+    val expectedSize: Long? = null,
+    val expectedSha256: String? = null
 )
 
 @Composable
@@ -42,25 +49,55 @@ fun UpdateDownloadScreen(
     val context = LocalContext.current
     var downloadStatus by remember { mutableStateOf("Iniciando descarga...") }
     var showInstallButton by remember { mutableStateOf(false) }
-    // Nombre único por descarga — evita que un archivo viejo (que a veces no se puede
-    // borrar en Android 10+) se mezcle con la descarga nueva y quede un APK corrupto.
-    val apkFileName = remember { "StaffAxis_update_${System.currentTimeMillis()}.apk" }
+    var showRetryButton by remember { mutableStateOf(false) }
+    var intentoManual by remember { mutableIntStateOf(0) }
+    // Nombre real del archivo que quedo bien descargado y verificado — se completa
+    // recien cuando la verificacion pasa, es el que usa el boton de instalar.
+    var apkFileNameFinal by remember { mutableStateOf("") }
 
-    // Inicia la descarga automáticamente al entrar a la pantalla
-    LaunchedEffect(Unit) {
-        try {
-            val downloadId = startDownload(context, updateInfo.apkUrl, apkFileName)
-            if (downloadId != -1L) {
-                downloadStatus = "Descargando..."
-                checkDownloadStatus(context, downloadId) { status, done ->
-                    downloadStatus = status
-                    if (done) showInstallButton = true
+    // Descarga con reintento automatico: DownloadManager marca "exitosa" apenas la
+    // conexion HTTP termina sin error, sin garantizar que el archivo haya llegado
+    // entero. Con señal debil en el campo eso deja un APK truncado y Android tira
+    // "hay un problema con el archivo" al querer instalar. Por eso se verifica tamaño
+    // y hash contra lo que dice version.json antes de ofrecer instalar, y si no cierra
+    // se reintenta solo — hasta 3 veces — antes de pedirle al usuario que lo intente el.
+    LaunchedEffect(intentoManual) {
+        showRetryButton = false
+        val maxIntentosAuto = 3
+        var descargaOk = false
+        for (intento in 1..maxIntentosAuto) {
+            try {
+                downloadStatus = if (intento == 1) "Iniciando descarga..." else "Reintentando descarga ($intento/$maxIntentosAuto)..."
+                val nombreArchivo = "StaffAxis_update_${System.currentTimeMillis()}_$intento.apk"
+                val downloadId = startDownload(context, updateInfo.apkUrl, nombreArchivo)
+                if (downloadId == -1L) {
+                    downloadStatus = "Error al iniciar la descarga"
+                    continue
                 }
-            } else {
-                downloadStatus = "Error al iniciar la descarga"
+                downloadStatus = "Descargando..."
+                val transferOk = esperarDescarga(context, downloadId) { status -> downloadStatus = status }
+                if (!transferOk) continue
+
+                downloadStatus = "Verificando archivo..."
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val file = File(downloadsDir, nombreArchivo)
+                if (ApkVerifier.verificar(file, updateInfo.expectedSize, updateInfo.expectedSha256)) {
+                    apkFileNameFinal = nombreArchivo
+                    downloadStatus = "¡Descarga completada!"
+                    showInstallButton = true
+                    descargaOk = true
+                    break
+                } else {
+                    file.delete()
+                    downloadStatus = "Descarga incompleta, reintentando..."
+                }
+            } catch (e: Exception) {
+                downloadStatus = "Error: ${e.message}"
             }
-        } catch (e: Exception) {
-            downloadStatus = "Error: ${e.message}"
+        }
+        if (!descargaOk) {
+            downloadStatus = "No se pudo completar la descarga.\nRevisá la conexión e intentá de nuevo."
+            showRetryButton = true
         }
     }
 
@@ -151,10 +188,14 @@ fun UpdateDownloadScreen(
                         Text(
                             downloadStatus,
                             style = MaterialTheme.typography.titleLarge,
-                            color = if (showInstallButton) Color(0xFF4CAF50) else Color.White,
+                            color = when {
+                                showInstallButton -> Color(0xFF4CAF50)
+                                showRetryButton -> Color(0xFFFF5252)
+                                else -> Color.White
+                            },
                             fontWeight = FontWeight.Bold
                         )
-                        if (!showInstallButton) {
+                        if (!showInstallButton && !showRetryButton) {
                             Spacer(Modifier.height(20.dp))
                             CircularProgressIndicator(
                                 modifier = Modifier.size(52.dp),
@@ -167,10 +208,31 @@ fun UpdateDownloadScreen(
 
                 Spacer(Modifier.height(16.dp))
 
-                // Botón instalar — aparece automáticamente al terminar la descarga
+                // Se agotaron los reintentos automaticos — deja al usuario intentar de
+                // nuevo a mano en vez de dejarlo trabado (la obligatoria no tiene "volver").
+                if (showRetryButton) {
+                    Button(
+                        onClick = { intentoManual++ },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF26C6DA)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            "Reintentar descarga",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                // Botón instalar — aparece automáticamente al terminar la descarga y
+                // pasar la verificacion de integridad.
                 if (showInstallButton) {
                     Button(
-                        onClick = { installApk(context, apkFileName, onInstall) },
+                        onClick = { installApk(context, apkFileNameFinal, onInstall) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
@@ -206,11 +268,13 @@ private fun startDownload(context: Context, apkUrl: String, fileName: String): L
     }
 }
 
-private suspend fun checkDownloadStatus(
+/** Espera a que DownloadManager termine. Devuelve true solo si la transferencia HTTP
+ *  cerro sin error — esto NO garantiza que el archivo este entero, ver verificarApk. */
+private suspend fun esperarDescarga(
     context: Context,
     downloadId: Long,
-    onUpdate: (String, Boolean) -> Unit
-) {
+    onUpdate: (String) -> Unit
+): Boolean {
     val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
     val query = DownloadManager.Query().setFilterById(downloadId)
     while (true) {
@@ -220,29 +284,31 @@ private suspend fun checkDownloadStatus(
             if (cursor.moveToFirst()) {
                 val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                 when (status) {
-                    DownloadManager.STATUS_SUCCESSFUL -> {
-                        onUpdate("¡Descarga completada!", true)
-                        break
-                    }
+                    DownloadManager.STATUS_SUCCESSFUL -> return true
                     DownloadManager.STATUS_FAILED -> {
-                        onUpdate("Error en la descarga", false)
-                        break
+                        onUpdate("Error en la descarga")
+                        return false
                     }
                     DownloadManager.STATUS_RUNNING -> {
                         val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
                         val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
                         val pct = if (total > 0) (downloaded * 100 / total).toInt() else 0
-                        onUpdate("Descargando... $pct%", false)
+                        onUpdate("Descargando... $pct%")
                     }
-                    DownloadManager.STATUS_PENDING  -> onUpdate("Preparando descarga...", false)
-                    DownloadManager.STATUS_PAUSED   -> onUpdate("Descarga pausada...", false)
+                    DownloadManager.STATUS_PENDING  -> onUpdate("Preparando descarga...")
+                    DownloadManager.STATUS_PAUSED   -> onUpdate("Descarga pausada...")
                 }
+            } else {
+                // El registro desaparecio de DownloadManager (puede pasar si el usuario
+                // borro la descarga desde la notificacion) — no queda nada que esperar.
+                return false
             }
         } finally {
             cursor.close()
         }
     }
 }
+
 
 private fun installApk(context: Context, fileName: String, onInstall: () -> Unit) {
     try {
