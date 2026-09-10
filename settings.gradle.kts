@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "StaffAxis HSM"
 include(":app")
+include(":webshell")
