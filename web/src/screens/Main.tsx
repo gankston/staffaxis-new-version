@@ -1,15 +1,16 @@
 /** MainScreen de Navigation.kt: las 3 solapas con la barra inferior. */
 import { useState } from 'react';
+import { IconoAusencias, IconoCambiarSector, IconoGrupo, IconoLista } from '../components/iconos';
 import { Empleados } from './empleados/Empleados';
 import { Ausencias } from './ausencias/Ausencias';
 import { Tarja } from './tarja/Tarja';
 
 type Solapa = 'empleados' | 'ausencias' | 'tarja';
 
-const SOLAPAS: Array<{ id: Solapa; label: string; icono: string }> = [
-  { id: 'empleados', label: 'Empleados', icono: '👥' },
-  { id: 'ausencias', label: 'Ausencias', icono: '🚫' },
-  { id: 'tarja', label: 'Tarja', icono: '☰' },
+const SOLAPAS: Array<{ id: Solapa; label: string; Icono: (p: { size?: number; color?: string }) => JSX.Element }> = [
+  { id: 'empleados', label: 'Empleados', Icono: IconoGrupo },
+  { id: 'ausencias', label: 'Ausencias', Icono: IconoAusencias },
+  { id: 'tarja', label: 'Tarja', Icono: IconoLista },
 ];
 
 export function Main({
@@ -32,9 +33,9 @@ export function Main({
           <button
             onClick={onCambiarASupervisor}
             title="Cambiar a modo supervisor"
-            style={{ background: 'none', border: 'none', color: 'var(--purple80)', fontSize: 22, padding: 8 }}
+            style={{ background: 'none', border: 'none', color: 'var(--purple80)', padding: 8, display: 'flex' }}
           >
-            ⇅
+            <IconoCambiarSector size={22} />
           </button>
         </div>
       )}
@@ -77,14 +78,15 @@ export function Main({
             >
               <span
                 style={{
-                  fontSize: 18,
-                  lineHeight: 1,
-                  padding: '2px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '2px 20px',
                   borderRadius: 12,
                   background: activa ? 'rgba(156,39,176,0.2)' : 'transparent',
                 }}
               >
-                {s.icono}
+                <s.Icono size={24} />
               </span>
               {s.label}
             </button>

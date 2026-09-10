@@ -10,7 +10,25 @@ import { getSectoresPermitidos, guardarSectorActivo, solicitarAcceso, type Secto
 import { sesion } from '../../lib/session';
 import { sumar } from '../../domain/tarjaValores';
 import { hoyISO } from '../../domain/fechaCarga';
-import { calcularPeriodo, cierreLocal, fmtCantidad, fmtHoras, fmtMonto } from './logica';
+import { calcularPeriodo, cierreLocal, fmtAbonada, fmtCantidad, fmtHoras, HORAS_POR_JORNAL } from './logica';
+import {
+  IconoAnterior,
+  IconoCambiarSector,
+  IconoCheck,
+  IconoCheckCirculo,
+  IconoGrafico,
+  IconoSiguiente,
+} from '../../components/iconos';
+
+const MESES_LARGOS = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+const fechaLarga = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${d} de ${MESES_LARGOS[m - 1]} ${y}`;
+};
+const fmtHorasMin = (h: number) => (h % 1 === 0 ? `${Math.trunc(h)}h` : `${h}h`);
 
 export function Tarja({
   onCambiarSector,
@@ -81,6 +99,7 @@ export function Tarja({
       horaEnvio: Date.now(),
       empleadosTarjados: registrosHoy.length,
       horasTarjadas: valores.horas,
+      abonada: valores.importe,
     };
     cierreLocal.guardar(sector.id, hoy, nuevo);
     setCierre(nuevo);
@@ -107,19 +126,21 @@ export function Tarja({
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'white' }}>Tarja</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'white', lineHeight: 1.15 }}>
+              Hola {sesion.getFullName() ?? sector.encargado ?? sector.name}
+            </div>
             <div style={{ fontSize: 16, color: 'var(--teal)' }}>Sector: {sector.name}</div>
           </div>
           <div style={{ textAlign: 'right', position: 'relative' }}>
-            <div className="label-small" style={{ color: 'var(--texto-tenue)' }}>{hoy.split('-').reverse().join('/')}</div>
+            <div className="label-small" style={{ color: 'var(--texto-tenue)' }}>{fechaLarga(hoy)}</div>
             {sectoresPermitidos.length > 1 && (
               <>
                 <button
                   onClick={() => setVerSectores((v) => !v)}
                   className="label-small"
-                  style={{ background: 'none', border: 'none', color: 'var(--teal)', padding: '2px 8px' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--teal)', padding: '2px 8px' }}
                 >
-                  ⇄ Cambiar sector
+                  <IconoCambiarSector size={16} /> Cambiar sector
                 </button>
                 {verSectores && (
                   <div
@@ -144,7 +165,6 @@ export function Tarja({
                           setSectorParaCambiar(s);
                         }}
                         style={{
-                          display: 'block',
                           width: '100%',
                           textAlign: 'left',
                           padding: '14px 16px',
@@ -152,10 +172,12 @@ export function Tarja({
                           border: 'none',
                           color: s.id === sector.id ? 'var(--teal)' : 'white',
                           fontSize: 15,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
                         }}
                       >
-                        {s.id === sector.id ? '✓ ' : ''}
-                        {s.name}
+                        {s.id === sector.id && <IconoCheck size={14} />} {s.name}
                       </button>
                     ))}
                   </div>
@@ -190,34 +212,66 @@ export function Tarja({
                 <Stat valor={fmtCantidad(valores.cosecha)} label="Cosecha" />
                 <Stat valor={String(valores.cajas)} label="Cajas" />
                 <Stat valor={String(valores.cajones)} label="Cajones" />
-                <Stat valor={fmtMonto(valores.importe)} label="Monto" />
+                <Stat valor={fmtAbonada(valores.importe)} label="Abonada" />
               </div>
             </>
           )}
         </div>
 
-        {/* Estado de la tarja */}
-        <div style={{ background: 'var(--card-background)', borderRadius: 16, padding: 16 }}>
-          {cierre?.enviada ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ fontWeight: 700, color: '#4caf50' }}>✓ Tarja enviada</div>
-              <div style={{ fontSize: 13, color: 'var(--texto-tenue)' }}>
-                {cierre.empleadosTarjados} empleados · {fmtHoras(cierre.horasTarjadas)}
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--texto-tenue)' }}>
-                Enviada a las{' '}
-                {new Date(cierre.horaEnvio).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-              </div>
+        {/* Resumen del día — mismo formato que la app: verde, con jornales y abonada */}
+        {cierre?.enviada ? (
+          <div
+            style={{
+              borderRadius: 16,
+              padding: 16,
+              background: 'linear-gradient(160deg, #2e7d32, #1b5e20)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ color: '#a5d6a7', display: 'flex' }}>
+                <IconoCheckCirculo size={26} />
+              </span>
+              <span style={{ fontSize: 17, fontWeight: 700, color: 'white' }}>
+                Tarja del {hoy.split('-').reverse().join('/')} enviada
+              </span>
             </div>
-          ) : (
+
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.25)' }} />
+
+            <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+              <Stat valor={String(cierre.empleadosTarjados)} label="Empleados tarjados" />
+              <Stat valor={fmtHorasMin(cierre.horasTarjadas)} label="Horas tarjadas" />
+              <Stat valor={fmtCantidad(cierre.horasTarjadas / HORAS_POR_JORNAL)} label="Jornales de hoy" />
+            </div>
+
+            {cierre.abonada > 0 && (
+              <>
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.25)' }} />
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 26, fontWeight: 700, color: 'white' }}>{fmtAbonada(cierre.abonada)}</div>
+                  <div className="label-small" style={{ color: 'rgba(255,255,255,0.8)' }}>Abonada</div>
+                </div>
+              </>
+            )}
+
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>
+              Enviado a las{' '}
+              {new Date(cierre.horaEnvio).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: 'var(--card-background)', borderRadius: 16, padding: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ fontWeight: 700, color: 'var(--warning)' }}>Tarja sin cerrar</div>
               <div style={{ fontSize: 13, color: 'var(--texto-tenue)' }}>
                 {registrosHoy.length} de {empleados.length} empleados tarjados
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Tarjas rechazadas por el supervisor */}
         {rechazadas.length > 0 && (
@@ -240,19 +294,22 @@ export function Tarja({
           <div style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>Cierre de Tarja</div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setPeriodoOffset((o) => o - 1)} style={botonPeriodo}>‹</button>
+            <button onClick={() => setPeriodoOffset((o) => o - 1)} style={botonPeriodo}><IconoAnterior size={22} /></button>
             <div style={{ flex: 1, textAlign: 'center', fontSize: 13, color: 'var(--teal)' }}>{periodo.label}</div>
             <button
               onClick={() => setPeriodoOffset((o) => Math.min(0, o + 1))}
               disabled={periodoOffset >= 0}
               style={{ ...botonPeriodo, opacity: periodoOffset >= 0 ? 0.3 : 1 }}
             >
-              ›
+              <IconoSiguiente size={22} />
             </button>
           </div>
 
-          <button onClick={() => setVerVisualizador(true)} style={botonSecundario}>
-            Ver horas del período
+          <button
+            onClick={() => setVerVisualizador(true)}
+            style={{ ...botonSecundario, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          >
+            <IconoGrafico size={20} /> Mostrar horas cargadas
           </button>
 
           <button
@@ -279,7 +336,7 @@ export function Tarja({
       {sectorParaCambiar && (
         <Modal
           titulo="¿Cambiar de sector?"
-          icono={<span style={{ fontSize: 28, color: 'var(--teal)' }}>⇄</span>}
+          icono={<span style={{ color: 'var(--teal)', display: 'flex', justifyContent: 'center' }}><IconoCambiarSector size={28} /></span>}
           onCerrar={() => setSectorParaCambiar(null)}
           acciones={[
             { texto: 'Cancelar', onClick: () => setSectorParaCambiar(null), tipo: 'texto' },

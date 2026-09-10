@@ -129,7 +129,45 @@ export async function getUbicacion(): Promise<Ubicacion | null> {
   });
 }
 
-/** Foto del DNI. Devuelve un data URL jpeg, o null si el usuario cancelo. */
+/**
+ * Elegir una foto ya existente. Va SIEMPRE por <input type="file"> (sin
+ * `capture`), que en el shell lo atiende onShowFileChooser y abre el selector
+ * del sistema — galeria, archivos, Drive, lo que tenga el telefono.
+ */
+export async function elegirDeGaleria(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    const limpiar = () => input.remove();
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) {
+        limpiar();
+        return resolve(null);
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        limpiar();
+        resolve(String(reader.result));
+      };
+      reader.onerror = () => {
+        limpiar();
+        resolve(null);
+      };
+      reader.readAsDataURL(file);
+    };
+    input.oncancel = () => {
+      limpiar();
+      resolve(null);
+    };
+    input.click();
+  });
+}
+
+/** Foto del DNI con la camara. Devuelve un data URL jpeg, o null si cancelo. */
 export async function tomarFoto(): Promise<string | null> {
   if (window.StaffAxisNative) {
     const nativo = window.StaffAxisNative;

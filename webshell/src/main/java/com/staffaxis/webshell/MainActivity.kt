@@ -13,6 +13,7 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Base64
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -44,6 +45,24 @@ class MainActivity : AppCompatActivity() {
     private var pedidoFoto: String? = null
     private var pedidoUbicacion: String? = null
     private var archivoFoto: File? = null
+
+    // Selector de archivos del WebView: lo dispara cualquier <input type="file">
+    // de la web. Con esto la galeria (y Drive, y archivos) andan sin tener que
+    // agregar un metodo nuevo al puente cada vez.
+    private var callbackArchivos: ValueCallback<Array<Uri>>? = null
+
+    private val elegirArchivo = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val cb = callbackArchivos ?: return@registerForActivityResult
+        callbackArchivos = null
+        val data = r.data
+        val uris: Array<Uri>? = when {
+            r.resultCode != RESULT_OK -> null
+            data?.clipData != null -> Array(data.clipData!!.itemCount) { i -> data.clipData!!.getItemAt(i).uri }
+            data?.data != null -> arrayOf(data.data!!)
+            else -> null
+        }
+        cb.onReceiveValue(uris)
+    }
 
     private val tomarFoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val id = pedidoFoto ?: return@registerForActivityResult
@@ -80,7 +99,26 @@ class MainActivity : AppCompatActivity() {
             // WebView cachea por su cuenta, una version nueva puede no llegar nunca.
             settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
             addJavascriptInterface(Puente(), "StaffAxisNative")
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowFileChooser(
+                    view: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    params: FileChooserParams?
+                ): Boolean {
+                    // Si quedo uno abierto sin resolver hay que cerrarlo, si no el
+                    // <input> de la web se queda esperando para siempre.
+                    callbackArchivos?.onReceiveValue(null)
+                    callbackArchivos = filePathCallback
+                    return try {
+                        elegirArchivo.launch(params?.createIntent() ?: return false)
+                        true
+                    } catch (e: Exception) {
+                        callbackArchivos = null
+                        filePathCallback?.onReceiveValue(null)
+                        false
+                    }
+                }
+            }
             webViewClient = object : WebViewClient() {
                 override fun onReceivedError(
                     view: WebView?,

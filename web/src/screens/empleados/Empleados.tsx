@@ -7,6 +7,7 @@ import { DialogoNuevoEmpleado } from './DialogoNuevoEmpleado';
 import { Modal } from '../../components/Modal';
 import { Spinner, TextField } from '../../components/ui';
 import { Toast } from '../../components/Toast';
+import { IconoBuscar, IconoCambiarSector, IconoCheck, IconoDesplegar, IconoMas } from '../../components/iconos';
 import {
   buildMinutesWorked,
   buildTipados,
@@ -185,7 +186,11 @@ export function Empleados({
             }}
           >
             {sector.name || 'Empleados'}
-            {sectoresPermitidos.length > 1 && <span style={{ color: 'var(--teal)', fontSize: 22 }}>▾</span>}
+            {sectoresPermitidos.length > 1 && (
+              <span style={{ color: 'var(--teal)', display: 'flex' }}>
+                <IconoDesplegar size={28} />
+              </span>
+            )}
           </button>
 
           {verSectores && (
@@ -223,7 +228,7 @@ export function Empleados({
                     fontSize: 15,
                   }}
                 >
-                  {s.id === sector.id && <span style={{ fontSize: 12 }}>✓</span>}
+                  {s.id === sector.id && <IconoCheck size={14} />}
                   {s.name}
                 </button>
               ))}
@@ -232,7 +237,13 @@ export function Empleados({
         </div>
 
         <div style={{ height: 8 }} />
-        <TextField value={busqueda} onChange={setBusqueda} placeholder="Buscar empleado" />
+        <TextField
+          value={busqueda}
+          onChange={setBusqueda}
+          label="Buscar empleado"
+          fondoEtiqueta="var(--dark-background)"
+          iconoIzq={<span style={{ color: 'var(--texto-tenue)', display: 'flex' }}><IconoBuscar size={20} /></span>}
+        />
         <div style={{ height: 8 }} />
         <div style={{ fontSize: 13, color: 'var(--texto-tenue)' }}>{filtrados.length} empleados</div>
         <div style={{ height: 4 }} />
@@ -272,15 +283,18 @@ export function Empleados({
           lineHeight: 1,
           boxShadow: '0 6px 16px rgba(0,0,0,0.4)',
           zIndex: 30,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        +
+        <IconoMas size={28} />
       </button>
 
       {sectorParaCambiar && (
         <Modal
           titulo="¿Cambiar de sector?"
-          icono={<span style={{ fontSize: 28, color: 'var(--teal)' }}>⇄</span>}
+          icono={<span style={{ color: 'var(--teal)', display: 'flex', justifyContent: 'center' }}><IconoCambiarSector size={28} /></span>}
           onCerrar={() => setSectorParaCambiar(null)}
           acciones={[
             { texto: 'Cancelar', onClick: () => setSectorParaCambiar(null), tipo: 'texto' },

@@ -168,7 +168,14 @@ export function FormularioCarga({
           onChange={(e) => set({ horas: Math.min(16, Math.max(0, parseFloat(e.target.value))) })}
           style={{ width: '100%', accentColor: 'var(--purple80)' }}
         />
+        {/* Extremos del rango, igual que el Slider de la app */}
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span className="label-small" style={{ color: 'var(--texto-tenue)' }}>0h</span>
+          <span className="label-small" style={{ color: 'var(--texto-tenue)' }}>16h</span>
+        </div>
       </div>
+
+      <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: 0 }} />
 
       {tiposCarga.includes('cosecha') && (
         <CargaSimple

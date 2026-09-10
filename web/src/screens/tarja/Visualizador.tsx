@@ -5,7 +5,7 @@ import { Spinner } from '../../components/ui';
 import { listarRegistros, type Registro } from '../../lib/empleados';
 import { parse, sumarValores, CERO } from '../../domain/tarjaValores';
 import { sumarLista, TIPOS_NUEVOS_VACIO } from '../../domain/tiposCarga';
-import { diasDelPeriodo, fmtCantidad, fmtHoras, fmtMonto } from './logica';
+import { diasDelPeriodo, fmtAbonada, fmtCantidad, fmtHoras } from './logica';
 import { formatMinutesWorkedDisplay, formatTiposNuevosRegistro } from '../empleados/logica';
 
 interface Fila {
@@ -72,7 +72,10 @@ export function Visualizador({
     for (const [empleadoId, subs] of porEmpleado) {
       const primero = subs[0];
       const apellido = (primero.lastName ?? '').trim();
-      const nombre = `${primero.firstName ?? ''} ${primero.lastName ?? ''}`.trim();
+      const soloNombre = (primero.firstName ?? '').trim();
+      // Se muestra "APELLIDO Nombre", igual que las tarjetas de Empleados y que
+      // el Excel: asi el orden alfabetico por apellido se ve de una.
+      const nombre = `${apellido} ${soloNombre}`.trim() || soloNombre;
       if (!nombre) continue;
       const v = subs.reduce((acc, s) => sumarValores(acc, parse(s.minutesWorked)), CERO);
       out.push({
@@ -87,11 +90,12 @@ export function Visualizador({
         cajonesTotal: v.cajones,
       });
     }
-    // Mismo orden que el ViewModel: por apellido.
+    // Orden alfabetico por apellido. Va con locale es e insensible a
+    // mayusculas/acentos: sin eso "Ávila" cae despues de "Zarate" y los
+    // apellidos en minuscula se van al final.
+    const clave = (f: Fila) => (f.apellido || f.nombre).trim();
     return out.sort((a, b) =>
-      (a.apellido || a.nombre.split(' ').pop() || a.nombre).localeCompare(
-        b.apellido || b.nombre.split(' ').pop() || b.nombre,
-      ),
+      clave(a).localeCompare(clave(b), 'es', { sensitivity: 'base', numeric: false }),
     );
   }, [registros]);
 
@@ -136,7 +140,7 @@ export function Visualizador({
             {totales.cosecha > 0 && <Resumen valor={fmtCantidad(totales.cosecha)} label="Cosecha" />}
             {totales.cajas > 0 && <Resumen valor={String(totales.cajas)} label="Cajas" />}
             {totales.cajones > 0 && <Resumen valor={String(totales.cajones)} label="Cajones" />}
-            {totales.importe > 0 && <Resumen valor={fmtMonto(totales.importe)} label="Abonada" />}
+            {totales.importe > 0 && <Resumen valor={fmtAbonada(totales.importe)} label="Abonada" />}
             {totales.tipos !== TIPOS_NUEVOS_VACIO && formatTiposNuevosRegistro(totales.tipos) && (
               <Resumen valor={formatTiposNuevosRegistro(totales.tipos)} label="Otros" />
             )}

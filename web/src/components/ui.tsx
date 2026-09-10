@@ -4,6 +4,7 @@
  */
 import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { IconoDesplegar } from './iconos';
 
 export function Spinner({ size = 40, color = 'var(--teal)', grosor = 4 }: { size?: number; color?: string; grosor?: number }) {
   return (
@@ -91,10 +92,13 @@ export function Card({
   );
 }
 
-const bordeCampo = (foco: boolean) => (foco ? '#26c6da' : '#555555');
-const fondoCampo = (foco: boolean) => (foco ? 'rgba(255,255,255,0.067)' : 'rgba(255,255,255,0.031)');
+const bordeCampo = (foco: boolean, error: boolean) =>
+  error ? 'var(--error)' : foco ? '#26c6da' : '#555555';
 
-/** OutlinedTextField con los colores exactos de textFieldColors(). */
+/**
+ * OutlinedTextField de Material3: la etiqueta arranca adentro y sube a
+ * "morder" el borde cuando el campo tiene foco o valor, igual que la app.
+ */
 export function TextField({
   value,
   onChange,
@@ -105,6 +109,8 @@ export function TextField({
   disabled = false,
   error = false,
   iconoIzq,
+  multilinea = false,
+  fondoEtiqueta = 'var(--card-background)',
   style,
 }: {
   value: string;
@@ -116,50 +122,94 @@ export function TextField({
   disabled?: boolean;
   error?: boolean;
   iconoIzq?: ReactNode;
+  multilinea?: boolean;
+  fondoEtiqueta?: string;
   style?: CSSProperties;
 }) {
   const [foco, setFoco] = useState(false);
+  const arriba = foco || value.length > 0;
+  const color = bordeCampo(foco, error);
+
   return (
-    <label style={{ display: 'block', width: '100%', ...style }}>
+    <div style={{ position: 'relative', width: '100%', ...style }}>
       {label && (
-        <span style={{ display: 'block', fontSize: 12, color: 'var(--texto-tenue)', marginBottom: 6 }}>{label}</span>
+        <span
+          style={{
+            position: 'absolute',
+            left: iconoIzq && !arriba ? 44 : 12,
+            top: arriba ? -8 : 18,
+            padding: arriba ? '0 4px' : 0,
+            background: arriba ? fondoEtiqueta : 'transparent',
+            fontSize: arriba ? 12 : 16,
+            lineHeight: arriba ? '16px' : '20px',
+            color: error ? 'var(--error)' : foco ? '#26c6da' : 'var(--texto-tenue)',
+            pointerEvents: 'none',
+            transition: 'top 120ms, font-size 120ms, left 120ms',
+            zIndex: 1,
+          }}
+        >
+          {label}
+        </span>
       )}
-      <span
+      <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: multilinea ? 'flex-start' : 'center',
           gap: 10,
-          border: `1px solid ${error ? 'var(--error)' : bordeCampo(foco)}`,
-          background: fondoCampo(foco),
+          border: `1px solid ${color}`,
           borderRadius: 12,
-          padding: '0 14px',
-          height: 56,
+          padding: multilinea ? '14px' : '0 14px',
+          minHeight: 56,
+          background: 'transparent',
         }}
       >
         {iconoIzq}
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => setFoco(true)}
-          onBlur={() => setFoco(false)}
-          placeholder={placeholder}
-          disabled={disabled}
-          type={tipo}
-          inputMode={soloNumeros ? 'numeric' : undefined}
-          pattern={soloNumeros ? '[0-9]*' : undefined}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            color: 'white',
-            fontSize: 16,
-            height: '100%',
-          }}
-        />
-      </span>
-    </label>
+        {multilinea ? (
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFoco(true)}
+            onBlur={() => setFoco(false)}
+            placeholder={arriba ? placeholder : undefined}
+            disabled={disabled}
+            rows={2}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: 'white',
+              fontSize: 16,
+              fontFamily: 'inherit',
+              resize: 'none',
+            }}
+          />
+        ) : (
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFoco(true)}
+            onBlur={() => setFoco(false)}
+            placeholder={label && !arriba ? undefined : placeholder}
+            disabled={disabled}
+            type={tipo}
+            inputMode={soloNumeros ? 'numeric' : undefined}
+            pattern={soloNumeros ? '[0-9]*' : undefined}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: 'white',
+              fontSize: 16,
+              height: 54,
+            }}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -202,8 +252,8 @@ export function Dropdown<T>({
           width: '100%',
           height: 56,
           padding: '0 14px',
-          border: `1px solid ${bordeCampo(abierto)}`,
-          background: fondoCampo(abierto),
+          border: `1px solid ${bordeCampo(abierto, false)}`,
+          background: 'transparent',
           borderRadius: 12,
           color: seleccionado ? 'white' : 'var(--texto-tenue)',
           fontSize: 16,
@@ -222,7 +272,7 @@ export function Dropdown<T>({
         >
           {seleccionado ? etiqueta(seleccionado) : placeholder}
         </span>
-        <span style={{ color: 'var(--texto-tenue)', transform: abierto ? 'rotate(180deg)' : undefined }}>▾</span>
+        <span style={{ color: 'var(--texto-tenue)', display: 'flex', transform: abierto ? 'rotate(180deg)' : undefined }}><IconoDesplegar size={22} /></span>
       </button>
 
       {abierto && (

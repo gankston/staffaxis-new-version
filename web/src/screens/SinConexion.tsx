@@ -3,6 +3,8 @@
  * Se acordó no armar sincronizacion offline: los supervisores siempre tarjan al
  * final de la jornada, ya con internet.
  */
+import { IconoSinConexion } from '../components/iconos';
+
 export function SinConexion({ onReintentar }: { onReintentar: () => void }) {
   return (
     <div
@@ -18,7 +20,7 @@ export function SinConexion({ onReintentar }: { onReintentar: () => void }) {
         background: 'var(--dark-background)',
       }}
     >
-      <div style={{ fontSize: 56, lineHeight: 1 }}>📡</div>
+      <div style={{ color: 'var(--texto-apagado)', display: 'flex' }}><IconoSinConexion size={56} /></div>
       <div className="title-large" style={{ fontWeight: 700 }}>
         Sin conexión
       </div>

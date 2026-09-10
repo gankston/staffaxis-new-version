@@ -9,6 +9,7 @@ export interface AccionModal {
   tipo?: 'boton' | 'texto';
   cargando?: boolean;
   peligro?: boolean;
+  icono?: ReactNode;
 }
 
 export function Modal({
@@ -89,7 +90,14 @@ export function Modal({
                     cursor: activo ? 'pointer' : 'default',
                   }}
                 >
-                  {a.cargando ? <Spinner size={16} color="white" grosor={2} /> : a.texto}
+                  {a.cargando ? (
+                    <Spinner size={16} color="white" grosor={2} />
+                  ) : (
+                    <>
+                      {a.icono}
+                      {a.texto}
+                    </>
+                  )}
                 </button>
               );
             })}

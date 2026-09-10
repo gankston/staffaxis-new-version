@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { TextField } from '../../components/ui';
+import { IconoAlerta, IconoCalendario, IconoGuardar } from '../../components/iconos';
 import { FormularioCarga } from './FormularioCarga';
 import { puedeGuardar, type ValoresCarga } from './logica';
 import { esFechaCargable, hoyISO, sumarDias } from '../../domain/fechaCarga';
@@ -53,13 +54,28 @@ export function DialogoHoras({
 
   return (
     <Modal
-      titulo={empleado.nombre}
+      titulo="Registrar Horas"
       onCerrar={onCerrar}
       acciones={[
         { texto: 'Cancelar', onClick: onCerrar, tipo: 'texto' },
-        { texto: 'Guardar', onClick: onGuardar, habilitado },
+        { texto: 'Guardar', onClick: onGuardar, habilitado, icono: <IconoGuardar size={20} /> },
       ]}
     >
+      {/* Tarjeta con el empleado, igual que la app: nombre grande y el DNI abajo */}
+      <div
+        style={{
+          background: 'rgba(106,27,154,0.55)',
+          borderRadius: 12,
+          padding: '14px 16px',
+          marginBottom: 12,
+        }}
+      >
+        <div style={{ fontWeight: 700, fontSize: 17, color: 'white' }}>{empleado.nombre}</div>
+        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)' }}>
+          DNI: {empleado.dni ?? 'Sin datos'}
+        </div>
+      </div>
+
       {faltaDni && (
         <div
           style={{
@@ -72,7 +88,7 @@ export function DialogoHoras({
             marginBottom: 12,
           }}
         >
-          <span style={{ color: '#d32f2f', fontSize: 18 }}>⚠</span>
+          <span style={{ color: '#d32f2f', display: 'flex', flexShrink: 0 }}><IconoAlerta size={20} /></span>
           <span style={{ fontSize: 12, color: '#d32f2f', fontWeight: 600 }}>
             Este empleado no tiene DNI cargado. No se pueden registrar horas hasta cargarlo desde "Editar".
           </span>
@@ -97,7 +113,7 @@ export function DialogoHoras({
           marginBottom: 12,
         }}
       >
-        📅 {etiquetaFecha(fecha, hoy)}
+        <IconoCalendario size={18} /> {etiquetaFecha(fecha, hoy)}
       </button>
 
       {verSelector && (
@@ -128,7 +144,7 @@ export function DialogoHoras({
       <FormularioCarga valores={valores} set={set} tiposCarga={tiposCarga} sectorId={sectorId} />
 
       <div style={{ marginTop: 12 }}>
-        <TextField value={observaciones} onChange={onObservaciones} label="Observaciones (opcional)" />
+        <TextField value={observaciones} onChange={onObservaciones} label="Observaciones (opcional)" multilinea />
       </div>
     </Modal>
   );

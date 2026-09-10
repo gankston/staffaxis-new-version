@@ -2,7 +2,15 @@
 import { useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { TextField } from '../../components/ui';
-import { tomarFoto } from '../../lib/bridge';
+import { elegirDeGaleria, tomarFoto } from '../../lib/bridge';
+import {
+  IconoAlerta,
+  IconoBorrar,
+  IconoCamara,
+  IconoCambiarSector,
+  IconoGaleria,
+  IconoPersonaMas,
+} from '../../components/iconos';
 import { api } from '../../lib/api';
 import { crearEmpleado, reactivarEmpleado, type Empleado } from '../../lib/empleados';
 
@@ -71,7 +79,7 @@ export function DialogoNuevoEmpleado({
     return (
       <Modal
         titulo="Empleado en otro sector"
-        icono={<span style={{ fontSize: 28, color: 'var(--purple80)' }}>⇄</span>}
+        icono={<span style={{ color: 'var(--purple80)', display: 'flex', justifyContent: 'center' }}><IconoCambiarSector size={28} /></span>}
         onCerrar={() => setPedirTransferencia(false)}
         acciones={[
           { texto: 'Cancelar', onClick: () => setPedirTransferencia(false), tipo: 'texto' },
@@ -89,7 +97,7 @@ export function DialogoNuevoEmpleado({
     return (
       <Modal
         titulo="Empleado oculto"
-        icono={<span style={{ fontSize: 28, color: 'var(--teal)' }}>👤</span>}
+        icono={<span style={{ color: 'var(--teal)', display: 'flex', justifyContent: 'center' }}><IconoPersonaMas size={28} /></span>}
         onCerrar={() => setInactivo(null)}
         acciones={[
           { texto: 'Cancelar', onClick: () => setInactivo(null), tipo: 'texto' },
@@ -155,7 +163,7 @@ export function DialogoNuevoEmpleado({
               padding: '16px 14px',
             }}
           >
-            <div style={{ fontSize: 28, lineHeight: 1 }}>⚠</div>
+            <div style={{ color: 'var(--error)', display: 'flex' }}><IconoAlerta size={28} /></div>
             <div style={{ color: 'var(--error)', fontWeight: 700, fontSize: 15 }}>DNI inválido</div>
             <div style={{ color: 'var(--error)', fontSize: 13 }}>{errorDni}</div>
           </div>
@@ -171,40 +179,47 @@ export function DialogoNuevoEmpleado({
           const valor = lado === 'frente' ? frente : dorso;
           const setter = lado === 'frente' ? setFrente : setDorso;
           return (
-            <div key={lado} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ flex: 1, fontSize: 14, textTransform: 'capitalize' }}>{lado}</span>
-              {valor && <img src={valor} alt={lado} style={{ height: 40, borderRadius: 6 }} />}
+            <div key={lado} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: valor ? '#4caf50' : 'var(--texto-apagado)',
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ fontWeight: 600, fontSize: 15, textTransform: 'capitalize' }}>{lado}</span>
+              {valor ? (
+                <img src={valor} alt={lado} style={{ height: 34, borderRadius: 6, marginLeft: 4 }} />
+              ) : (
+                <span style={{ flex: 1, fontSize: 14, color: 'var(--texto-tenue)' }}>Sin foto</span>
+              )}
+              {valor && <span style={{ flex: 1 }} />}
+
               <button
                 onClick={async () => {
                   const d = await tomarFoto();
                   if (d) setter(d);
                 }}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 14,
-                  border: '1px solid var(--teal)',
-                  background: 'transparent',
-                  color: 'var(--teal)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
+                title="Sacar foto"
+                style={botonIcono('var(--purple80)')}
               >
-                {valor ? 'Reemplazar' : 'Sacar foto'}
+                <IconoCamara size={22} />
+              </button>
+              <button
+                onClick={async () => {
+                  const d = await elegirDeGaleria();
+                  if (d) setter(d);
+                }}
+                title="Elegir de la galería"
+                style={botonIcono('var(--teal)')}
+              >
+                <IconoGaleria size={22} />
               </button>
               {valor && (
-                <button
-                  onClick={() => setter(null)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: 14,
-                    border: '1px solid var(--error)',
-                    background: 'transparent',
-                    color: 'var(--error)',
-                    fontSize: 12,
-                    fontWeight: 600,
-                  }}
-                >
-                  Borrar
+                <button onClick={() => setter(null)} title="Borrar" style={botonIcono('var(--error)')}>
+                  <IconoBorrar size={20} />
                 </button>
               )}
             </div>
@@ -214,3 +229,12 @@ export function DialogoNuevoEmpleado({
     </Modal>
   );
 }
+
+const botonIcono = (color: string) => ({
+  background: 'none',
+  border: 'none',
+  padding: 4,
+  display: 'flex',
+  color,
+  cursor: 'pointer' as const,
+});

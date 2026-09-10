@@ -7,6 +7,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal } from '../components/Modal';
 import { Spinner, TextField } from '../components/ui';
 import { Toast } from '../components/Toast';
+import {
+  IconoAnterior,
+  IconoCambiarSector,
+  IconoGrafico,
+  IconoSalir,
+  IconoSiguiente,
+} from '../components/iconos';
 import { api, type SupervisorResumenRowDto } from '../lib/api';
 import { sesion } from '../lib/session';
 import {
@@ -163,11 +170,11 @@ export function Supervisor({
           <div style={{ display: 'flex', gap: 4 }}>
             {hasDeviceSession && (
               <button onClick={onCambiarATarja} title="Cambiar a tarja" style={botonIcono}>
-                ⇅
+                <IconoCambiarSector size={22} />
               </button>
             )}
             <button onClick={cerrarSesion} title="Cerrar sesión" style={botonIcono}>
-              ⏻
+              <IconoSalir size={22} />
             </button>
           </div>
         </div>
@@ -181,16 +188,16 @@ export function Supervisor({
                 setBusqueda('');
                 setFiltro(null);
               }}
-              style={{ ...botonSecundario, width: 'auto', alignSelf: 'flex-start' }}
+              style={{ ...botonSecundario, width: 'auto', alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 4 }}
             >
-              ‹ Volver
+              <IconoAnterior size={18} /> Volver
             </button>
 
             <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>
               {tarjaAbierta.sectorName} — {fechaLegible(tarjaAbierta.fecha)}
             </div>
 
-            <TextField value={busqueda} onChange={setBusqueda} placeholder="Buscar empleado" />
+            <TextField value={busqueda} onChange={setBusqueda} label="Buscar empleado" />
 
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <Chip activo={filtro === null} onClick={() => setFiltro(null)} texto="Todos" />
@@ -327,18 +334,22 @@ export function Supervisor({
             <div style={{ background: 'var(--card-background)', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>Horas del período</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button onClick={() => setPeriodoOffset((o) => o - 1)} style={botonPeriodo}>‹</button>
+                <button onClick={() => setPeriodoOffset((o) => o - 1)} style={botonPeriodo}><IconoAnterior size={22} /></button>
                 <div style={{ flex: 1, textAlign: 'center', fontSize: 13, color: 'var(--teal)' }}>{periodo.label}</div>
                 <button
                   onClick={() => setPeriodoOffset((o) => Math.min(0, o + 1))}
                   disabled={periodoOffset >= 0}
                   style={{ ...botonPeriodo, opacity: periodoOffset >= 0 ? 0.3 : 1 }}
                 >
-                  ›
+                  <IconoSiguiente size={22} />
                 </button>
               </div>
-              <button onClick={() => setVerResumen(true)} style={botonSecundario}>
-                {resumenCargando ? 'Cargando...' : `Ver resumen (${resumen.length})`}
+              <button
+                onClick={() => setVerResumen(true)}
+                style={{ ...botonSecundario, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              >
+                <IconoGrafico size={20} />
+                {resumenCargando ? 'Cargando...' : `Mostrar horas cargadas (${resumen.length})`}
               </button>
             </div>
           </>
@@ -448,8 +459,8 @@ const botonIcono: React.CSSProperties = {
   background: 'none',
   border: 'none',
   color: 'var(--purple80)',
-  fontSize: 20,
   padding: 8,
+  display: 'flex',
 };
 
 const botonPrimario: React.CSSProperties = {

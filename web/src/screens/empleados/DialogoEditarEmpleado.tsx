@@ -14,7 +14,15 @@ import {
   type ValoresCarga,
 } from './logica';
 import { api } from '../../lib/api';
-import { tomarFoto } from '../../lib/bridge';
+import { elegirDeGaleria, tomarFoto } from '../../lib/bridge';
+import {
+  IconoBorrar,
+  IconoCamara,
+  IconoEditar,
+  IconoGaleria,
+  IconoGuardar,
+  IconoOcultar,
+} from '../../components/iconos';
 import {
   actualizarEmpleado,
   listarRegistros,
@@ -45,29 +53,44 @@ function FilaFoto({
   onEliminar: () => void;
   onVer: () => void;
 }) {
+  const usar = async (obtener: () => Promise<string | null>) => {
+    const dataUrl = await obtener();
+    if (dataUrl) onSubir(await dataUrlABlob(dataUrl));
+  };
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
-      <span style={{ flex: 1, fontSize: 14, textTransform: 'capitalize' }}>{lado}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: tieneFoto ? '#4caf50' : 'var(--texto-apagado)',
+          flexShrink: 0,
+        }}
+      />
+      <span style={{ fontWeight: 600, fontSize: 15, textTransform: 'capitalize' }}>{lado}</span>
+      <span style={{ flex: 1, fontSize: 14, color: 'var(--texto-tenue)' }}>
+        {tieneFoto ? 'Cargada' : 'Sin foto'}
+      </span>
+
       {cargando ? (
         <Spinner size={18} grosor={2} />
       ) : (
         <>
-          <button
-            onClick={async () => {
-              const dataUrl = await tomarFoto();
-              if (dataUrl) onSubir(await dataUrlABlob(dataUrl));
-            }}
-            style={botonChico('var(--teal)')}
-          >
-            {tieneFoto ? 'Reemplazar' : 'Sacar foto'}
+          <button onClick={() => usar(tomarFoto)} title="Sacar foto" style={botonIcono('var(--purple80)')}>
+            <IconoCamara size={22} />
+          </button>
+          <button onClick={() => usar(elegirDeGaleria)} title="Elegir de la galería" style={botonIcono('var(--teal)')}>
+            <IconoGaleria size={22} />
           </button>
           {tieneFoto && (
             <>
-              <button onClick={onVer} style={botonChico('var(--purple80)')}>
-                Ver
+              <button onClick={onVer} title="Ver" style={botonIcono('var(--teal)')}>
+                <IconoOcultar size={20} />
               </button>
-              <button onClick={onEliminar} style={botonChico('var(--error)')}>
-                Borrar
+              <button onClick={onEliminar} title="Borrar" style={botonIcono('var(--error)')}>
+                <IconoBorrar size={20} />
               </button>
             </>
           )}
@@ -77,15 +100,15 @@ function FilaFoto({
   );
 }
 
-const botonChico = (color: string) => ({
-  padding: '6px 12px',
-  borderRadius: 14,
-  border: `1px solid ${color}`,
-  background: 'transparent',
+const botonIcono = (color: string) => ({
+  background: 'none',
+  border: 'none',
+  padding: 4,
+  display: 'flex',
   color,
-  fontSize: 12,
-  fontWeight: 600 as const,
+  cursor: 'pointer' as const,
 });
+
 
 export function DialogoEditarEmpleado({
   empleado,
@@ -240,7 +263,7 @@ export function DialogoEditarEmpleado({
         onCerrar={() => { setEditando(null); setValores(null); }}
         acciones={[
           { texto: 'Cancelar', onClick: () => { setEditando(null); setValores(null); }, tipo: 'texto' },
-          { texto: 'Guardar', onClick: guardarRegistro, habilitado: puedeGuardar(valores) },
+          { texto: 'Guardar', onClick: guardarRegistro, habilitado: puedeGuardar(valores), icono: <IconoGuardar size={20} /> },
         ]}
       >
         <FormularioCarga
@@ -283,18 +306,24 @@ export function DialogoEditarEmpleado({
 
   return (
     <Modal
-      titulo="Editar empleado"
+      titulo="Editar Empleado"
       onCerrar={onCerrar}
       acciones={[
         { texto: 'Cancelar', onClick: onCerrar, tipo: 'texto' },
-        { texto: 'Guardar', onClick: guardar, habilitado: !!nombre.trim() && !!apellido.trim(), cargando: guardando },
+        {
+          texto: 'Guardar',
+          onClick: guardar,
+          habilitado: !!nombre.trim() && !!apellido.trim(),
+          cargando: guardando,
+          icono: <IconoGuardar size={20} />,
+        },
       ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <TextField value={nombre} onChange={setNombre} label="Nombre" />
         <TextField value={apellido} onChange={setApellido} label="Apellido" />
         <TextField value={dni} onChange={setDni} label="DNI" soloNumeros />
-        <TextField value={observacion} onChange={setObservacion} label="Observación" />
+        <TextField value={observacion} onChange={setObservacion} label="Observación" multilinea />
 
         <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: 0 }} />
         <div style={{ fontWeight: 700, fontSize: 14 }}>Fotos del DNI</div>
@@ -337,9 +366,10 @@ export function DialogoEditarEmpleado({
                       setEditando(r);
                       setValores(valoresDesdeRegistro(r.minutesWorked, r.tiposNuevos));
                     }}
-                    style={{ background: 'none', border: 'none', color: 'var(--purple80)', padding: 8 }}
+                    title="Editar registro"
+                    style={{ background: 'none', border: 'none', color: 'var(--purple80)', padding: 8, display: 'flex' }}
                   >
-                    ✎
+                    <IconoEditar size={20} />
                   </button>
                 </div>
               );
@@ -366,8 +396,13 @@ export function DialogoEditarEmpleado({
             color: 'white',
             fontWeight: 600,
             marginTop: 4,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
           }}
         >
+          <IconoOcultar size={20} />
           Quitar de la lista
         </button>
       </div>

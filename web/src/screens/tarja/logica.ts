@@ -50,19 +50,27 @@ export function diasDelPeriodo(desde: string, hasta: string): string[] {
 
 export const fmtHoras = (h: number) => (h % 1 === 0 ? `${Math.trunc(h)}H` : `${h.toFixed(1)}H`);
 export const fmtCantidad = (v: number) => (v % 1 === 0 ? String(Math.trunc(v)) : v.toFixed(2));
-export const fmtMonto = (v: number) =>
-  `$${v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+/**
+ * ABONADA NO ES PLATA. En la base conviven importes con descripciones
+ * ("barcadilla", "14 bolsas"), asi que va sin simbolo de moneda ni separador
+ * de miles: es el valor tal cual se cargo.
+ */
+export const fmtAbonada = (v: number) => (v % 1 === 0 ? String(Math.trunc(v)) : String(v));
 
 /**
  * El cierre de tarja de la app vive en Room (tabla tarja_status), no en el
  * servidor: es una marca del dispositivo. Acá cumple el mismo rol en el
  * almacenamiento local del navegador.
  */
+/** Un jornal son 8 horas, igual que HORAS_POR_JORNAL de la app. */
+export const HORAS_POR_JORNAL = 8;
+
 export interface Cierre {
   enviada: boolean;
   horaEnvio: number;
   empleadosTarjados: number;
   horasTarjadas: number;
+  abonada: number;
 }
 
 const clave = (sectorId: string, fecha: string) => `tarja_cierre_${sectorId}_${fecha}`;
