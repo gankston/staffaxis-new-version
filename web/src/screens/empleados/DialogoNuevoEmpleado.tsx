@@ -411,6 +411,30 @@ export function DialogoNuevoEmpleado({
 
         <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: 0 }} />
         <div style={{ fontWeight: 700, fontSize: 14 }}>Fotos del DNI</div>
+
+        {/* El momento de sacar el dorso es ahora, con el DNI todavia en la mano:
+            si se salta este paso, despues hay que ir a buscar al empleado. */}
+        {!dorso && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              background: 'rgba(38,198,218,0.12)',
+              border: '1px solid var(--teal)',
+              borderRadius: 12,
+              padding: '12px 14px',
+            }}
+          >
+            <span style={{ color: 'var(--teal)', display: 'flex', flexShrink: 0 }}>
+              <IconoCambiarSector size={24} />
+            </span>
+            <div style={{ fontSize: 13, color: '#a7e6ee', lineHeight: 1.45 }}>
+              <strong style={{ color: 'white' }}>No te olvides del dorso.</strong> Ya que tenés el DNI en la mano,
+              dalo vuelta y sacale la foto ahora.
+            </div>
+          </div>
+        )}
         {(['frente', 'dorso'] as const).map((lado) => {
           const valor = lado === 'frente' ? frente : dorso;
           const setter = lado === 'frente' ? setFrente : setDorso;
