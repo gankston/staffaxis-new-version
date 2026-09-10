@@ -31,6 +31,9 @@ export function DialogoNuevoEmpleado({
   const [cargando, setCargando] = useState(false);
   const [pedirTransferencia, setPedirTransferencia] = useState(false);
   const [inactivo, setInactivo] = useState<{ id: string; nombre: string } | null>(null);
+  // Si el DNI no cumple los requisitos el cartel NO se cierra: el motivo se
+  // muestra acá adentro y lo tipeado queda para corregir.
+  const [errorDni, setErrorDni] = useState<string | null>(null);
 
   const subirFotos = async (empId: string) => {
     if (frente) await api.subirFoto(empId, 'frente', await dataUrlABlob(frente)).catch(() => {});
@@ -39,6 +42,7 @@ export function DialogoNuevoEmpleado({
 
   const crear = async (forceTransfer: boolean) => {
     setCargando(true);
+    setErrorDni(null);
     const r = await crearEmpleado(nombre, apellido, dni, sectorId, sectorName, enElSector, forceTransfer);
     if (r.tipo === 'ok') {
       await subirFotos(r.empleado.id);
@@ -56,8 +60,9 @@ export function DialogoNuevoEmpleado({
     } else if (r.tipo === 'existe_inactivo') {
       setInactivo({ id: r.id, nombre: r.nombre });
     } else {
-      onMensaje(r.mensaje, true);
-      onCerrar();
+      // DNI rechazado por el servidor (formato inválido, obligatorio, etc.):
+      // el cartel queda abierto para poder corregirlo sin volver a cargar todo.
+      setErrorDni(r.mensaje);
     }
   };
 
@@ -125,7 +130,37 @@ export function DialogoNuevoEmpleado({
       ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <TextField value={dni} onChange={setDni} label="DNI *" soloNumeros error={!dni.trim()} />
+        <TextField
+          value={dni}
+          onChange={(v) => {
+            setDni(v);
+            if (errorDni) setErrorDni(null);
+          }}
+          label="DNI *"
+          soloNumeros
+          error={!dni.trim() || !!errorDni}
+        />
+
+        {errorDni && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 8,
+              textAlign: 'center',
+              background: 'rgba(255,82,82,0.12)',
+              border: '1px solid var(--error)',
+              borderRadius: 12,
+              padding: '16px 14px',
+            }}
+          >
+            <div style={{ fontSize: 28, lineHeight: 1 }}>⚠</div>
+            <div style={{ color: 'var(--error)', fontWeight: 700, fontSize: 15 }}>DNI inválido</div>
+            <div style={{ color: 'var(--error)', fontSize: 13 }}>{errorDni}</div>
+          </div>
+        )}
+
         <TextField value={nombre} onChange={(v) => setNombre(v.replace(/\n/g, ''))} label="Nombre *" error={!nombre.trim()} />
         <TextField value={apellido} onChange={(v) => setApellido(v.replace(/\n/g, ''))} label="Apellido *" error={!apellido.trim()} />
         <div style={{ fontSize: 12, color: 'var(--texto-tenue)' }}>Sector: {sectorName}</div>
