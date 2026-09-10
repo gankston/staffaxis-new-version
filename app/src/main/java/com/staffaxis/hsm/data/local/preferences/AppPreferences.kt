@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -33,7 +32,6 @@ class AppPreferences @Inject constructor(@ApplicationContext private val context
         private val KEY_LAST_SYNC_ID = stringPreferencesKey("last_sync_id")
         private val KEY_IS_MASTER = booleanPreferencesKey("is_master_device")
         private val KEY_FULL_NAME = stringPreferencesKey("user_full_name")
-        private val KEY_LAST_SEEN_VERSION_CODE = intPreferencesKey("last_seen_version_code")
         // Modo supervisor: token/identidad separados del dispositivo normal — un mismo
         // telefono podria en teoria tener las dos sesiones activas a la vez.
         private val KEY_SUPERVISOR_TOKEN = stringPreferencesKey("supervisor_token")
@@ -88,8 +86,9 @@ class AppPreferences @Inject constructor(@ApplicationContext private val context
         }
     }
 
-    // Sesion forzada a re-autenticarse tras una actualizacion de la app, SIN perder
-    // el historial local de tarjas (Room queda intacto, solo se borra token+sector).
+    // Corta la sesion (token + sector) SIN perder el historial local de tarjas
+    // (Room queda intacto). La usa la revocacion en caliente: un 403 revoked del
+    // backend manda a bienvenida sin esperar a que reinicien la app.
     suspend fun clearSessionKeepingLocalData() {
         context.dataStore.edit {
             it.remove(KEY_DEVICE_TOKEN)
@@ -113,13 +112,6 @@ class AppPreferences @Inject constructor(@ApplicationContext private val context
 
     suspend fun saveUserFullName(fullName: String) {
         context.dataStore.edit { it[KEY_FULL_NAME] = fullName }
-    }
-
-    suspend fun getLastSeenVersionCode(): Int =
-        context.dataStore.data.map { it[KEY_LAST_SEEN_VERSION_CODE] ?: 0 }.first()
-
-    suspend fun setLastSeenVersionCode(code: Int) {
-        context.dataStore.edit { it[KEY_LAST_SEEN_VERSION_CODE] = code }
     }
 
     suspend fun saveActiveSector(id: String, name: String, tipoCarga: String, encargado: String? = null, tiposCarga: List<String> = emptyList()) {

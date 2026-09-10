@@ -2,7 +2,6 @@ package com.staffaxis.hsm.presentation.navigation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.staffaxis.hsm.BuildConfig
 import com.staffaxis.hsm.data.local.SessionEvents
 import com.staffaxis.hsm.data.local.preferences.AppPreferences
 import com.staffaxis.hsm.domain.repository.AuthRepository
@@ -62,17 +61,6 @@ class SessionViewModel @Inject constructor(
             // Timeout de seguridad: si algo de DataStore se cuelga, nunca dejamos
             // la pantalla en negro para siempre — a los 5s cae a "bienvenida".
             val destino = withTimeoutOrNull(5_000) {
-                // Si esta build es mas nueva que la ultima vista, fuerza a pasar de nuevo
-                // por la pantalla de autorizacion (sin tocar Room / outbox de tarjas).
-                // Se limpia SIEMPRE que cambie el versionCode (incluida la primera vez
-                // que corre esta build), que es justamente el objetivo de la migracion
-                // al nuevo sistema de autorizacion.
-                val lastSeen = prefs.getLastSeenVersionCode()
-                if (lastSeen != BuildConfig.VERSION_CODE) {
-                    prefs.clearSessionKeepingLocalData()
-                    prefs.setLastSeenVersionCode(BuildConfig.VERSION_CODE)
-                }
-
                 val token = prefs.deviceToken.first()
                 val sectorId = prefs.activeSectorId.first()
                 val supervisorToken = prefs.supervisorToken.first()
