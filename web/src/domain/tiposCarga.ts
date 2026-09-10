@@ -1,0 +1,81 @@
+/**
+ * Port exacto de TiposCargaNuevos (domain/model/Models.kt).
+ *
+ * Tipos de carga nuevos (km_viajes, bolseros, carga_camion, etc.) — cada uno con
+ * columna propia en el servidor, igual que horas/cosecha/cajas/cajones/importe.
+ * 50kg/25kg son checks: el dato ES el peso, no una cantidad a ingresar.
+ */
+export interface TiposCargaNuevos {
+  kmViajes: number | null;
+  hasFumigadas: number | null;
+  siembraTrilla: number | null;
+  bolseros: number | null;
+  etiquetado: number | null;
+  cargaCamionKg50: boolean | null;
+  cargaCamionKg25: boolean | null;
+  cargaCamionOtro: string | null;
+  movimientoEstibaKg50: boolean | null;
+  movimientoEstibaKg25: boolean | null;
+  movimientoEstibaOtro: string | null;
+}
+
+export const TIPOS_NUEVOS_VACIO: TiposCargaNuevos = {
+  kmViajes: null,
+  hasFumigadas: null,
+  siembraTrilla: null,
+  bolseros: null,
+  etiquetado: null,
+  cargaCamionKg50: null,
+  cargaCamionKg25: null,
+  cargaCamionOtro: null,
+  movimientoEstibaKg50: null,
+  movimientoEstibaKg25: null,
+  movimientoEstibaOtro: null,
+};
+
+export function estaVacio(t: TiposCargaNuevos): boolean {
+  return (
+    t.kmViajes === null &&
+    t.hasFumigadas === null &&
+    t.siembraTrilla === null &&
+    t.bolseros === null &&
+    t.etiquetado === null &&
+    t.cargaCamionKg50 === null &&
+    t.cargaCamionKg25 === null &&
+    t.cargaCamionOtro === null &&
+    t.movimientoEstibaKg50 === null &&
+    t.movimientoEstibaKg25 === null &&
+    t.movimientoEstibaOtro === null
+  );
+}
+
+// Para totales de periodo: los numericos se suman, los checks de camion/estiba
+// quedan en true si aparecieron cualquier dia, "otro" se queda con el primero.
+function sumarNum(a: number | null, b: number | null): number | null {
+  if (a === null && b === null) return null;
+  return (a ?? 0) + (b ?? 0);
+}
+
+function oCualquiera(a: boolean | null, b: boolean | null): boolean | null {
+  return a === true || b === true ? true : null;
+}
+
+export function sumarTipos(a: TiposCargaNuevos, b: TiposCargaNuevos): TiposCargaNuevos {
+  return {
+    kmViajes: sumarNum(a.kmViajes, b.kmViajes),
+    hasFumigadas: sumarNum(a.hasFumigadas, b.hasFumigadas),
+    siembraTrilla: sumarNum(a.siembraTrilla, b.siembraTrilla),
+    bolseros: sumarNum(a.bolseros, b.bolseros),
+    etiquetado: sumarNum(a.etiquetado, b.etiquetado),
+    cargaCamionKg50: oCualquiera(a.cargaCamionKg50, b.cargaCamionKg50),
+    cargaCamionKg25: oCualquiera(a.cargaCamionKg25, b.cargaCamionKg25),
+    cargaCamionOtro: a.cargaCamionOtro ?? b.cargaCamionOtro,
+    movimientoEstibaKg50: oCualquiera(a.movimientoEstibaKg50, b.movimientoEstibaKg50),
+    movimientoEstibaKg25: oCualquiera(a.movimientoEstibaKg25, b.movimientoEstibaKg25),
+    movimientoEstibaOtro: a.movimientoEstibaOtro ?? b.movimientoEstibaOtro,
+  };
+}
+
+export function sumarLista(lista: TiposCargaNuevos[]): TiposCargaNuevos {
+  return lista.reduce(sumarTipos, TIPOS_NUEVOS_VACIO);
+}

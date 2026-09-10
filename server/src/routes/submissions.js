@@ -85,6 +85,47 @@ export async function submissionRoutes(app) {
     return reply.send({ id: saved.rows[0].id, status: saved.rows[0].status });
   });
 
+  // GET /api/submissions?start_date=&end_date=&employee_id=
+  //
+  // Mismas filas que /api/admin/report pero acotado al sector del dispositivo que
+  // pregunta, sin admin token. La app Android no lo necesita porque lee su base
+  // local (Room + outbox); el clon web no tiene base local, y la alternativa era
+  // meter el admin token dentro del bundle de la pagina — o sea, regalarselo a
+  // cualquiera que abra la URL.
+  app.get('/api/submissions', { preHandler: verifyDevice }, async (req, reply) => {
+    const { sectorId } = req.device;
+    const { start_date, end_date, employee_id } = req.query ?? {};
+
+    const params = [sectorId];
+    let filtro = '';
+    if (start_date && end_date) {
+      params.push(start_date, end_date);
+      filtro += ` AND s.date BETWEEN $${params.length - 1} AND $${params.length}`;
+    }
+    if (employee_id) {
+      params.push(employee_id);
+      filtro += ` AND s.employee_id = $${params.length}`;
+    }
+
+    const result = await db.query(
+      `SELECT s.id AS submission_id, s.employee_id,
+              e.first_name, e.last_name, e.dni,
+              s.date, s.minutes_worked, s.notes, s.status,
+              s.horas, s.cosecha, s.cajas, s.cajones, s.importe,
+              s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
+              s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
+              s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
+              s.motivo_rechazo
+       FROM submissions s
+       JOIN employees e ON e.id = s.employee_id
+       WHERE s.sector_id = $1
+         AND NOT s.is_deleted${filtro}
+       ORDER BY e.last_name, e.first_name, s.date`,
+      params
+    );
+    return reply.send({ rows: result.rows });
+  });
+
   // GET /api/rechazadas — tarjas que el supervisor rechazo en el sector de este
   // dispositivo y todavia no se corrigieron, para avisarle al que las cargo.
   app.get('/api/rechazadas', { preHandler: verifyDevice }, async (req, reply) => {

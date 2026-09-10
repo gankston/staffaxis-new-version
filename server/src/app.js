@@ -14,6 +14,7 @@ import { adminRoutes }      from './routes/admin.js';
 import { supervisorRoutes } from './routes/supervisor.js';
 import { statsRoutes }      from './routes/stats.js';
 import { photoRoutes }      from './routes/photos.js';
+import { webAppRoutes }     from './routes/webApp.js';
 
 // Espera a que la DB esté lista (la red interna de Railway puede tardar al arrancar).
 // Reintenta con paciencia en vez de crashear al primer timeout.
@@ -61,6 +62,7 @@ const start = async () => {
   await app.register(supervisorRoutes);
   await app.register(statsRoutes);
   await app.register(photoRoutes);
+  await app.register(webAppRoutes);
 
   app.get('/health', async () => ({ ok: true }));
 
