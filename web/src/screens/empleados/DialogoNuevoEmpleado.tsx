@@ -1,6 +1,7 @@
 /**
  * Alta de empleado. Ya no se carga a mano: se escanea el codigo de barras del
- * DORSO del DNI y de ahi salen el numero, el apellido y el nombre. Se lee de
+ * FRENTE del DNI (al lado de la firma) y de ahi salen el numero, el apellido y
+ * el nombre. El dorso NO tiene codigo: tiene la huella y el domicilio. Se lee de
  * una foto sacada con la camara (el PDF417 es denso y necesita foco y
  * resolucion: una foto entera lo lee mejor que un video en vivo).
  */
@@ -56,7 +57,7 @@ export function DialogoNuevoEmpleado({
   const [inactivo, setInactivo] = useState<{ id: string; nombre: string } | null>(null);
   const [errorDni, setErrorDni] = useState<string | null>(null);
 
-  /** Saca (o elige) la foto del dorso, la decodifica y completa los datos. */
+  /** Saca (o elige) la foto del frente, la decodifica y completa los datos. */
   const escanear = async (obtener: () => Promise<string | null>) => {
     setErrorLectura(null);
     const foto = await obtener();
@@ -70,14 +71,14 @@ export function DialogoNuevoEmpleado({
       setPaso('instrucciones');
       setErrorLectura(
         crudo
-          ? 'Se leyó el código pero no tiene el formato del DNI. Probá con el dorso de otro ejemplar.'
-          : 'No se pudo leer el código. Asegurate de enfocar el DORSO, con buena luz y que el código entre completo.',
+          ? 'Se leyó el código pero no tiene el formato del DNI. Probá con otro ejemplar.'
+          : 'No se pudo leer el código. Asegurate de enfocar el FRENTE del DNI, con buena luz y que el código entre completo.',
       );
       return;
     }
 
-    // La foto del dorso ya la sacamos: se aprovecha para la ficha.
-    setDorso(foto);
+    // La foto del frente ya la sacamos: se aprovecha para la ficha.
+    setFrente(foto);
     setLeido(datos);
     setDni(datos.dni);
     setApellido(datos.apellido);
@@ -212,8 +213,8 @@ export function DialogoNuevoEmpleado({
           <IlustracionDni />
 
           <div style={{ fontSize: 14, color: '#b0b0b0', textAlign: 'center', lineHeight: 1.5 }}>
-            Es el código de barras ancho que está <strong style={{ color: 'white' }}>en el dorso</strong> del DNI, abajo
-            de todo. El frente no tiene código.
+            Es el código cuadrado que está <strong style={{ color: 'white' }}>en el frente</strong> del DNI, al lado
+            de la firma. El dorso no tiene código: tiene la huella y el domicilio.
           </div>
 
           <ul
@@ -226,7 +227,7 @@ export function DialogoNuevoEmpleado({
               alignSelf: 'stretch',
             }}
           >
-            <li>Apoyá el DNI sobre una superficie plana.</li>
+            <li>Apoyá el DNI sobre una superficie plana, del lado de la foto.</li>
             <li>Que el código entre completo y derecho en la foto.</li>
             <li>Buena luz y sin reflejos ni sombras encima.</li>
           </ul>

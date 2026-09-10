@@ -1,5 +1,6 @@
 /**
- * Lectura del codigo de barras PDF417 del DORSO del DNI argentino.
+ * Lectura del codigo de barras PDF417 del FRENTE del DNI argentino (esta al
+ * lado de la firma; el dorso solo tiene la huella y el domicilio).
  *
  * Ojo: no es un QR. Es el codigo ancho de barras finas que esta abajo del todo
  * en el reverso de la tarjeta. Adentro viene el mismo dato que esta impreso,
