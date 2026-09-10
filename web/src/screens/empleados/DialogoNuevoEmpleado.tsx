@@ -1,7 +1,13 @@
-/** DialogoNuevoEmpleado: alta + fotos, con los pasos de transferencia y reactivación. */
+/**
+ * Alta de empleado. Ya no se carga a mano: se escanea el codigo de barras del
+ * DORSO del DNI y de ahi salen el numero, el apellido y el nombre. Se lee de
+ * una foto sacada con la camara (el PDF417 es denso y necesita foco y
+ * resolucion: una foto entera lo lee mejor que un video en vivo).
+ */
 import { useState } from 'react';
 import { Modal } from '../../components/Modal';
-import { TextField } from '../../components/ui';
+import { Spinner, TextField } from '../../components/ui';
+import { IlustracionDni } from './IlustracionDni';
 import { elegirDeGaleria, tomarFoto } from '../../lib/bridge';
 import {
   IconoAlerta,
@@ -9,12 +15,16 @@ import {
   IconoCamara,
   IconoCambiarSector,
   IconoGaleria,
+  IconoGuardar,
   IconoPersonaMas,
 } from '../../components/iconos';
+import { leerPdf417, parsearDni, type DatosDni } from '../../domain/dniBarcode';
 import { api } from '../../lib/api';
 import { crearEmpleado, reactivarEmpleado, type Empleado } from '../../lib/empleados';
 
 const dataUrlABlob = async (dataUrl: string) => (await fetch(dataUrl)).blob();
+
+type Paso = 'instrucciones' | 'leyendo' | 'datos';
 
 export function DialogoNuevoEmpleado({
   sectorId,
@@ -31,17 +41,49 @@ export function DialogoNuevoEmpleado({
   onCreado: () => void;
   onMensaje: (texto: string, esError: boolean) => void;
 }) {
+  const [paso, setPaso] = useState<Paso>('instrucciones');
+  const [errorLectura, setErrorLectura] = useState<string | null>(null);
+
   const [dni, setDni] = useState('');
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
+  const [leido, setLeido] = useState<DatosDni | null>(null);
+
   const [frente, setFrente] = useState<string | null>(null);
   const [dorso, setDorso] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
   const [pedirTransferencia, setPedirTransferencia] = useState(false);
   const [inactivo, setInactivo] = useState<{ id: string; nombre: string } | null>(null);
-  // Si el DNI no cumple los requisitos el cartel NO se cierra: el motivo se
-  // muestra acá adentro y lo tipeado queda para corregir.
   const [errorDni, setErrorDni] = useState<string | null>(null);
+
+  /** Saca (o elige) la foto del dorso, la decodifica y completa los datos. */
+  const escanear = async (obtener: () => Promise<string | null>) => {
+    setErrorLectura(null);
+    const foto = await obtener();
+    if (!foto) return;
+
+    setPaso('leyendo');
+    const crudo = await leerPdf417(foto);
+    const datos = crudo ? parsearDni(crudo) : null;
+
+    if (!datos) {
+      setPaso('instrucciones');
+      setErrorLectura(
+        crudo
+          ? 'Se leyó el código pero no tiene el formato del DNI. Probá con el dorso de otro ejemplar.'
+          : 'No se pudo leer el código. Asegurate de enfocar el DORSO, con buena luz y que el código entre completo.',
+      );
+      return;
+    }
+
+    // La foto del dorso ya la sacamos: se aprovecha para la ficha.
+    setDorso(foto);
+    setLeido(datos);
+    setDni(datos.dni);
+    setApellido(datos.apellido);
+    setNombre(datos.nombre);
+    setPaso('datos');
+  };
 
   const subirFotos = async (empId: string) => {
     if (frente) await api.subirFoto(empId, 'frente', await dataUrlABlob(frente)).catch(() => {});
@@ -55,7 +97,10 @@ export function DialogoNuevoEmpleado({
     if (r.tipo === 'ok') {
       await subirFotos(r.empleado.id);
       setCargando(false);
-      onMensaje(forceTransfer ? `Empleado transferido: ${r.empleado.nombre}` : `Empleado creado: ${r.empleado.nombre}`, false);
+      onMensaje(
+        forceTransfer ? `Empleado transferido: ${r.empleado.nombre}` : `Empleado creado: ${r.empleado.nombre}`,
+        false,
+      );
       onCreado();
       return;
     }
@@ -68,22 +113,33 @@ export function DialogoNuevoEmpleado({
     } else if (r.tipo === 'existe_inactivo') {
       setInactivo({ id: r.id, nombre: r.nombre });
     } else {
-      // DNI rechazado por el servidor (formato inválido, obligatorio, etc.):
-      // el cartel queda abierto para poder corregirlo sin volver a cargar todo.
       setErrorDni(r.mensaje);
     }
   };
+
+  // ── Confirmaciones que ya existian ────────────────────────────────────────
 
   if (pedirTransferencia) {
     const nombreCompleto = `${nombre.trim()} ${apellido.trim()}`.trim();
     return (
       <Modal
         titulo="Empleado en otro sector"
-        icono={<span style={{ color: 'var(--purple80)', display: 'flex', justifyContent: 'center' }}><IconoCambiarSector size={28} /></span>}
+        icono={
+          <span style={{ color: 'var(--purple80)', display: 'flex', justifyContent: 'center' }}>
+            <IconoCambiarSector size={28} />
+          </span>
+        }
         onCerrar={() => setPedirTransferencia(false)}
         acciones={[
           { texto: 'Cancelar', onClick: () => setPedirTransferencia(false), tipo: 'texto' },
-          { texto: 'Sí, transferir', onClick: () => { setPedirTransferencia(false); crear(true); }, cargando },
+          {
+            texto: 'Sí, transferir',
+            onClick: () => {
+              setPedirTransferencia(false);
+              crear(true);
+            },
+            cargando,
+          },
         ]}
       >
         <div style={{ fontSize: 14 }}>
@@ -97,7 +153,11 @@ export function DialogoNuevoEmpleado({
     return (
       <Modal
         titulo="Empleado oculto"
-        icono={<span style={{ color: 'var(--teal)', display: 'flex', justifyContent: 'center' }}><IconoPersonaMas size={28} /></span>}
+        icono={
+          <span style={{ color: 'var(--teal)', display: 'flex', justifyContent: 'center' }}>
+            <IconoPersonaMas size={28} />
+          </span>
+        }
         onCerrar={() => setInactivo(null)}
         acciones={[
           { texto: 'Cancelar', onClick: () => setInactivo(null), tipo: 'texto' },
@@ -126,18 +186,174 @@ export function DialogoNuevoEmpleado({
     );
   }
 
+  // ── Paso 2: decodificando ─────────────────────────────────────────────────
+
+  if (paso === 'leyendo') {
+    return (
+      <Modal titulo="Leyendo el código">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '24px 0' }}>
+          <Spinner />
+          <div style={{ color: 'var(--texto-tenue)', fontSize: 14 }}>Buscando el código en la foto...</div>
+        </div>
+      </Modal>
+    );
+  }
+
+  // ── Paso 1: instrucciones + escanear ──────────────────────────────────────
+
+  if (paso === 'instrucciones') {
+    return (
+      <Modal titulo="Nuevo empleado" onCerrar={onCerrar} acciones={[{ texto: 'Cancelar', onClick: onCerrar, tipo: 'texto' }]}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'white', textAlign: 'center' }}>
+            Escaneá el código del DNI
+          </div>
+
+          <IlustracionDni />
+
+          <div style={{ fontSize: 14, color: '#b0b0b0', textAlign: 'center', lineHeight: 1.5 }}>
+            Es el código de barras ancho que está <strong style={{ color: 'white' }}>en el dorso</strong> del DNI, abajo
+            de todo. El frente no tiene código.
+          </div>
+
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: 18,
+              fontSize: 13,
+              color: 'var(--texto-tenue)',
+              lineHeight: 1.7,
+              alignSelf: 'stretch',
+            }}
+          >
+            <li>Apoyá el DNI sobre una superficie plana.</li>
+            <li>Que el código entre completo y derecho en la foto.</li>
+            <li>Buena luz y sin reflejos ni sombras encima.</li>
+          </ul>
+
+          {errorLectura && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 8,
+                textAlign: 'center',
+                background: 'rgba(255,82,82,0.12)',
+                border: '1px solid var(--error)',
+                borderRadius: 12,
+                padding: 14,
+                alignSelf: 'stretch',
+              }}
+            >
+              <div style={{ color: 'var(--error)', display: 'flex' }}>
+                <IconoAlerta size={26} />
+              </div>
+              <div style={{ color: 'var(--error)', fontWeight: 700, fontSize: 14 }}>No se pudo leer</div>
+              <div style={{ color: 'var(--error)', fontSize: 13 }}>{errorLectura}</div>
+            </div>
+          )}
+
+          <button
+            onClick={() => escanear(tomarFoto)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              width: '100%',
+              height: 56,
+              border: 'none',
+              borderRadius: 16,
+              background: 'linear-gradient(90deg, #9c27b0, #26c6da)',
+              color: 'white',
+              fontWeight: 700,
+              fontSize: 16,
+            }}
+          >
+            <IconoCamara size={24} />
+            Escanear código
+          </button>
+
+          <button
+            onClick={() => escanear(elegirDeGaleria)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              width: '100%',
+              padding: 12,
+              borderRadius: 12,
+              border: '1px solid var(--teal)',
+              background: 'transparent',
+              color: 'var(--teal)',
+              fontWeight: 600,
+              fontSize: 14,
+            }}
+          >
+            <IconoGaleria size={20} />
+            Usar una foto de la galería
+          </button>
+
+          {/* Salida de emergencia: si un DNI no se deja leer, el alta no puede
+              quedar bloqueada en el campo. Va discreta y a proposito. */}
+          <button
+            onClick={() => {
+              setLeido(null);
+              setPaso('datos');
+            }}
+            style={{ background: 'none', border: 'none', color: 'var(--texto-apagado)', fontSize: 13, marginTop: 4 }}
+          >
+            El código no se lee — cargar a mano
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  // ── Paso 3: datos leidos, confirmar y crear ───────────────────────────────
+
   const habilitado = !!dni.trim() && !!nombre.trim() && !!apellido.trim() && !cargando;
 
   return (
     <Modal
-      titulo="Nuevo empleado"
+      titulo={leido ? 'Confirmá los datos' : 'Nuevo empleado'}
       onCerrar={onCerrar}
       acciones={[
-        { texto: 'Cancelar', onClick: onCerrar, tipo: 'texto' },
-        { texto: 'Crear', onClick: () => crear(false), habilitado, cargando },
+        { texto: 'Volver', onClick: () => setPaso('instrucciones'), tipo: 'texto' },
+        { texto: 'Crear', onClick: () => crear(false), habilitado, cargando, icono: <IconoGuardar size={20} /> },
       ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {leido ? (
+          <div
+            style={{
+              background: 'rgba(76,175,80,0.12)',
+              border: '1px solid #4caf50',
+              borderRadius: 12,
+              padding: '12px 14px',
+              fontSize: 13,
+              color: '#a5d6a7',
+            }}
+          >
+            Código leído correctamente. Revisá que esté todo bien antes de crear.
+          </div>
+        ) : (
+          <div
+            style={{
+              background: 'rgba(255,152,0,0.12)',
+              border: '1px solid var(--warning)',
+              borderRadius: 12,
+              padding: '12px 14px',
+              fontSize: 13,
+              color: 'var(--warning)',
+            }}
+          >
+            Carga manual, sin escanear. Revisá bien el DNI antes de crear.
+          </div>
+        )}
+
         <TextField
           value={dni}
           onChange={(v) => {
@@ -163,18 +379,37 @@ export function DialogoNuevoEmpleado({
               padding: '16px 14px',
             }}
           >
-            <div style={{ color: 'var(--error)', display: 'flex' }}><IconoAlerta size={28} /></div>
+            <div style={{ color: 'var(--error)', display: 'flex' }}>
+              <IconoAlerta size={28} />
+            </div>
             <div style={{ color: 'var(--error)', fontWeight: 700, fontSize: 15 }}>DNI inválido</div>
             <div style={{ color: 'var(--error)', fontSize: 13 }}>{errorDni}</div>
           </div>
         )}
 
-        <TextField value={nombre} onChange={(v) => setNombre(v.replace(/\n/g, ''))} label="Nombre *" error={!nombre.trim()} />
-        <TextField value={apellido} onChange={(v) => setApellido(v.replace(/\n/g, ''))} label="Apellido *" error={!apellido.trim()} />
+        <TextField
+          value={apellido}
+          onChange={(v) => setApellido(v.replace(/\n/g, ''))}
+          label="Apellido *"
+          error={!apellido.trim()}
+        />
+        <TextField
+          value={nombre}
+          onChange={(v) => setNombre(v.replace(/\n/g, ''))}
+          label="Nombre *"
+          error={!nombre.trim()}
+        />
+
+        {leido?.fechaNacimiento && (
+          <div style={{ fontSize: 12, color: 'var(--texto-tenue)' }}>
+            Nacimiento: {leido.fechaNacimiento}
+            {leido.sexo ? ` · Sexo: ${leido.sexo}` : ''}
+          </div>
+        )}
         <div style={{ fontSize: 12, color: 'var(--texto-tenue)' }}>Sector: {sectorName}</div>
 
         <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: 0 }} />
-        <div style={{ fontWeight: 700, fontSize: 14 }}>Fotos del DNI (opcional)</div>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>Fotos del DNI</div>
         {(['frente', 'dorso'] as const).map((lado) => {
           const valor = lado === 'frente' ? frente : dorso;
           const setter = lado === 'frente' ? setFrente : setDorso;
