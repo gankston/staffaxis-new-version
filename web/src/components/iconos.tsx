@@ -18,6 +18,8 @@ export const IconoGuardar = svg('M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1
 export const IconoCamara = svg('M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM9 2 7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z');
 // Material: PhotoLibrary
 export const IconoGaleria = svg('M22 16V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2zm-11-4 2.03 2.71L16 11l4 5H8l3-4zM2 6v14a2 2 0 0 0 2 2h14v-2H4V6H2z');
+// Material: Send (el del boton de cierre de tarja en la app)
+export const IconoEnviar = svg('M2.01 21 23 12 2.01 3 2 10l15 2-15 2z');
 // Material: Edit
 export const IconoEditar = svg('M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z');
 // Material: Group

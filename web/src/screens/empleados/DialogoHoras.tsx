@@ -31,6 +31,7 @@ export function DialogoHoras({
   tiposCarga,
   sectorId,
   guardando,
+  error,
   onCerrar,
   onGuardar,
 }: {
@@ -44,6 +45,7 @@ export function DialogoHoras({
   tiposCarga: string[];
   sectorId: string;
   guardando: boolean;
+  error?: string | null;
   onCerrar: () => void;
   onGuardar: () => void;
 }) {
@@ -58,9 +60,39 @@ export function DialogoHoras({
       onCerrar={onCerrar}
       acciones={[
         { texto: 'Cancelar', onClick: onCerrar, tipo: 'texto' },
-        { texto: 'Guardar', onClick: onGuardar, habilitado, icono: <IconoGuardar size={20} /> },
+        {
+          texto: error ? 'Reintentar' : 'Guardar',
+          onClick: onGuardar,
+          habilitado,
+          icono: <IconoGuardar size={20} />,
+        },
       ]}
     >
+      {/* El error se muestra acá adentro, con los datos todavía cargados. */}
+      {error && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10,
+            background: 'rgba(255,82,82,0.12)',
+            border: '1px solid var(--error)',
+            borderRadius: 12,
+            padding: '12px 14px',
+            marginBottom: 12,
+          }}
+        >
+          <span style={{ color: 'var(--error)', display: 'flex', flexShrink: 0 }}>
+            <IconoAlerta size={22} />
+          </span>
+          <div style={{ fontSize: 13, color: 'var(--error)', lineHeight: 1.45 }}>
+            <strong>No se pudo guardar.</strong> {error}
+            <div style={{ marginTop: 4, color: 'var(--texto-tenue)' }}>
+              No se perdió nada: los datos siguen cargados. Fijate la señal y dale Reintentar.
+            </div>
+          </div>
+        </div>
+      )}
       {/* Tarjeta con el empleado, igual que la app: nombre grande y el DNI abajo */}
       <div
         style={{

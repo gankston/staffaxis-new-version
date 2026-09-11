@@ -46,6 +46,9 @@ export function Empleados({
   const [valores, setValores] = useState<ValoresCarga>(VALORES_CARGA_INICIAL);
   const [observaciones, setObservaciones] = useState('');
   const [guardandoHoras, setGuardandoHoras] = useState(false);
+  // Si el guardado falla no se cierra el dialogo: con señal mala el tipo
+  // perdia todo lo que acababa de cargar y tenia que tipearlo de nuevo.
+  const [errorHoras, setErrorHoras] = useState<string | null>(null);
 
   const [paraEditar, setParaEditar] = useState<Empleado | null>(null);
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
@@ -113,6 +116,7 @@ export function Empleados({
   const guardarHoras = async () => {
     if (!paraHoras) return;
     setGuardandoHoras(true);
+    setErrorHoras(null);
     const t = buildTiposNuevos(valores);
     const tip = buildTipados(valores);
     const ubicacion = await getUbicacion();
@@ -145,8 +149,8 @@ export function Empleados({
       setParaHoras(null);
       avisar('Horas guardadas correctamente', false);
     } catch (e) {
-      setParaHoras(null);
-      avisar(e instanceof Error ? e.message : 'Error', true);
+      // El dialogo queda abierto con los datos puestos para poder reintentar.
+      setErrorHoras(e instanceof Error ? e.message : 'No se pudo guardar');
     }
     setGuardandoHoras(false);
   };
@@ -329,7 +333,11 @@ export function Empleados({
           tiposCarga={tiposCarga}
           sectorId={sector.id}
           guardando={guardandoHoras}
-          onCerrar={() => setParaHoras(null)}
+          error={errorHoras}
+          onCerrar={() => {
+            setErrorHoras(null);
+            setParaHoras(null);
+          }}
           onGuardar={guardarHoras}
         />
       )}

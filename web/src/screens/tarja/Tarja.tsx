@@ -11,14 +11,7 @@ import { sesion } from '../../lib/session';
 import { sumar } from '../../domain/tarjaValores';
 import { hoyISO } from '../../domain/fechaCarga';
 import { calcularPeriodo, cierreLocal, fmtAbonada, fmtCantidad, fmtHoras, HORAS_POR_JORNAL } from './logica';
-import {
-  IconoAnterior,
-  IconoCambiarSector,
-  IconoCheck,
-  IconoCheckCirculo,
-  IconoGrafico,
-  IconoSiguiente,
-} from '../../components/iconos';
+import { IconoAnterior, IconoCambiarSector, IconoCheck, IconoCheckCirculo, IconoEnviar, IconoGrafico, IconoSiguiente } from '../../components/iconos';
 
 const MESES_LARGOS = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -312,6 +305,9 @@ export function Tarja({
             <IconoGrafico size={20} /> Mostrar horas cargadas
           </button>
 
+          {/* Mismos textos que la app: el boton cambia a "Reenviar" si el dia ya
+              se cerro. En la web no queda nada por mandar (cada tarja se envia
+              al guardarla), pero el rotulo es el que los supervisores conocen. */}
           <button
             onClick={cerrarTarja}
             disabled={cerrando}
@@ -324,9 +320,21 @@ export function Tarja({
               color: 'white',
               fontWeight: 700,
               fontSize: 15,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
             }}
           >
-            {cerrando ? 'Cerrando...' : 'Cerrar tarja del día'}
+            {cerrando ? (
+              <>
+                <Spinner size={18} /> Enviando tarja...
+              </>
+            ) : (
+              <>
+                <IconoEnviar size={20} /> {cierre?.enviada ? 'Reenviar tarja' : 'Realizar cierre de tarja'}
+              </>
+            )}
           </button>
         </div>
 
