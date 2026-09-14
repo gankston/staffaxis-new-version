@@ -66,9 +66,12 @@ export async function employeeRoutes(app) {
   // esto, el encargado lo daba de alta de nuevo y quedaba la ficha duplicada.
   app.get('/api/employees/buscar', { preHandler: verifyDevice }, async (req, reply) => {
     const dni = normalizarDni(req.query?.dni);
-    if (!dni) return reply.status(400).send({ error: 'Falta el DNI' });
-    if (!formatoDniValido(dni)) {
-      return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
+    // Buscar solo pide que sea un numero de largo razonable. Las reglas de
+    // patron (no todos iguales, no secuencias) son para dar de ALTA: aplicarlas
+    // aca solo lograria que una ficha vieja con un DNI raro no se pueda
+    // encontrar nunca, que es justo lo contrario de lo que buscamos.
+    if (!dni || dni.length < 7 || dni.length > 9) {
+      return reply.status(400).send({ error: 'El DNI tiene que tener entre 7 y 9 dígitos' });
     }
     const r = await db.query(
       `SELECT e.id, e.sector_id, e.first_name, e.last_name, e.dni, e.is_active,
