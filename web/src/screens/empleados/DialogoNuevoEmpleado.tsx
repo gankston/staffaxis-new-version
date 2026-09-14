@@ -21,7 +21,7 @@ import {
   IconoPersonaMas,
 } from '../../components/iconos';
 import { leerPdf417, parsearDni, type DatosDni } from '../../domain/dniBarcode';
-import { leerTextoDeFoto, parsearConstancia } from '../../domain/constanciaOcr';
+import { leerConstancia as leerHoja } from '../../domain/constanciaOcr';
 import { api } from '../../lib/api';
 import { crearEmpleado, reactivarEmpleado, type Empleado } from '../../lib/empleados';
 
@@ -107,8 +107,7 @@ export function DialogoNuevoEmpleado({
     if (!foto) return;
 
     setPaso('leyendoConstancia');
-    const texto = await leerTextoDeFoto(foto);
-    const datos = texto ? parsearConstancia(texto) : null;
+    const datos = await leerHoja(foto);
 
     if (!datos) {
       setPaso('instrucciones');
