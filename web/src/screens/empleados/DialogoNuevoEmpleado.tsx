@@ -379,6 +379,27 @@ export function DialogoNuevoEmpleado({
             Alta con constancia de DNI en trámite
           </button>
 
+          <button
+            onClick={() => leerConstancia(elegirDeGaleria)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              width: '100%',
+              padding: 10,
+              borderRadius: 12,
+              border: 'none',
+              background: 'none',
+              color: 'var(--warning)',
+              fontWeight: 600,
+              fontSize: 13,
+            }}
+          >
+            <IconoGaleria size={18} />
+            Usar una foto de la galería
+          </button>
+
           {/* Salida de emergencia: si un DNI no se deja leer, el alta no puede
               quedar bloqueada en el campo. Va discreta y a proposito. */}
           <button
