@@ -107,26 +107,75 @@ export function getShellVersion(): string {
 }
 
 /** Ubicacion con timeout de 8s — nunca bloquea la tarja, igual que LocationHelper. */
-export async function getUbicacion(): Promise<Ubicacion | null> {
-  if (window.StaffAxisNative) {
-    const nativo = window.StaffAxisNative;
-    return pedirAlNativo<Ubicacion>((id) => nativo.requestLocation(id), 8000);
+/**
+ * Ubicacion con cache, igual que LocationHelper.kt en la app: si hay una lectura
+ * de menos de 2 minutos se usa esa y listo. Sin esto cada guardado se quedaba
+ * esperando un GPS nuevo — hasta 8 segundos por empleado, con el tipo mirando
+ * la pantalla.
+ */
+const VIGENCIA_UBICACION = 2 * 60 * 1000;
+let ubicacionCache: { valor: Ubicacion | null; cuando: number } | null = null;
+let pedidoEnCurso: Promise<Ubicacion | null> | null = null;
+
+function ubicacionFresca(): Ubicacion | null | undefined {
+  if (ubicacionCache && Date.now() - ubicacionCache.cuando < VIGENCIA_UBICACION) {
+    return ubicacionCache.valor;
   }
-  if (!navigator.geolocation) return null;
-  return new Promise((resolve) => {
-    let listo = false;
-    const fin = (v: Ubicacion | null) => {
-      if (listo) return;
-      listo = true;
-      resolve(v);
-    };
-    setTimeout(() => fin(null), 8000);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => fin({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-      () => fin(null),
-      { timeout: 8000, maximumAge: 60000 },
-    );
-  });
+  return undefined;
+}
+
+function pedirUbicacion(): Promise<Ubicacion | null> {
+  if (pedidoEnCurso) return pedidoEnCurso;
+  const pedido = (async (): Promise<Ubicacion | null> => {
+    if (window.StaffAxisNative) {
+      const nativo = window.StaffAxisNative;
+      return pedirAlNativo<Ubicacion>((id) => nativo.requestLocation(id), 8000);
+    }
+    if (!navigator.geolocation) return null;
+    return new Promise<Ubicacion | null>((resolve) => {
+      let listo = false;
+      const fin = (v: Ubicacion | null) => {
+        if (listo) return;
+        listo = true;
+        resolve(v);
+      };
+      setTimeout(() => fin(null), 8000);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => fin({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        () => fin(null),
+        { timeout: 8000, maximumAge: 60000 },
+      );
+    });
+  })();
+  pedidoEnCurso = pedido;
+  pedido.then(
+    (v) => { ubicacionCache = { valor: v, cuando: Date.now() }; pedidoEnCurso = null; },
+    () => { pedidoEnCurso = null; },
+  );
+  return pedido;
+}
+
+/**
+ * Se dispara al abrir el formulario de carga. Mientras el tipo completa las
+ * horas el telefono va buscando el GPS, asi al apretar Guardar ya esta listo.
+ */
+export function precalentarUbicacion(): void {
+  if (ubicacionFresca() !== undefined) return;
+  void pedirUbicacion();
+}
+
+/**
+ * La ubicacion es un dato acompanante, no el motivo de la carga: si no esta a
+ * mano se guarda igual. Por eso espera poco y despues sigue de largo.
+ */
+export async function getUbicacion(msMaximo = 2500): Promise<Ubicacion | null> {
+  const fresca = ubicacionFresca();
+  if (fresca !== undefined) return fresca;
+  const pedido = pedirUbicacion();
+  return Promise.race([
+    pedido,
+    new Promise<null>((r) => setTimeout(() => r(null), msMaximo)),
+  ]);
 }
 
 /**

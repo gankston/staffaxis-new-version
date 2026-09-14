@@ -17,7 +17,7 @@ import {
   type ValoresCarga,
 } from './logica';
 import { api } from '../../lib/api';
-import { getUbicacion } from '../../lib/bridge';
+import { getUbicacion, precalentarUbicacion } from '../../lib/bridge';
 import { listarEmpleadosCrudos, listarRegistros, type Empleado } from '../../lib/empleados';
 import { fetchSectoresPublicos, getSectoresPermitidos, guardarSectorActivo, solicitarAcceso, type Sector } from '../../lib/auth';
 import { sesion } from '../../lib/session';
@@ -107,6 +107,9 @@ export function Empleados({
   }, []);
 
   const abrirHoras = (e: Empleado) => {
+    // El telefono va buscando el GPS mientras se completan las horas, asi al
+    // apretar Guardar el dato ya esta y no hay que esperarlo.
+    precalentarUbicacion();
     setParaHoras(e);
     setFecha(hoyISO());
     setValores({ ...VALORES_CARGA_INICIAL, porCosecha: sector?.tipoCarga === 'cosecha' });

@@ -87,7 +87,7 @@ export function SupervisorEntry({ onNavegar }: { onNavegar: () => void }) {
     setCargando(true);
     setError(null);
     try {
-      const ubicacion = await getUbicacion();
+      const ubicacion = await getUbicacion(8000);
       const r = await api.pedirAccesoSupervisor({
         device_id: getDeviceId(),
         supervisor_id: seleccionado.id,

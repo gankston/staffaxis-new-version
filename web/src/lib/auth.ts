@@ -61,7 +61,7 @@ export type ResultadoAcceso =
   | { tipo: 'pending'; requestId: string };
 
 export async function solicitarAcceso(sector: Sector, nombreCompleto: string): Promise<ResultadoAcceso> {
-  const ubicacion = await getUbicacion();
+  const ubicacion = await getUbicacion(8000);
   const body = await api.pedirAcceso({
     device_id: getDeviceId(),
     sector_id: sector.id,
