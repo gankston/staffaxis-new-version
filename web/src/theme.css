@@ -88,3 +88,20 @@ button {
   letter-spacing: 0.5px;
   font-weight: 500;
 }
+
+/* El anillo de "cargando". Sin esto el circulo se dibuja pero no gira, y
+   parece que la app se colgo justo cuando esta trabajando. */
+@keyframes staffaxis-giro {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Si el telefono tiene reducido el movimiento, el anillo no gira: en ese caso
+   late, para que igual se note que algo esta pasando. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes staffaxis-giro {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+}
