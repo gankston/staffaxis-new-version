@@ -17,15 +17,20 @@ import {
   IconoCambiarSector,
   IconoGaleria,
   IconoGuardar,
+  IconoLista,
   IconoPersonaMas,
 } from '../../components/iconos';
 import { leerPdf417, parsearDni, type DatosDni } from '../../domain/dniBarcode';
+import { leerTextoDeFoto, parsearConstancia } from '../../domain/constanciaOcr';
 import { api } from '../../lib/api';
 import { crearEmpleado, reactivarEmpleado, type Empleado } from '../../lib/empleados';
 
 const dataUrlABlob = async (dataUrl: string) => (await fetch(dataUrl)).blob();
 
-type Paso = 'instrucciones' | 'leyendo' | 'datos';
+type Paso = 'instrucciones' | 'leyendo' | 'leyendoConstancia' | 'datos';
+
+/** De donde salieron los datos. Define si se pueden editar o no. */
+type Origen = 'escaneo' | 'constancia' | 'manual';
 
 export function DialogoNuevoEmpleado({
   sectorId,
@@ -49,6 +54,8 @@ export function DialogoNuevoEmpleado({
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [leido, setLeido] = useState<DatosDni | null>(null);
+  const [origen, setOrigen] = useState<Origen>('manual');
+  const [idTramite, setIdTramite] = useState<string | null>(null);
 
   const [frente, setFrente] = useState<string | null>(null);
   const [dorso, setDorso] = useState<string | null>(null);
@@ -80,6 +87,41 @@ export function DialogoNuevoEmpleado({
     // La foto del frente ya la sacamos: se aprovecha para la ficha.
     setFrente(foto);
     setLeido(datos);
+    setOrigen('escaneo');
+    setDni(datos.dni);
+    setApellido(datos.apellido);
+    setNombre(datos.nombre);
+    setPaso('datos');
+  };
+
+  /**
+   * Alta con la constancia de tramite: el que tiene el DNI en tramite no tiene
+   * tarjeta para escanear. La hoja no trae ningun codigo con los datos (el de
+   * barras es el numero de boleta y el QR un link de seguimiento), asi que el
+   * apellido, el nombre y el DNI salen del texto impreso — y por eso quedan
+   * editables, al reves que los del codigo.
+   */
+  const leerConstancia = async (obtener: () => Promise<string | null>) => {
+    setErrorLectura(null);
+    const foto = await obtener();
+    if (!foto) return;
+
+    setPaso('leyendoConstancia');
+    const texto = await leerTextoDeFoto(foto);
+    const datos = texto ? parsearConstancia(texto) : null;
+
+    if (!datos) {
+      setPaso('instrucciones');
+      setErrorLectura(
+        'No se pudo leer la constancia. Sacá la foto de frente, con la hoja plana y que entre entera.',
+      );
+      return;
+    }
+
+    setFrente(foto);
+    setLeido(null);
+    setOrigen('constancia');
+    setIdTramite(datos.idTramite);
     setDni(datos.dni);
     setApellido(datos.apellido);
     setNombre(datos.nombre);
@@ -189,6 +231,20 @@ export function DialogoNuevoEmpleado({
 
   // ── Paso 2: decodificando ─────────────────────────────────────────────────
 
+  if (paso === 'leyendoConstancia') {
+    return (
+      <Modal titulo="Leyendo la constancia" onCerrar={onCerrar} acciones={[]}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '20px 0' }}>
+          <Spinner />
+          <div style={{ color: 'var(--texto-tenue)', fontSize: 14, textAlign: 'center' }}>
+            Buscando el nombre y el DNI en la hoja...
+            <div style={{ fontSize: 12, marginTop: 6 }}>La primera vez puede tardar un poco más.</div>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   if (paso === 'leyendo') {
     return (
       <Modal titulo="Leyendo el código">
@@ -297,11 +353,38 @@ export function DialogoNuevoEmpleado({
             Usar una foto de la galería
           </button>
 
+          <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: '4px 0', alignSelf: 'stretch' }} />
+
+          {/* Para el que todavia no tiene la tarjeta: se le saca la foto a la
+              constancia del RENAPER y de ahi salen el nombre y el DNI. */}
+          <button
+            onClick={() => leerConstancia(tomarFoto)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              width: '100%',
+              padding: 14,
+              borderRadius: 12,
+              border: '1px solid var(--warning)',
+              background: 'rgba(255,152,0,0.10)',
+              color: 'var(--warning)',
+              fontWeight: 700,
+              fontSize: 14,
+              lineHeight: 1.3,
+            }}
+          >
+            <IconoLista size={20} />
+            Alta con constancia de DNI en trámite
+          </button>
+
           {/* Salida de emergencia: si un DNI no se deja leer, el alta no puede
               quedar bloqueada en el campo. Va discreta y a proposito. */}
           <button
             onClick={() => {
               setLeido(null);
+              setOrigen('manual');
               setPaso('datos');
             }}
             style={{ background: 'none', border: 'none', color: 'var(--texto-apagado)', fontSize: 13, marginTop: 4 }}
@@ -315,11 +398,14 @@ export function DialogoNuevoEmpleado({
 
   // ── Paso 3: datos leidos, confirmar y crear ───────────────────────────────
 
+  // Lo que sale del codigo del DNI no se toca: es el dato del documento y
+  // viene exacto. Lo leido de la constancia y lo cargado a mano si se edita.
+  const bloqueado = origen === 'escaneo';
   const habilitado = !!dni.trim() && !!nombre.trim() && !!apellido.trim() && !cargando;
 
   return (
     <Modal
-      titulo={leido ? 'Confirmá los datos' : 'Nuevo empleado'}
+      titulo={origen === 'manual' ? 'Nuevo empleado' : 'Confirmá los datos'}
       onCerrar={onCerrar}
       acciones={[
         { texto: 'Volver', onClick: () => setPaso('instrucciones'), tipo: 'texto' },
@@ -327,7 +413,7 @@ export function DialogoNuevoEmpleado({
       ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {leido ? (
+        {origen === 'escaneo' ? (
           <div
             style={{
               background: 'rgba(76,175,80,0.12)',
@@ -338,7 +424,22 @@ export function DialogoNuevoEmpleado({
               color: '#a5d6a7',
             }}
           >
-            Código leído correctamente. Revisá que esté todo bien antes de crear.
+            Código leído correctamente. Los datos salen del DNI, no se editan.
+          </div>
+        ) : origen === 'constancia' ? (
+          <div
+            style={{
+              background: 'rgba(255,152,0,0.12)',
+              border: '1px solid var(--warning)',
+              borderRadius: 12,
+              padding: '12px 14px',
+              fontSize: 13,
+              color: 'var(--warning)',
+            }}
+          >
+            <strong>Constancia de DNI en trámite.</strong> Estos datos se leyeron de la hoja impresa, así que
+            pueden tener errores: revisalos contra el papel antes de crear.
+            {idTramite && <div style={{ marginTop: 4, fontSize: 12 }}>Trámite {idTramite}</div>}
           </div>
         ) : (
           <div
@@ -363,6 +464,7 @@ export function DialogoNuevoEmpleado({
           }}
           label="DNI *"
           soloNumeros
+          disabled={bloqueado}
           error={!dni.trim() || !!errorDni}
         />
 
@@ -392,12 +494,14 @@ export function DialogoNuevoEmpleado({
           value={apellido}
           onChange={(v) => setApellido(v.replace(/\n/g, ''))}
           label="Apellido *"
+          disabled={bloqueado}
           error={!apellido.trim()}
         />
         <TextField
           value={nombre}
           onChange={(v) => setNombre(v.replace(/\n/g, ''))}
           label="Nombre *"
+          disabled={bloqueado}
           error={!nombre.trim()}
         />
 
@@ -414,7 +518,7 @@ export function DialogoNuevoEmpleado({
 
         {/* El momento de sacar el dorso es ahora, con el DNI todavia en la mano:
             si se salta este paso, despues hay que ir a buscar al empleado. */}
-        {!dorso && (
+        {origen === 'escaneo' && !dorso && (
           <div
             style={{
               display: 'flex',
