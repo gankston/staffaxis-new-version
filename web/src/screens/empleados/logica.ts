@@ -264,25 +264,30 @@ export function filtrarEmpleados<T extends { apellido: string }>(lista: T[], q: 
  * formatTiposNuevosRegistro(): los tipos nuevos en texto legible, para la lista
  * de registros del empleado.
  */
+/**
+ * Se usa != null a proposito: si el servidor no manda uno de estos campos llega
+ * undefined, y con !== null se colaba y la pantalla mostraba "Otro: undefined"
+ * en una planilla de sueldos.
+ */
 export function formatTiposNuevosRegistro(t: TiposCargaNuevos): string {
   const partes: string[] = [];
-  if (t.kmViajes !== null) partes.push(`Km ${fmtValor(t.kmViajes)}`);
-  if (t.hasFumigadas !== null) partes.push(`Ha ${fmtValor(t.hasFumigadas)}`);
-  if (t.siembraTrilla !== null) partes.push(`Siembra/Trilla ${fmtValor(t.siembraTrilla)}`);
-  if (t.bolseros !== null) partes.push(`Bolseros ${fmtValor(t.bolseros)}`);
-  if (t.etiquetado !== null) partes.push(`Etiquetado ${fmtValor(t.etiquetado)}`);
+  if (t.kmViajes != null) partes.push(`Km ${fmtValor(t.kmViajes)}`);
+  if (t.hasFumigadas != null) partes.push(`Ha ${fmtValor(t.hasFumigadas)}`);
+  if (t.siembraTrilla != null) partes.push(`Siembra/Trilla ${fmtValor(t.siembraTrilla)}`);
+  if (t.bolseros != null) partes.push(`Bolseros ${fmtValor(t.bolseros)}`);
+  if (t.etiquetado != null) partes.push(`Etiquetado ${fmtValor(t.etiquetado)}`);
 
   const camion = [
     t.cargaCamionKg50 === true ? '50kg' : null,
     t.cargaCamionKg25 === true ? '25kg' : null,
-    t.cargaCamionOtro !== null ? `Otro: ${t.cargaCamionOtro}` : null,
+    t.cargaCamionOtro != null ? `Otro: ${t.cargaCamionOtro}` : null,
   ].filter(Boolean).join(' ');
   if (camion.trim()) partes.push(`Carga Camión ${camion}`);
 
   const estiba = [
     t.movimientoEstibaKg50 === true ? '50kg' : null,
     t.movimientoEstibaKg25 === true ? '25kg' : null,
-    t.movimientoEstibaOtro !== null ? `Otro: ${t.movimientoEstibaOtro}` : null,
+    t.movimientoEstibaOtro != null ? `Otro: ${t.movimientoEstibaOtro}` : null,
   ].filter(Boolean).join(' ');
   if (estiba.trim()) partes.push(`Mov. Estiba ${estiba}`);
 

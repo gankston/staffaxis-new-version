@@ -150,9 +150,7 @@ export function Visualizador({
             <table style={{ borderCollapse: 'collapse', fontSize: 12, whiteSpace: 'nowrap' }}>
               <thead>
                 <tr>
-                  <th style={{ ...celda, position: 'sticky', left: 0, background: 'var(--card-background)', textAlign: 'left', minWidth: 160 }}>
-                    Empleado
-                  </th>
+                  <th style={{ ...celda, ...columnaNombre }}>Empleado</th>
                   {dias.map((d) => (
                     <th key={d} style={{ ...celda, minWidth: 54 }}>
                       {d.slice(8)}/{d.slice(5, 7)}
@@ -164,16 +162,7 @@ export function Visualizador({
               <tbody>
                 {filas.map((f) => (
                   <tr key={f.employeeId}>
-                    <td
-                      style={{
-                        ...celda,
-                        position: 'sticky',
-                        left: 0,
-                        background: 'var(--card-background)',
-                        textAlign: 'left',
-                        fontWeight: 600,
-                      }}
-                    >
+                    <td style={{ ...celda, ...columnaNombre, fontWeight: 600 }} title={f.nombre}>
                       {f.nombre}
                     </td>
                     {dias.map((d) => {
@@ -208,6 +197,27 @@ function Resumen({ valor, label }: { valor: string; label: string }) {
     </div>
   );
 }
+
+/**
+ * La columna de nombres queda fija a la izquierda mientras se desplaza el resto.
+ * Va con ancho TOPE: sin eso un "PUNTA ORMACHEA PABLO GASTON" estiraba la
+ * columna hasta ocupar toda la pantalla y las horas quedaban afuera, sin que se
+ * viera un solo dato. El nombre se parte en dos renglones antes que recortarse:
+ * en una planilla de sueldos el nombre completo tiene que leerse.
+ */
+const columnaNombre: React.CSSProperties = {
+  position: 'sticky',
+  left: 0,
+  zIndex: 1,
+  background: 'var(--card-background)',
+  textAlign: 'left',
+  width: 132,
+  minWidth: 132,
+  maxWidth: 132,
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  lineHeight: 1.2,
+};
 
 const celda: React.CSSProperties = {
   border: '1px solid rgba(255,255,255,0.08)',
