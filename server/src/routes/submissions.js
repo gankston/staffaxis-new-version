@@ -2,6 +2,8 @@ import { db } from '../db.js';
 import { v4 as uuid } from 'uuid';
 import { verifyDevice } from '../middleware/auth.js';
 
+import { normalizarSeparadorDecimal, completarTipados } from '../lib/tarjaValores.js';
+
 export async function submissionRoutes(app) {
 
   // POST /api/submissions
@@ -28,6 +30,21 @@ export async function submissionRoutes(app) {
     // La mayoria de los sectores siguen auto-aprobados como siempre. Solo los que
     // tienen requiere_aprobacion=true (hoy: sectores de pruebas) pasan por supervisor.
     const statusInicial = emp.rows[0].requiere_aprobacion ? 'pending' : 'approved';
+
+    // Pedido de IT Salvita, puntos 1 y 2 del informe del 11/09.
+    //
+    // 1) Un solo separador decimal. El teclado numerico de Android en español
+    //    escribe coma, y con los dos conviviendo ningun export sale derecho.
+    //    Se guarda siempre con punto; los lectores aceptan las dos formas, asi
+    //    que lo que ya esta cargado se sigue leyendo igual.
+    const mw = normalizarSeparadorDecimal(minutes_worked ?? null);
+
+    // 2) Que el numero llegue a la columna tipada aunque el telefono no la
+    //    mande. Sin esto un reporte que lea solo las columnas sale corto y en
+    //    silencio: hay 800 partes con las cajas unicamente en el texto, y las
+    //    versiones viejas de la app no mandan ninguna de estas columnas.
+    //    Lo que el cliente SI manda no se toca.
+    const tipados = completarTipados(mw, { horas, cosecha, cajas, cajones, importe });
 
     const id = uuid();
     await db.query(
@@ -70,8 +87,8 @@ export async function submissionRoutes(app) {
                      fue_editada            = true,
                      updated_at             = NOW()`,
       [
-        id, employee_id, emp.rows[0].sector_id, date, minutes_worked ?? null, notes ?? null, statusInicial, latitude ?? null, longitude ?? null,
-        horas ?? null, cosecha ?? null, cajas ?? null, cajones ?? null, importe ?? null,
+        id, employee_id, emp.rows[0].sector_id, date, mw, notes ?? null, statusInicial, latitude ?? null, longitude ?? null,
+        tipados.horas, tipados.cosecha, tipados.cajas, tipados.cajones, tipados.importe,
         km_viajes ?? null, has_fumigadas ?? null, siembra_trilla ?? null, bolseros ?? null, etiquetado ?? null,
         carga_camion_kg50 ?? null, carga_camion_kg25 ?? null, carga_camion_otro ?? null,
         movimiento_estiba_kg50 ?? null, movimiento_estiba_kg25 ?? null, movimiento_estiba_otro ?? null,
