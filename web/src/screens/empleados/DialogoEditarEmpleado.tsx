@@ -22,6 +22,7 @@ import {
   IconoGaleria,
   IconoGuardar,
   IconoOcultar,
+  IconoVer,
 } from '../../components/iconos';
 import {
   actualizarEmpleado,
@@ -87,7 +88,7 @@ function FilaFoto({
           {tieneFoto && (
             <>
               <button onClick={onVer} title="Ver" style={botonIcono('var(--teal)')}>
-                <IconoOcultar size={20} />
+                <IconoVer size={20} />
               </button>
               <button onClick={onEliminar} title="Borrar" style={botonIcono('var(--error)')}>
                 <IconoBorrar size={20} />
