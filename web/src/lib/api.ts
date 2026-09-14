@@ -138,6 +138,12 @@ export interface EmployeeDto {
   tiene_foto_dorso: boolean;
 }
 
+/** Una ficha encontrada por DNI, con el sector donde esta hoy. */
+export interface EmpleadoEncontradoDto extends EmployeeDto {
+  sector_name: string | null;
+  es_de_mi_sector: boolean;
+}
+
 export interface AccessStatusDto {
   status: 'pending' | 'authorized' | 'rejected';
   token?: string | null;
@@ -296,6 +302,14 @@ export const api = {
     sector_id: string;
     force_transfer?: boolean;
   }) => pedir<EmployeeDto>('/api/employees', { method: 'POST', body }),
+
+  /** Busca en TODOS los sectores, no solo en el propio. */
+  buscarPorDni: (dni: string) =>
+    pedir<{ rows: EmpleadoEncontradoDto[] }>(`/api/employees/buscar?dni=${encodeURIComponent(dni)}`),
+
+  /** Trae esa ficha al sector del equipo (y la reactiva si estaba de baja). */
+  moverEmpleado: (id: string) =>
+    pedir<EmployeeDto>(`/api/employees/${encodeURIComponent(id)}/mover`, { method: 'POST', body: {} }),
 
   actualizarEmpleado: (
     id: string,

@@ -59,6 +59,70 @@ export async function employeeRoutes(app) {
     return reply.send({ employees: result.rows.map(toDto) });
   });
 
+  // GET /api/employees/buscar?dni=X — busca en TODOS los sectores.
+  //
+  // La lista comun solo devuelve el sector propio, asi que no habia forma de
+  // saber si un tipo que se presenta a trabajar ya existe en otro lado. Sin
+  // esto, el encargado lo daba de alta de nuevo y quedaba la ficha duplicada.
+  app.get('/api/employees/buscar', { preHandler: verifyDevice }, async (req, reply) => {
+    const dni = normalizarDni(req.query?.dni);
+    if (!dni) return reply.status(400).send({ error: 'Falta el DNI' });
+    if (!formatoDniValido(dni)) {
+      return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
+    }
+    const r = await db.query(
+      `SELECT e.id, e.sector_id, e.first_name, e.last_name, e.dni, e.is_active,
+              e.dni_foto_frente, e.dni_foto_dorso, s.name AS sector_name
+         FROM employees e LEFT JOIN sectors s ON s.id = e.sector_id
+        WHERE e.dni = $1
+        ORDER BY e.is_active DESC, e.updated_at DESC NULLS LAST`,
+      [dni]
+    );
+    return reply.send({
+      rows: r.rows.map((row) => ({
+        ...toDto(row),
+        sector_name: row.sector_name,
+        es_de_mi_sector: row.sector_id === req.device.sectorId,
+      })),
+    });
+  });
+
+  // POST /api/employees/:id/mover — trae UNA ficha concreta al sector del equipo.
+  //
+  // Va por id y no por DNI a proposito: la transferencia de POST /api/employees
+  // solo mira fichas activas, asi que con un empleado dado de baja en el otro
+  // sector terminaba creando una ficha nueva en vez de moverlo — un duplicado
+  // mas. Aca se mueve la ficha que el encargado vio en pantalla, y si estaba
+  // inactiva se reactiva, que es lo que quiere decir traerla.
+  app.post('/api/employees/:id/mover', { preHandler: verifyDevice }, async (req, reply) => {
+    const destino = req.device.sectorId;
+    if (!destino) return reply.status(400).send({ error: 'El equipo no tiene sector asignado' });
+
+    const actual = await db.query('SELECT id, sector_id, is_active FROM employees WHERE id = $1', [req.params.id]);
+    if (!actual.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
+
+    const origen = actual.rows[0].sector_id;
+    if (origen === destino && actual.rows[0].is_active) {
+      return reply.status(409).send({ error: 'El empleado ya está en tu sector' });
+    }
+
+    const movido = await db.query(
+      `UPDATE employees SET sector_id = $1, is_active = true, updated_at = NOW()
+        WHERE id = $2
+    RETURNING id, sector_id, first_name, last_name, dni, is_active, dni_foto_frente, dni_foto_dorso`,
+      [destino, req.params.id]
+    );
+
+    if (origen !== destino) {
+      // Queda registrado para que el export muestre "Se fue a X" / "Viene de Y"
+      await db.query(
+        'INSERT INTO transfers (employee_id, from_sector_id, to_sector_id) VALUES ($1, $2, $3)',
+        [req.params.id, origen, destino]
+      ).catch(() => {});
+    }
+    return reply.send(toDto(movido.rows[0]));
+  });
+
   // POST /api/employees
   app.post('/api/employees', { preHandler: verifyDevice }, async (req, reply) => {
     const { first_name, last_name, dni, sector_id, force_transfer } = req.body ?? {};

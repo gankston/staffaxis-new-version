@@ -4,6 +4,7 @@ import { EmpleadoCard } from './EmpleadoCard';
 import { DialogoHoras } from './DialogoHoras';
 import { DialogoEditarEmpleado } from './DialogoEditarEmpleado';
 import { DialogoNuevoEmpleado } from './DialogoNuevoEmpleado';
+import { DialogoMovimiento } from './DialogoMovimiento';
 import { Modal } from '../../components/Modal';
 import { Spinner, TextField } from '../../components/ui';
 import { Toast } from '../../components/Toast';
@@ -49,6 +50,7 @@ export function Empleados({
   // Si el guardado falla no se cierra el dialogo: con señal mala el tipo
   // perdia todo lo que acababa de cargar y tenia que tipearlo de nuevo.
   const [errorHoras, setErrorHoras] = useState<string | null>(null);
+  const [movimientoAbierto, setMovimientoAbierto] = useState(false);
 
   const [paraEditar, setParaEditar] = useState<Empleado | null>(null);
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
@@ -252,7 +254,28 @@ export function Empleados({
           iconoIzq={<span style={{ color: 'var(--texto-tenue)', display: 'flex' }}><IconoBuscar size={20} /></span>}
         />
         <div style={{ height: 8 }} />
-        <div style={{ fontSize: 13, color: 'var(--texto-tenue)' }}>{filtrados.length} empleados</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ fontSize: 13, color: 'var(--texto-tenue)' }}>{filtrados.length} empleados</div>
+          {/* Buscar a alguien que esta en OTRO sector y traerlo. Va aca, pegado
+              al buscador, porque es lo que se hace cuando no aparece en la lista. */}
+          <button
+            onClick={() => setMovimientoAbierto(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'none',
+              border: 'none',
+              color: 'var(--teal)',
+              fontSize: 13,
+              fontWeight: 600,
+              padding: '4px 0',
+            }}
+          >
+            <IconoCambiarSector size={18} />
+            Movimiento de empleados
+          </button>
+        </div>
         <div style={{ height: 4 }} />
 
         {cargando && todos.length === 0 ? (
@@ -358,6 +381,23 @@ export function Empleados({
           onMensaje={avisar}
         />
       )}
+
+      {movimientoAbierto && (
+
+        <DialogoMovimiento
+
+          sectorName={sector.name}
+
+          onCerrar={() => setMovimientoAbierto(false)}
+
+          onMovido={cargar}
+
+          onMensaje={avisar}
+
+        />
+
+      )}
+
 
       {nuevoAbierto && (
         <DialogoNuevoEmpleado
