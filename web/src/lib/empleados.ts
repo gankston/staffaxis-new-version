@@ -161,6 +161,14 @@ interface FilaSubmission {
   movimiento_estiba_kg50: boolean | null;
   movimiento_estiba_kg25: boolean | null;
   movimiento_estiba_otro: string | null;
+  etiquetado_lata_185?: number | null;
+  etiquetado_lata_750?: number | null;
+  etiquetado_lata_2500?: number | null;
+  etiquetado_lata_8kg?: number | null;
+  descarga_jaula?: number | null;
+  descarga_camion?: number | null;
+  carga_jaula?: number | null;
+  carga_camion_cantidad?: number | null;
 }
 
 function aRegistro(f: FilaSubmission): Registro {
@@ -185,6 +193,14 @@ function aRegistro(f: FilaSubmission): Registro {
       movimientoEstibaKg50: f.movimiento_estiba_kg50,
       movimientoEstibaKg25: f.movimiento_estiba_kg25,
       movimientoEstibaOtro: f.movimiento_estiba_otro,
+      etiquetadoLata185: f.etiquetado_lata_185 ?? null,
+      etiquetadoLata750: f.etiquetado_lata_750 ?? null,
+      etiquetadoLata2500: f.etiquetado_lata_2500 ?? null,
+      etiquetadoLata8kg: f.etiquetado_lata_8kg ?? null,
+      descargaJaula: f.descarga_jaula ?? null,
+      descargaCamion: f.descarga_camion ?? null,
+      cargaJaula: f.carga_jaula ?? null,
+      cargaCamionCantidad: f.carga_camion_cantidad ?? null,
     },
   };
 }

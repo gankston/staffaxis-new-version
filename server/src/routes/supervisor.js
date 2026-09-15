@@ -35,6 +35,7 @@ export async function supervisorRoutes(app) {
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
+              s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,
               e.first_name, e.last_name, sec.id AS sector_id, sec.name AS sector_name,
               COALESCE(
                 (SELECT ARRAY_AGG(stc.tipo ORDER BY stc.tipo)
@@ -59,6 +60,7 @@ export async function supervisorRoutes(app) {
         bolseros: x.bolseros, etiquetado: x.etiquetado,
         cargaCamionKg50: x.carga_camion_kg50, cargaCamionKg25: x.carga_camion_kg25, cargaCamionOtro: x.carga_camion_otro,
         movimientoEstibaKg50: x.movimiento_estiba_kg50, movimientoEstibaKg25: x.movimiento_estiba_kg25, movimientoEstibaOtro: x.movimiento_estiba_otro,
+        etiquetadoLata185: x.etiquetado_lata_185, etiquetadoLata750: x.etiquetado_lata_750, etiquetadoLata2500: x.etiquetado_lata_2500, etiquetadoLata8kg: x.etiquetado_lata_8kg, descargaJaula: x.descarga_jaula, descargaCamion: x.descarga_camion, cargaJaula: x.carga_jaula, cargaCamionCantidad: x.carga_camion_cantidad,
       })),
     });
   });
@@ -124,6 +126,7 @@ export async function supervisorRoutes(app) {
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
+              s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,
               s.latitude, s.longitude, s.created_at AS submitted_at
        FROM submissions s
        JOIN employees e  ON e.id  = s.employee_id

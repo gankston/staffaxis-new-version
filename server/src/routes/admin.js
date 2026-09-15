@@ -299,6 +299,7 @@ export async function adminRoutes(app) {
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
+              s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,
               s.aprobada_en, sup.full_name AS aprobada_por_nombre, s.motivo_rechazo,
               s.latitude, s.longitude, s.created_at AS submitted_at
        FROM submissions s

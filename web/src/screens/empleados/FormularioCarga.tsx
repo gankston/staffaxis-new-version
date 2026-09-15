@@ -79,6 +79,112 @@ function CargaSimple({
   );
 }
 
+/** Etiquetado: se tilda una vez y se abre una cantidad por tamaño de lata. */
+function CargaPorLata({
+  checked,
+  onCheck,
+  valores,
+  onValor,
+}: {
+  checked: boolean;
+  onCheck: (v: boolean) => void;
+  valores: { l185: string; l750: string; l2500: string; l8kg: string };
+  onValor: (campo: 'l185' | 'l750' | 'l2500' | 'l8kg', v: string) => void;
+}) {
+  const vacio = !valores.l185.trim() && !valores.l750.trim() && !valores.l2500.trim() && !valores.l8kg.trim();
+  const latas = [
+    ['l185', 'Lata 185'],
+    ['l750', 'Lata 750'],
+    ['l2500', 'Lata 2500'],
+    ['l8kg', 'Lata 8 kgs'],
+  ] as const;
+  return (
+    <div>
+      <Check label="Etiquetado" checked={checked} onChange={onCheck} negrita />
+      {checked && (
+        <div style={{ paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {latas.map(([campo, etiqueta]) => (
+            <TextField
+              key={campo}
+              value={valores[campo]}
+              onChange={(v) => onValor(campo, v)}
+              label={etiqueta}
+              soloNumeros
+            />
+          ))}
+          {vacio && <div style={{ fontSize: 12, color: 'var(--error)' }}>Cargá al menos una lata</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Descarga y Carga (FABRICA): se tilda el tipo, se elige jaula y/o camion, y
+ * cada opcion tildada pide su cantidad.
+ */
+function CargaJaulaCamion({
+  label,
+  checked,
+  onCheck,
+  jaulaCheck,
+  onJaulaCheck,
+  jaulaValor,
+  onJaulaValor,
+  camionCheck,
+  onCamionCheck,
+  camionValor,
+  onCamionValor,
+}: {
+  label: string;
+  checked: boolean;
+  onCheck: (v: boolean) => void;
+  jaulaCheck: boolean;
+  onJaulaCheck: (v: boolean) => void;
+  jaulaValor: string;
+  onJaulaValor: (v: string) => void;
+  camionCheck: boolean;
+  onCamionCheck: (v: boolean) => void;
+  camionValor: string;
+  onCamionValor: (v: string) => void;
+}) {
+  const faltaOpcion = !jaulaCheck && !camionCheck;
+  return (
+    <div>
+      <Check label={label} checked={checked} onChange={onCheck} negrita />
+      {checked && (
+        <div style={{ paddingLeft: 16 }}>
+          <Check label="Jaula" checked={jaulaCheck} onChange={onJaulaCheck} />
+          {jaulaCheck && (
+            <div style={{ paddingLeft: 16 }}>
+              <TextField
+                value={jaulaValor}
+                onChange={onJaulaValor}
+                label="Cantidad de jaulas"
+                soloNumeros
+                error={!jaulaValor.trim()}
+              />
+            </div>
+          )}
+          <Check label="Camión" checked={camionCheck} onChange={onCamionCheck} />
+          {camionCheck && (
+            <div style={{ paddingLeft: 16 }}>
+              <TextField
+                value={camionValor}
+                onChange={onCamionValor}
+                label="Cantidad de camiones"
+                soloNumeros
+                error={!camionValor.trim()}
+              />
+            </div>
+          )}
+          {faltaOpcion && <div style={{ fontSize: 12, color: 'var(--error)' }}>Marcá al menos una opción</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CargaTriple({
   label,
   checked,
@@ -263,13 +369,79 @@ export function FormularioCarga({
         />
       )}
       {tiposCarga.includes('etiquetado') && (
-        <CargaSimple
-          label="Etiquetado"
+        <CargaPorLata
           checked={valores.porEtiquetado}
-          valor={valores.etiquetadoValor}
-          onCheck={(v) => set({ porEtiquetado: v, etiquetadoValor: v ? valores.etiquetadoValor : '' })}
-          onValor={(v) => set({ etiquetadoValor: v })}
-          placeholder="Cantidad (obligatorio)"
+          onCheck={(v) =>
+            set(
+              v
+                ? { porEtiquetado: true }
+                : {
+                    porEtiquetado: false,
+                    etiquetadoLata185: '',
+                    etiquetadoLata750: '',
+                    etiquetadoLata2500: '',
+                    etiquetadoLata8kg: '',
+                  },
+            )
+          }
+          valores={{
+            l185: valores.etiquetadoLata185,
+            l750: valores.etiquetadoLata750,
+            l2500: valores.etiquetadoLata2500,
+            l8kg: valores.etiquetadoLata8kg,
+          }}
+          onValor={(campo, v) =>
+            set(
+              campo === 'l185' ? { etiquetadoLata185: v }
+              : campo === 'l750' ? { etiquetadoLata750: v }
+              : campo === 'l2500' ? { etiquetadoLata2500: v }
+              : { etiquetadoLata8kg: v },
+            )
+          }
+        />
+      )}
+
+      {tiposCarga.includes('descarga') && (
+        <CargaJaulaCamion
+          label="Descarga"
+          checked={valores.porDescarga}
+          onCheck={(v) =>
+            set(
+              v
+                ? { porDescarga: true }
+                : { porDescarga: false, descargaJaulaCheck: false, descargaJaulaValor: '', descargaCamionCheck: false, descargaCamionValor: '' },
+            )
+          }
+          jaulaCheck={valores.descargaJaulaCheck}
+          onJaulaCheck={(v) => set({ descargaJaulaCheck: v, descargaJaulaValor: v ? valores.descargaJaulaValor : '' })}
+          jaulaValor={valores.descargaJaulaValor}
+          onJaulaValor={(v) => set({ descargaJaulaValor: v })}
+          camionCheck={valores.descargaCamionCheck}
+          onCamionCheck={(v) => set({ descargaCamionCheck: v, descargaCamionValor: v ? valores.descargaCamionValor : '' })}
+          camionValor={valores.descargaCamionValor}
+          onCamionValor={(v) => set({ descargaCamionValor: v })}
+        />
+      )}
+
+      {tiposCarga.includes('carga') && (
+        <CargaJaulaCamion
+          label="Carga"
+          checked={valores.porCarga}
+          onCheck={(v) =>
+            set(
+              v
+                ? { porCarga: true }
+                : { porCarga: false, cargaJaulaCheck: false, cargaJaulaValor: '', cargaCamionCheck: false, cargaCamionValor: '' },
+            )
+          }
+          jaulaCheck={valores.cargaJaulaCheck}
+          onJaulaCheck={(v) => set({ cargaJaulaCheck: v, cargaJaulaValor: v ? valores.cargaJaulaValor : '' })}
+          jaulaValor={valores.cargaJaulaValor}
+          onJaulaValor={(v) => set({ cargaJaulaValor: v })}
+          camionCheck={valores.cargaCamionCheck}
+          onCamionCheck={(v) => set({ cargaCamionCheck: v, cargaCamionValor: v ? valores.cargaCamionValor : '' })}
+          camionValor={valores.cargaCamionValor}
+          onCamionValor={(v) => set({ cargaCamionValor: v })}
         />
       )}
       {tiposCarga.includes('carga_camion') && (

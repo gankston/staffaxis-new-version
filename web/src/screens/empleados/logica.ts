@@ -66,7 +66,22 @@ export interface ValoresCarga {
   porBolseros: boolean;
   bolserosValor: string;
   porEtiquetado: boolean;
-  etiquetadoValor: string;
+  etiquetadoLata185: string;
+  etiquetadoLata750: string;
+  etiquetadoLata2500: string;
+  etiquetadoLata8kg: string;
+  // Descarga y Carga (FABRICA): se tilda el tipo, despues jaula y/o camion, y
+  // cada uno tildado pide su cantidad.
+  porDescarga: boolean;
+  descargaJaulaCheck: boolean;
+  descargaJaulaValor: string;
+  descargaCamionCheck: boolean;
+  descargaCamionValor: string;
+  porCarga: boolean;
+  cargaJaulaCheck: boolean;
+  cargaJaulaValor: string;
+  cargaCamionCheck: boolean;
+  cargaCamionValor: string;
   porCargaCamion: boolean;
   cargaCamion50: boolean;
   cargaCamion25: boolean;
@@ -98,7 +113,20 @@ export const VALORES_CARGA_INICIAL: ValoresCarga = {
   porBolseros: false,
   bolserosValor: '',
   porEtiquetado: false,
-  etiquetadoValor: '',
+  etiquetadoLata185: '',
+  etiquetadoLata750: '',
+  etiquetadoLata2500: '',
+  etiquetadoLata8kg: '',
+  porDescarga: false,
+  descargaJaulaCheck: false,
+  descargaJaulaValor: '',
+  descargaCamionCheck: false,
+  descargaCamionValor: '',
+  porCarga: false,
+  cargaJaulaCheck: false,
+  cargaJaulaValor: '',
+  cargaCamionCheck: false,
+  cargaCamionValor: '',
   porCargaCamion: false,
   cargaCamion50: false,
   cargaCamion25: false,
@@ -124,7 +152,26 @@ export function puedeGuardar(v: ValoresCarga): boolean {
   if (v.porHasFumigadas && !v.hasFumigadasValor.trim()) return false;
   if (v.porSiembraTrilla && !v.siembraTrillaValor.trim()) return false;
   if (v.porBolseros && !v.bolserosValor.trim()) return false;
-  if (v.porEtiquetado && !v.etiquetadoValor.trim()) return false;
+  // Etiquetado: alcanza con que haya cargado una lata, no las cuatro.
+  if (
+    v.porEtiquetado &&
+    !v.etiquetadoLata185.trim() &&
+    !v.etiquetadoLata750.trim() &&
+    !v.etiquetadoLata2500.trim() &&
+    !v.etiquetadoLata8kg.trim()
+  )
+    return false;
+  // Descarga y Carga: hay que tildar al menos una opcion, y la tildada pide numero.
+  if (v.porDescarga) {
+    if (!v.descargaJaulaCheck && !v.descargaCamionCheck) return false;
+    if (v.descargaJaulaCheck && !v.descargaJaulaValor.trim()) return false;
+    if (v.descargaCamionCheck && !v.descargaCamionValor.trim()) return false;
+  }
+  if (v.porCarga) {
+    if (!v.cargaJaulaCheck && !v.cargaCamionCheck) return false;
+    if (v.cargaJaulaCheck && !v.cargaJaulaValor.trim()) return false;
+    if (v.cargaCamionCheck && !v.cargaCamionValor.trim()) return false;
+  }
   if (
     v.porCargaCamion &&
     !v.cargaCamion50 &&
@@ -158,7 +205,16 @@ export function buildTiposNuevos(v: ValoresCarga): TiposCargaNuevos {
     hasFumigadas: v.porHasFumigadas ? toFloatOrNull(comaAPunto(v.hasFumigadasValor)) : null,
     siembraTrilla: v.porSiembraTrilla ? toFloatOrNull(comaAPunto(v.siembraTrillaValor)) : null,
     bolseros: v.porBolseros ? toFloatOrNull(comaAPunto(v.bolserosValor)) : null,
-    etiquetado: v.porEtiquetado ? toFloatOrNull(comaAPunto(v.etiquetadoValor)) : null,
+    // `etiquetado` queda para lo viejo; ahora el dato va abierto por lata.
+    etiquetado: null,
+    etiquetadoLata185: v.porEtiquetado ? toFloatOrNull(comaAPunto(v.etiquetadoLata185)) : null,
+    etiquetadoLata750: v.porEtiquetado ? toFloatOrNull(comaAPunto(v.etiquetadoLata750)) : null,
+    etiquetadoLata2500: v.porEtiquetado ? toFloatOrNull(comaAPunto(v.etiquetadoLata2500)) : null,
+    etiquetadoLata8kg: v.porEtiquetado ? toFloatOrNull(comaAPunto(v.etiquetadoLata8kg)) : null,
+    descargaJaula: v.porDescarga && v.descargaJaulaCheck ? toFloatOrNull(comaAPunto(v.descargaJaulaValor)) : null,
+    descargaCamion: v.porDescarga && v.descargaCamionCheck ? toFloatOrNull(comaAPunto(v.descargaCamionValor)) : null,
+    cargaJaula: v.porCarga && v.cargaJaulaCheck ? toFloatOrNull(comaAPunto(v.cargaJaulaValor)) : null,
+    cargaCamionCantidad: v.porCarga && v.cargaCamionCheck ? toFloatOrNull(comaAPunto(v.cargaCamionValor)) : null,
     cargaCamionKg50: v.porCargaCamion && v.cargaCamion50 ? true : null,
     cargaCamionKg25: v.porCargaCamion && v.cargaCamion25 ? true : null,
     cargaCamionOtro:
@@ -237,8 +293,28 @@ export function valoresDesdeRegistro(
     siembraTrillaValor: t.siembraTrilla !== null ? fmtValor(t.siembraTrilla) : '',
     porBolseros: t.bolseros !== null,
     bolserosValor: t.bolseros !== null ? fmtValor(t.bolseros) : '',
-    porEtiquetado: t.etiquetado !== null,
-    etiquetadoValor: t.etiquetado !== null ? fmtValor(t.etiquetado) : '',
+    // Se abre el bloque si hay alguna lata cargada, o si es una tarja vieja que
+    // guardo el etiquetado en un solo numero: ese cae en Lata 185 para que se
+    // pueda ver y corregir, en vez de desaparecer al editar.
+    porEtiquetado:
+      t.etiquetadoLata185 !== null || t.etiquetadoLata750 !== null ||
+      t.etiquetadoLata2500 !== null || t.etiquetadoLata8kg !== null || t.etiquetado !== null,
+    etiquetadoLata185:
+      t.etiquetadoLata185 !== null ? fmtValor(t.etiquetadoLata185)
+      : t.etiquetado !== null ? fmtValor(t.etiquetado) : '',
+    etiquetadoLata750: t.etiquetadoLata750 !== null ? fmtValor(t.etiquetadoLata750) : '',
+    etiquetadoLata2500: t.etiquetadoLata2500 !== null ? fmtValor(t.etiquetadoLata2500) : '',
+    etiquetadoLata8kg: t.etiquetadoLata8kg !== null ? fmtValor(t.etiquetadoLata8kg) : '',
+    porDescarga: t.descargaJaula !== null || t.descargaCamion !== null,
+    descargaJaulaCheck: t.descargaJaula !== null,
+    descargaJaulaValor: t.descargaJaula !== null ? fmtValor(t.descargaJaula) : '',
+    descargaCamionCheck: t.descargaCamion !== null,
+    descargaCamionValor: t.descargaCamion !== null ? fmtValor(t.descargaCamion) : '',
+    porCarga: t.cargaJaula !== null || t.cargaCamionCantidad !== null,
+    cargaJaulaCheck: t.cargaJaula !== null,
+    cargaJaulaValor: t.cargaJaula !== null ? fmtValor(t.cargaJaula) : '',
+    cargaCamionCheck: t.cargaCamionCantidad !== null,
+    cargaCamionValor: t.cargaCamionCantidad !== null ? fmtValor(t.cargaCamionCantidad) : '',
     porCargaCamion: t.cargaCamionKg50 === true || t.cargaCamionKg25 === true || t.cargaCamionOtro !== null,
     cargaCamion50: t.cargaCamionKg50 === true,
     cargaCamion25: t.cargaCamionKg25 === true,
@@ -276,6 +352,25 @@ export function formatTiposNuevosRegistro(t: TiposCargaNuevos): string {
   if (t.siembraTrilla != null) partes.push(`Siembra/Trilla ${fmtValor(t.siembraTrilla)}`);
   if (t.bolseros != null) partes.push(`Bolseros ${fmtValor(t.bolseros)}`);
   if (t.etiquetado != null) partes.push(`Etiquetado ${fmtValor(t.etiquetado)}`);
+  const latas = [
+    t.etiquetadoLata185 != null ? `185: ${fmtValor(t.etiquetadoLata185)}` : null,
+    t.etiquetadoLata750 != null ? `750: ${fmtValor(t.etiquetadoLata750)}` : null,
+    t.etiquetadoLata2500 != null ? `2500: ${fmtValor(t.etiquetadoLata2500)}` : null,
+    t.etiquetadoLata8kg != null ? `8kg: ${fmtValor(t.etiquetadoLata8kg)}` : null,
+  ].filter(Boolean).join(' ');
+  if (latas) partes.push(`Etiquetado ${latas}`);
+
+  const descarga = [
+    t.descargaJaula != null ? `Jaula ${fmtValor(t.descargaJaula)}` : null,
+    t.descargaCamion != null ? `Camión ${fmtValor(t.descargaCamion)}` : null,
+  ].filter(Boolean).join(' ');
+  if (descarga) partes.push(`Descarga ${descarga}`);
+
+  const carga = [
+    t.cargaJaula != null ? `Jaula ${fmtValor(t.cargaJaula)}` : null,
+    t.cargaCamionCantidad != null ? `Camión ${fmtValor(t.cargaCamionCantidad)}` : null,
+  ].filter(Boolean).join(' ');
+  if (carga) partes.push(`Carga ${carga}`);
 
   const camion = [
     t.cargaCamionKg50 === true ? '50kg' : null,

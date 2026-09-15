@@ -14,6 +14,8 @@ export async function submissionRoutes(app) {
       km_viajes, has_fumigadas, siembra_trilla, bolseros, etiquetado,
       carga_camion_kg50, carga_camion_kg25, carga_camion_otro,
       movimiento_estiba_kg50, movimiento_estiba_kg25, movimiento_estiba_otro,
+      // Etiquetado abierto por lata, y Descarga/Carga de FABRICA
+      etiquetado_lata_185, etiquetado_lata_750, etiquetado_lata_2500, etiquetado_lata_8kg, descarga_jaula, descarga_camion, carga_jaula, carga_camion_cantidad,
     } = req.body ?? {};
     if (!employee_id || !date) {
       return reply.status(400).send({ error: 'Faltan campos requeridos' });
@@ -53,9 +55,10 @@ export async function submissionRoutes(app) {
          horas, cosecha, cajas, cajones, importe,
          km_viajes, has_fumigadas, siembra_trilla, bolseros, etiquetado,
          carga_camion_kg50, carga_camion_kg25, carga_camion_otro,
-         movimiento_estiba_kg50, movimiento_estiba_kg25, movimiento_estiba_otro
+         movimiento_estiba_kg50, movimiento_estiba_kg25, movimiento_estiba_otro,
+         etiquetado_lata_185, etiquetado_lata_750, etiquetado_lata_2500, etiquetado_lata_8kg, descarga_jaula, descarga_camion, carga_jaula, carga_camion_cantidad
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
        ON CONFLICT (employee_id, date) WHERE NOT is_deleted
        DO UPDATE SET minutes_worked         = EXCLUDED.minutes_worked,
                      notes                  = EXCLUDED.notes,
@@ -77,6 +80,14 @@ export async function submissionRoutes(app) {
                      movimiento_estiba_kg50 = EXCLUDED.movimiento_estiba_kg50,
                      movimiento_estiba_kg25 = EXCLUDED.movimiento_estiba_kg25,
                      movimiento_estiba_otro = EXCLUDED.movimiento_estiba_otro,
+                     etiquetado_lata_185 = EXCLUDED.etiquetado_lata_185,
+                     etiquetado_lata_750 = EXCLUDED.etiquetado_lata_750,
+                     etiquetado_lata_2500 = EXCLUDED.etiquetado_lata_2500,
+                     etiquetado_lata_8kg = EXCLUDED.etiquetado_lata_8kg,
+                     descarga_jaula = EXCLUDED.descarga_jaula,
+                     descarga_camion = EXCLUDED.descarga_camion,
+                     carga_jaula = EXCLUDED.carga_jaula,
+                     carga_camion_cantidad = EXCLUDED.carga_camion_cantidad,
                      -- Al editar una tarja ya cargada vuelve a quedar como recien enviada:
                      -- si el sector requiere aprobacion pasa de nuevo a 'pending' y se borra
                      -- la aprobacion anterior, porque el supervisor aprobo OTROS valores y
@@ -92,6 +103,7 @@ export async function submissionRoutes(app) {
         km_viajes ?? null, has_fumigadas ?? null, siembra_trilla ?? null, bolseros ?? null, etiquetado ?? null,
         carga_camion_kg50 ?? null, carga_camion_kg25 ?? null, carga_camion_otro ?? null,
         movimiento_estiba_kg50 ?? null, movimiento_estiba_kg25 ?? null, movimiento_estiba_otro ?? null,
+        etiquetado_lata_185 ?? null, etiquetado_lata_750 ?? null, etiquetado_lata_2500 ?? null, etiquetado_lata_8kg ?? null, descarga_jaula ?? null, descarga_camion ?? null, carga_jaula ?? null, carga_camion_cantidad ?? null,
       ]
     );
 
@@ -132,6 +144,7 @@ export async function submissionRoutes(app) {
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
+              s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,
               s.motivo_rechazo
        FROM submissions s
        JOIN employees e ON e.id = s.employee_id

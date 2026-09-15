@@ -195,6 +195,14 @@ export interface AdminReportRowDto {
   movimiento_estiba_kg50: boolean | null;
   movimiento_estiba_kg25: boolean | null;
   movimiento_estiba_otro: string | null;
+  etiquetado_lata_185?: number | null;
+  etiquetado_lata_750?: number | null;
+  etiquetado_lata_2500?: number | null;
+  etiquetado_lata_8kg?: number | null;
+  descarga_jaula?: number | null;
+  descarga_camion?: number | null;
+  carga_jaula?: number | null;
+  carga_camion_cantidad?: number | null;
 }
 
 export interface SupervisorPendingItemDto {
@@ -219,6 +227,14 @@ export interface SupervisorPendingItemDto {
   movimientoEstibaKg50?: boolean | null;
   movimientoEstibaKg25?: boolean | null;
   movimientoEstibaOtro?: string | null;
+  etiquetadoLata185?: number | null;
+  etiquetadoLata750?: number | null;
+  etiquetadoLata2500?: number | null;
+  etiquetadoLata8kg?: number | null;
+  descargaJaula?: number | null;
+  descargaCamion?: number | null;
+  cargaJaula?: number | null;
+  cargaCamionCantidad?: number | null;
 }
 
 export interface SupervisorResumenRowDto {
@@ -241,6 +257,14 @@ export interface SupervisorResumenRowDto {
   movimiento_estiba_kg50?: boolean | null;
   movimiento_estiba_kg25?: boolean | null;
   movimiento_estiba_otro?: string | null;
+  etiquetado_lata_185?: number | null;
+  etiquetado_lata_750?: number | null;
+  etiquetado_lata_2500?: number | null;
+  etiquetado_lata_8kg?: number | null;
+  descarga_jaula?: number | null;
+  descarga_camion?: number | null;
+  carga_jaula?: number | null;
+  carga_camion_cantidad?: number | null;
 }
 
 export interface CrearSubmissionBody {
