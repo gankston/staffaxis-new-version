@@ -2,7 +2,7 @@
  * Port exacto de TiposCargaNuevos (domain/model/Models.kt).
  *
  * Tipos de carga nuevos (km_viajes, bolseros, carga_camion, etc.) — cada uno con
- * columna propia en el servidor, igual que horas/cosecha/cajas/cajones/importe.
+ * columna propia en el servidor, igual que horas/cosecha/cajas/cajones/abonada.
  * 50kg/25kg son checks: el dato ES el peso, no una cantidad a ingresar.
  */
 export interface TiposCargaNuevos {

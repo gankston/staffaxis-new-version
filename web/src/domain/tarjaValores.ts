@@ -11,10 +11,10 @@ export interface TarjaValores {
   cosecha: number;
   cajas: number;
   cajones: number;
-  importe: number;
+  abonada: number;
 }
 
-export const CERO: TarjaValores = { horas: 0, cosecha: 0, cajas: 0, cajones: 0, importe: 0 };
+export const CERO: TarjaValores = { horas: 0, cosecha: 0, cajas: 0, cajones: 0, abonada: 0 };
 
 const REGEX_CAJAS = /Cajas ([0-9]+(?:[.,][0-9]+)?)/;
 const REGEX_CAJONES = /Cajones ([0-9]+(?:[.,][0-9]+)?)/;
@@ -37,7 +37,7 @@ export function parse(minutesWorked: string | null | undefined): TarjaValores {
   let cosecha = 0;
   let cajas = 0;
   let cajones = 0;
-  let importe = 0;
+  let abonada = 0;
 
   for (const parte of minutesWorked.split('|').map((p) => p.trim())) {
     if (parte.startsWith('H ')) {
@@ -47,9 +47,10 @@ export function parse(minutesWorked: string | null | undefined): TarjaValores {
     } else if (parte === 'C') {
       // cosecha vieja, sin cantidad de cachos
     } else if (parte.startsWith('AB:')) {
-      importe += num(parte.slice(3));
+      abonada += num(parte.slice(3));
     } else if (parte.startsWith('$')) {
-      importe += num(parte.slice(1));
+      // Formato viejo: la abonada sola, escrita con el signo adelante.
+      abonada += num(parte.slice(1));
     } else if (parte.startsWith('Cajas') || parte.startsWith('Cajones')) {
       // Kotlin usa .toInt(), que TRUNCA hacia cero (no redondea).
       cajas += Math.trunc(num(REGEX_CAJAS.exec(parte)?.[1]));
@@ -61,7 +62,7 @@ export function parse(minutesWorked: string | null | undefined): TarjaValores {
     }
   }
 
-  return { horas, cosecha, cajas, cajones, importe };
+  return { horas, cosecha, cajas, cajones, abonada };
 }
 
 export function sumarValores(a: TarjaValores, b: TarjaValores): TarjaValores {
@@ -70,7 +71,7 @@ export function sumarValores(a: TarjaValores, b: TarjaValores): TarjaValores {
     cosecha: a.cosecha + b.cosecha,
     cajas: a.cajas + b.cajas,
     cajones: a.cajones + b.cajones,
-    importe: a.importe + b.importe,
+    abonada: a.abonada + b.abonada,
   };
 }
 

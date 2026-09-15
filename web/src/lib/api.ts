@@ -183,7 +183,7 @@ export interface AdminReportRowDto {
   cosecha: number | null;
   cajas: number | null;
   cajones: number | null;
-  importe: number | null;
+  abonada: number | null;
   km_viajes: number | null;
   has_fumigadas: number | null;
   siembra_trilla: number | null;
@@ -278,7 +278,7 @@ export interface CrearSubmissionBody {
   cosecha?: number | null;
   cajas?: number | null;
   cajones?: number | null;
-  importe?: number | null;
+  abonada?: number | null;
   km_viajes?: number | null;
   has_fumigadas?: number | null;
   siembra_trilla?: number | null;

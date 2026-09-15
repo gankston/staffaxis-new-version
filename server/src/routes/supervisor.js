@@ -31,7 +31,7 @@ export async function supervisorRoutes(app) {
     const r = await db.query(
       `SELECT s.id, s.employee_id, s.date, s.minutes_worked, s.notes, s.created_at,
               s.fue_editada,
-              s.horas, s.cosecha, s.cajas, s.cajones, s.importe,
+              s.horas, s.cosecha, s.cajas, s.cajones, s.importe, s.importe AS abonada,
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
@@ -122,7 +122,7 @@ export async function supervisorRoutes(app) {
               e.first_name, e.last_name, e.dni,
               sec.id AS sector_id, sec.name AS sector_name,
               s.date, s.minutes_worked, s.notes, s.status,
-              s.horas, s.cosecha, s.cajas, s.cajones, s.importe,
+              s.horas, s.cosecha, s.cajas, s.cajones, s.importe, s.importe AS abonada,
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,

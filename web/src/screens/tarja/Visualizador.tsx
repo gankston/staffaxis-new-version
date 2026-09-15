@@ -15,7 +15,7 @@ interface Fila {
   porDia: Map<string, Registro>;
   totalHoras: number;
   cosechaTotal: number;
-  importeTotal: number;
+  abonadaTotal: number;
   cajasTotal: number;
   cajonesTotal: number;
 }
@@ -85,7 +85,7 @@ export function Visualizador({
         porDia: new Map(subs.map((s) => [s.date, s])),
         totalHoras: v.horas,
         cosechaTotal: v.cosecha,
-        importeTotal: v.importe,
+        abonadaTotal: v.abonada,
         cajasTotal: v.cajas,
         cajonesTotal: v.cajones,
       });
@@ -104,11 +104,11 @@ export function Visualizador({
       (acc, f) => ({
         horas: acc.horas + f.totalHoras,
         cosecha: acc.cosecha + f.cosechaTotal,
-        importe: acc.importe + f.importeTotal,
+        abonada: acc.abonada + f.abonadaTotal,
         cajas: acc.cajas + f.cajasTotal,
         cajones: acc.cajones + f.cajonesTotal,
       }),
-      { horas: 0, cosecha: 0, importe: 0, cajas: 0, cajones: 0 },
+      { horas: 0, cosecha: 0, abonada: 0, cajas: 0, cajones: 0 },
     );
     const tipos = sumarLista(registros.map((r) => r.tiposNuevos));
     return { ...v, tipos };
@@ -140,7 +140,7 @@ export function Visualizador({
             {totales.cosecha > 0 && <Resumen valor={fmtCantidad(totales.cosecha)} label="Cosecha" />}
             {totales.cajas > 0 && <Resumen valor={String(totales.cajas)} label="Cajas" />}
             {totales.cajones > 0 && <Resumen valor={String(totales.cajones)} label="Cajones" />}
-            {totales.importe > 0 && <Resumen valor={fmtAbonada(totales.importe)} label="Abonada" />}
+            {totales.abonada > 0 && <Resumen valor={fmtAbonada(totales.abonada)} label="Abonada" />}
             {totales.tipos !== TIPOS_NUEVOS_VACIO && formatTiposNuevosRegistro(totales.tipos) && (
               <Resumen valor={formatTiposNuevosRegistro(totales.tipos)} label="Otros" />
             )}

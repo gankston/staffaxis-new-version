@@ -36,7 +36,7 @@ export function parseCosecha(mw: string | null): number {
 }
 
 /**
- * La abonada se devuelve como TEXTO: en la base conviven importes ("$ 10200")
+ * La abonada se devuelve como TEXTO: en la base conviven cantidades ("$ 10200")
  * con descripciones ("barcadilla", "14 bolsas"). Sumarla daría cero.
  */
 export function parseAbonada(mw: string | null): string | null {

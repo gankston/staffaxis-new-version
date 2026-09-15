@@ -92,7 +92,7 @@ export function Tarja({
       horaEnvio: Date.now(),
       empleadosTarjados: registrosHoy.length,
       horasTarjadas: valores.horas,
-      abonada: valores.importe,
+      abonada: valores.abonada,
     };
     cierreLocal.guardar(sector.id, hoy, nuevo);
     setCierre(nuevo);
@@ -112,7 +112,7 @@ export function Tarja({
 
   if (!sector) return null;
 
-  const hayExtras = valores.cosecha > 0 || valores.cajas > 0 || valores.cajones > 0 || valores.importe > 0;
+  const hayExtras = valores.cosecha > 0 || valores.cajas > 0 || valores.cajones > 0 || valores.abonada > 0;
 
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
@@ -205,7 +205,7 @@ export function Tarja({
                 <Stat valor={fmtCantidad(valores.cosecha)} label="Cosecha" />
                 <Stat valor={String(valores.cajas)} label="Cajas" />
                 <Stat valor={String(valores.cajones)} label="Cajones" />
-                <Stat valor={fmtAbonada(valores.importe)} label="Abonada" />
+                <Stat valor={fmtAbonada(valores.abonada)} label="Abonada" />
               </div>
             </>
           )}

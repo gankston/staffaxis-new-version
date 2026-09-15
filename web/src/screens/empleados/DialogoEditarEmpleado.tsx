@@ -227,7 +227,7 @@ export function DialogoEditarEmpleado({
         cosecha: tip.cosecha,
         cajas: tip.cajas,
         cajones: tip.cajones,
-        importe: tip.importe,
+        abonada: tip.abonada,
         km_viajes: t.kmViajes,
         has_fumigadas: t.hasFumigadas,
         siembra_trilla: t.siembraTrilla,

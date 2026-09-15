@@ -47,7 +47,7 @@ export function normalizarSeparadorDecimal(texto) {
  */
 export function parseMinutesWorked(minutesWorked) {
   const vacio = {
-    horas: null, cosecha: null, cajas: null, cajones: null, importe: null,
+    horas: null, cosecha: null, cajas: null, cajones: null, abonada: null,
   };
   if (typeof minutesWorked !== 'string' || minutesWorked.trim() === '') return vacio;
 
@@ -55,7 +55,7 @@ export function parseMinutesWorked(minutesWorked) {
   let cosecha = null;
   let cajas = null;
   let cajones = null;
-  let importe = null;
+  let abonada = null;
   const sumar = (acc, v) => (v === null ? acc : (acc ?? 0) + v);
 
   for (const parte of minutesWorked.split('|').map((p) => p.trim())) {
@@ -68,10 +68,11 @@ export function parseMinutesWorked(minutesWorked) {
     } else if (parte.startsWith('AB:')) {
       // Hay partes viejas escritas "AB:$ 10200": se le saca el signo y el espacio.
       // Cuando trae una tarea en vez de un numero ("AB:limpieza") queda en null,
-      // que es lo correcto: no hay importe que guardar.
-      importe = sumar(importe, num(parte.slice(3).replace(/^\s*\$\s*/, '')));
+      // que es lo correcto: no hay cantidad que guardar.
+      abonada = sumar(abonada, num(parte.slice(3).replace(/^\s*\$\s*/, '')));
     } else if (parte.startsWith('$')) {
-      importe = sumar(importe, num(parte.slice(1)));
+      // Formato viejo: la abonada sola, escrita con el signo adelante.
+      abonada = sumar(abonada, num(parte.slice(1)));
     } else if (/^Cajas|^Cajones/i.test(parte)) {
       const c = num(RE_CAJAS.exec(parte)?.[1]);
       const j = num(RE_CAJONES.exec(parte)?.[1]);
@@ -84,7 +85,7 @@ export function parseMinutesWorked(minutesWorked) {
     }
   }
 
-  return { horas, cosecha, cajas, cajones, importe };
+  return { horas, cosecha, cajas, cajones, abonada };
 }
 
 const esEntero = (n) => n !== null && Number.isFinite(n) && Number.isInteger(n);
@@ -106,7 +107,7 @@ export function completarTipados(minutesWorked, enviado) {
   return {
     horas: tomar(enviado.horas, leido.horas),
     cosecha: tomar(enviado.cosecha, leido.cosecha),
-    importe: tomar(enviado.importe, leido.importe),
+    abonada: tomar(enviado.abonada, leido.abonada),
     cajas: tomar(enviado.cajas, esEntero(leido.cajas) ? leido.cajas : null),
     cajones: tomar(enviado.cajones, esEntero(leido.cajones) ? leido.cajones : null),
   };

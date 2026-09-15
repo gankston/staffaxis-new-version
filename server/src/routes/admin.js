@@ -295,7 +295,7 @@ export async function adminRoutes(app) {
               e.sector_id AS current_sector_id, e.is_active,
               cs.name     AS current_sector_name,
               s.date, s.minutes_worked, s.notes, s.status,
-              s.horas, s.cosecha, s.cajas, s.cajones, s.importe,
+              s.horas, s.cosecha, s.cajas, s.cajones, s.importe, s.importe AS abonada,
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,

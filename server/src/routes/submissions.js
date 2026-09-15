@@ -10,7 +10,7 @@ export async function submissionRoutes(app) {
   app.post('/api/submissions', { preHandler: verifyDevice }, async (req, reply) => {
     const {
       employee_id, date, minutes_worked, notes, latitude, longitude,
-      horas, cosecha, cajas, cajones, importe,
+      horas, cosecha, cajas, cajones, abonada, importe,
       km_viajes, has_fumigadas, siembra_trilla, bolseros, etiquetado,
       carga_camion_kg50, carga_camion_kg25, carga_camion_otro,
       movimiento_estiba_kg50, movimiento_estiba_kg25, movimiento_estiba_otro,
@@ -46,7 +46,10 @@ export async function submissionRoutes(app) {
     //    silencio: hay 800 partes con las cajas unicamente en el texto, y las
     //    versiones viejas de la app no mandan ninguna de estas columnas.
     //    Lo que el cliente SI manda no se toca.
-    const tipados = completarTipados(mw, { horas, cosecha, cajas, cajones, importe });
+    // `importe` es el nombre viejo del campo: la abonada nunca fue plata, es una
+    // cantidad como la cosecha. Se sigue aceptando porque los telefonos que todavia
+    // no se actualizaron lo mandan asi.
+    const tipados = completarTipados(mw, { horas, cosecha, cajas, cajones, abonada: abonada ?? importe });
 
     const id = uuid();
     await db.query(
@@ -99,7 +102,7 @@ export async function submissionRoutes(app) {
                      updated_at             = NOW()`,
       [
         id, employee_id, emp.rows[0].sector_id, date, mw, notes ?? null, statusInicial, latitude ?? null, longitude ?? null,
-        tipados.horas, tipados.cosecha, tipados.cajas, tipados.cajones, tipados.importe,
+        tipados.horas, tipados.cosecha, tipados.cajas, tipados.cajones, tipados.abonada,
         km_viajes ?? null, has_fumigadas ?? null, siembra_trilla ?? null, bolseros ?? null, etiquetado ?? null,
         carga_camion_kg50 ?? null, carga_camion_kg25 ?? null, carga_camion_otro ?? null,
         movimiento_estiba_kg50 ?? null, movimiento_estiba_kg25 ?? null, movimiento_estiba_otro ?? null,
@@ -140,7 +143,7 @@ export async function submissionRoutes(app) {
       `SELECT s.id AS submission_id, s.employee_id,
               e.first_name, e.last_name, e.dni,
               s.date, s.minutes_worked, s.notes, s.status,
-              s.horas, s.cosecha, s.cajas, s.cajones, s.importe,
+              s.horas, s.cosecha, s.cajas, s.cajones, s.importe, s.importe AS abonada,
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,

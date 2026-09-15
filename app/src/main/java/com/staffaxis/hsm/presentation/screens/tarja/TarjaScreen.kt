@@ -178,7 +178,7 @@ fun TarjaScreen(
                                 GradientStat(formatCantidad(uiState.cosechaDelDia), "Cosecha")
                                 GradientStat("${uiState.cajasDelDia}", "Cajas")
                                 GradientStat("${uiState.cajonesDelDia}", "Cajones")
-                                GradientStat(formatMonto(uiState.montoDelDia), "Monto")
+                                GradientStat(formatAbonada(uiState.montoDelDia), "Abonada")
                             }
                         }
                     }
@@ -458,7 +458,7 @@ private fun EstadoTarjaCard(uiState: TarjaUiState, fechaCorta: String) {
                             if (uiState.cosechaDelDia > 0f) TarjaEnviadaStat(formatCantidad(uiState.cosechaDelDia), "Cosecha")
                             if (uiState.cajasDelDia > 0) TarjaEnviadaStat("${uiState.cajasDelDia}", "Cajas")
                             if (uiState.cajonesDelDia > 0) TarjaEnviadaStat("${uiState.cajonesDelDia}", "Cajones")
-                            if (uiState.montoDelDia > 0f) TarjaEnviadaStat(formatMonto(uiState.montoDelDia), "Abonada")
+                            if (uiState.montoDelDia > 0f) TarjaEnviadaStat(formatAbonada(uiState.montoDelDia), "Abonada")
                         }
                     }
                     status.horaEnvio?.let { millis ->
@@ -654,7 +654,7 @@ private fun VisualizadorHorasDialog(
                                 if (totalCosecha > 0f) ResumenStat(formatCantidad(totalCosecha), "Cosecha")
                                 if (totalCajas > 0) ResumenStat("$totalCajas", "Cajas")
                                 if (totalCajones > 0) ResumenStat("$totalCajones", "Cajones")
-                                if (totalImporte > 0f) ResumenStat(formatMonto(totalImporte), "Abonada")
+                                if (totalImporte > 0f) ResumenStat(formatAbonada(totalImporte), "Abonada")
                                 tiposNuevosTotal.kmViajes?.let { if (it > 0f) ResumenStat(formatCantidad(it), "Km/Viajes") }
                                 tiposNuevosTotal.hasFumigadas?.let { if (it > 0f) ResumenStat(formatCantidad(it), "Has Fumigadas") }
                                 tiposNuevosTotal.siembraTrilla?.let { if (it > 0f) ResumenStat(formatCantidad(it), "Siembra/Trilla") }
@@ -756,7 +756,7 @@ private fun VisualizadorHorasDialog(
                                         }
                                         if (resumen.importeTotal > 0f) {
                                             if (isNotEmpty()) append("\n")
-                                            append(formatMonto(resumen.importeTotal))
+                                            append(formatAbonada(resumen.importeTotal))
                                         }
                                         val tiposTxt = formatTiposNuevosCompacto(resumen.tiposNuevosTotal)
                                         if (tiposTxt.isNotBlank()) {
@@ -866,10 +866,11 @@ private fun formatHoras(horas: Float): String {
     return if (m == 0) "${h}h" else "${h}h${m}m"
 }
 
-private fun formatMonto(monto: Float): String {
-    return if (monto == 0f) "$0"
-    else if (monto == monto.toLong().toFloat()) "$${monto.toLong()}"
-    else "$${"%.2f".format(monto)}"
+// La abonada NO es plata: es una cantidad, como la cosecha. Por eso va sin signo.
+private fun formatAbonada(valor: Float): String {
+    return if (valor == 0f) "0"
+    else if (valor == valor.toLong().toFloat()) "${valor.toLong()}"
+    else "%.2f".format(valor)
 }
 
 // Cantidades sueltas (cachos de cosecha): sin decimales cuando son enteras.

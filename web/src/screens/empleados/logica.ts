@@ -230,13 +230,13 @@ export function buildTiposNuevos(v: ValoresCarga): TiposCargaNuevos {
   };
 }
 
-/** Campos tipados que acompanian al string (cosecha/cajas/cajones/importe). */
+/** Campos tipados que acompanian al string (cosecha/cajas/cajones/abonada). */
 export function buildTipados(v: ValoresCarga) {
   return {
     cosecha: v.porCosecha ? toFloatOrNull(comaAPunto(v.cachosCount)) : null,
     cajas: v.porCajas ? toIntOrNull(v.cajasCount) : null,
     cajones: v.porCajones ? toIntOrNull(v.cajonesCount) : null,
-    importe: v.porAbonada ? toFloatOrNull(comaAPunto(v.abonadaValor)) : null,
+    abonada: v.porAbonada ? toFloatOrNull(comaAPunto(v.abonadaValor)) : null,
   };
 }
 
@@ -403,7 +403,8 @@ export function formatMinutesWorkedDisplay(mw: string | null): string {
 
   const cosechaPart = parts.find((p) => p === 'C' || p.startsWith('C:'));
   const abonadaPart = parts.find((p) => p.startsWith('AB:'));
-  const importePart = parts.find((p) => p.startsWith('$'));
+  // Formato viejo: la abonada sola, escrita con el signo adelante.
+  const abonadaVieja = parts.find((p) => p.startsWith('$'));
   const cajasCajonesPart = parts.find((p) => p.startsWith('Cajas ') || p.startsWith('Cajones '));
 
   const piezas: string[] = [];
@@ -412,7 +413,7 @@ export function formatMinutesWorkedDisplay(mw: string | null): string {
     piezas.push(cosechaPart.startsWith('C:') ? `Cosecha ${cosechaPart.slice(2)}` : 'Cosecha');
   }
   if (abonadaPart !== undefined) piezas.push(`Abonada ${abonadaPart.slice(3)}`);
-  if (importePart !== undefined) piezas.push(importePart);
+  if (abonadaVieja !== undefined) piezas.push(`Abonada ${abonadaVieja.slice(1).trim()}`);
   if (cajasCajonesPart !== undefined) piezas.push(cajasCajonesPart);
 
   return piezas.length === 0 ? mw : piezas.join(' + ');

@@ -51,7 +51,7 @@ export function diasDelPeriodo(desde: string, hasta: string): string[] {
 export const fmtHoras = (h: number) => (h % 1 === 0 ? `${Math.trunc(h)}H` : `${h.toFixed(1)}H`);
 export const fmtCantidad = (v: number) => (v % 1 === 0 ? String(Math.trunc(v)) : v.toFixed(2));
 /**
- * ABONADA NO ES PLATA. En la base conviven importes con descripciones
+ * ABONADA NO ES PLATA. En la base conviven cantidades con descripciones
  * ("barcadilla", "14 bolsas"), asi que va sin simbolo de moneda ni separador
  * de miles: es el valor tal cual se cargo.
  */
