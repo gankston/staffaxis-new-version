@@ -388,19 +388,24 @@ function ResumenPeriodo({
   onCerrar: () => void;
 }) {
   const porEmpleado = useMemo(() => {
-    const mapa = new Map<string, { nombre: string; sector: string; mw: Array<string | null> }>();
+    const mapa = new Map<string, { nombre: string; sector: string; mw: Array<string | null>; cosecha: number }>();
     for (const r of rows) {
       const clave = r.employee_id;
       const actual = mapa.get(clave) ?? {
         nombre: `${r.last_name ?? ''} ${r.first_name ?? ''}`.trim(),
         sector: r.sector_name,
         mw: [],
+        cosecha: 0,
       };
       actual.mw.push(r.minutes_worked);
+      actual.cosecha += (r.cosecha_canadas ?? 0) + (r.cosecha_inv ?? 0);
       mapa.set(clave, actual);
     }
     return [...mapa.entries()]
-      .map(([id, v]) => ({ id, ...v, valores: sumar(v.mw) }))
+      .map(([id, v]) => {
+        const valores = sumar(v.mw);
+        return { id, ...v, valores: { ...valores, cosecha: valores.cosecha + v.cosecha } };
+      })
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [rows]);
 

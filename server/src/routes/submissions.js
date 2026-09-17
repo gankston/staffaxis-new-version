@@ -16,6 +16,9 @@ export async function submissionRoutes(app) {
       movimiento_estiba_kg50, movimiento_estiba_kg25, movimiento_estiba_otro,
       // Etiquetado abierto por lata, y Descarga/Carga de FABRICA
       etiquetado_lata_185, etiquetado_lata_750, etiquetado_lata_2500, etiquetado_lata_8kg, descarga_jaula, descarga_camion, carga_jaula, carga_camion_cantidad,
+      // Cosecha abierta por origen y Tantero. Estos NUNCA se escriben en
+      // minutes_worked ni se leen de ahi: la columna es el dato.
+      cosecha_canadas, cosecha_inv, tantero_invernadero, tantero_campo,
     } = req.body ?? {};
     if (!employee_id || !date) {
       return reply.status(400).send({ error: 'Faltan campos requeridos' });
@@ -51,6 +54,12 @@ export async function submissionRoutes(app) {
     // no se actualizaron lo mandan asi.
     const tipados = completarTipados(mw, { horas, cosecha, cajas, cajones, abonada: abonada ?? importe });
 
+    // La cosecha abierta manda: si vienen los subtipos, el total es la suma de
+    // ELLOS, no lo que diga el texto. Asi la columna `cosecha` sigue sirviendo
+    // para el MCP y el tablero, sin que nadie tenga que reparsear nada.
+    const subtipos = [cosecha_canadas, cosecha_inv].filter((v) => v !== undefined && v !== null);
+    if (subtipos.length) tipados.cosecha = subtipos.reduce((a, b) => Number(a) + Number(b), 0);
+
     const id = uuid();
     await db.query(
       `INSERT INTO submissions (
@@ -59,9 +68,10 @@ export async function submissionRoutes(app) {
          km_viajes, has_fumigadas, siembra_trilla, bolseros, etiquetado,
          carga_camion_kg50, carga_camion_kg25, carga_camion_otro,
          movimiento_estiba_kg50, movimiento_estiba_kg25, movimiento_estiba_otro,
-         etiquetado_lata_185, etiquetado_lata_750, etiquetado_lata_2500, etiquetado_lata_8kg, descarga_jaula, descarga_camion, carga_jaula, carga_camion_cantidad
+         etiquetado_lata_185, etiquetado_lata_750, etiquetado_lata_2500, etiquetado_lata_8kg, descarga_jaula, descarga_camion, carga_jaula, carga_camion_cantidad,
+         cosecha_canadas, cosecha_inv, tantero_invernadero, tantero_campo
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
        ON CONFLICT (employee_id, date) WHERE NOT is_deleted
        DO UPDATE SET minutes_worked         = EXCLUDED.minutes_worked,
                      notes                  = EXCLUDED.notes,
@@ -91,6 +101,10 @@ export async function submissionRoutes(app) {
                      descarga_camion = EXCLUDED.descarga_camion,
                      carga_jaula = EXCLUDED.carga_jaula,
                      carga_camion_cantidad = EXCLUDED.carga_camion_cantidad,
+                     cosecha_canadas = EXCLUDED.cosecha_canadas,
+                     cosecha_inv = EXCLUDED.cosecha_inv,
+                     tantero_invernadero = EXCLUDED.tantero_invernadero,
+                     tantero_campo = EXCLUDED.tantero_campo,
                      -- Al editar una tarja ya cargada vuelve a quedar como recien enviada:
                      -- si el sector requiere aprobacion pasa de nuevo a 'pending' y se borra
                      -- la aprobacion anterior, porque el supervisor aprobo OTROS valores y
@@ -107,6 +121,7 @@ export async function submissionRoutes(app) {
         carga_camion_kg50 ?? null, carga_camion_kg25 ?? null, carga_camion_otro ?? null,
         movimiento_estiba_kg50 ?? null, movimiento_estiba_kg25 ?? null, movimiento_estiba_otro ?? null,
         etiquetado_lata_185 ?? null, etiquetado_lata_750 ?? null, etiquetado_lata_2500 ?? null, etiquetado_lata_8kg ?? null, descarga_jaula ?? null, descarga_camion ?? null, carga_jaula ?? null, carga_camion_cantidad ?? null,
+        cosecha_canadas ?? null, cosecha_inv ?? null, tantero_invernadero ?? null, tantero_campo ?? null,
       ]
     );
 
@@ -147,7 +162,8 @@ export async function submissionRoutes(app) {
               s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
-              s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,
+              s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg,
+              s.cosecha_canadas, s.cosecha_inv, s.tantero_invernadero, s.tantero_campo, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,
               s.motivo_rechazo
        FROM submissions s
        JOIN employees e ON e.id = s.employee_id

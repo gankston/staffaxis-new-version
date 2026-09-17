@@ -3,6 +3,7 @@
  * el de "editar registro", igual que en EmpleadosScreen.kt. Cada bloque aparece
  * solo si el sector tiene ese tipo habilitado (uiState.tiposCarga).
  */
+import type { ReactNode } from 'react';
 import { TextField } from '../../components/ui';
 import type { ValoresCarga } from './logica';
 
@@ -17,8 +18,19 @@ export const formatHorasSlider = (h: number) => (h % 1 === 0 ? `${Math.trunc(h)}
 export function lineaResumen(v: ValoresCarga): string {
   let out = formatHorasSlider(v.horas);
   if (v.porCosecha) {
-    out += ' + Cosecha';
-    if (v.cachosCount.trim()) out += ` (${v.cachosCount})`;
+    const cosecha = [
+      v.cosechaCanadasCheck && v.cosechaCanadasValor.trim() ? `Cañadas ${v.cosechaCanadasValor.trim()}` : '',
+      v.cosechaInvCheck && v.cosechaInvValor.trim() ? `Raigón/Inv ${v.cosechaInvValor.trim()}` : '',
+      !v.cosechaCanadasCheck && !v.cosechaInvCheck && v.cachosLegacy.trim() ? v.cachosLegacy.trim() : '',
+    ].filter(Boolean).join(', ');
+    out += cosecha ? ` + Cosecha (${cosecha})` : ' + Cosecha';
+  }
+  if (v.porTantero) {
+    const tantero = [
+      v.tanteroInvCheck && v.tanteroInvValor.trim() ? `Inv ${v.tanteroInvValor.trim()}` : '',
+      v.tanteroCampoCheck && v.tanteroCampoValor.trim() ? `Campo ${v.tanteroCampoValor.trim()}` : '',
+    ].filter(Boolean).join(', ');
+    out += tantero ? ` + Tantero (${tantero})` : ' + Tantero';
   }
   if (v.porAbonada) out += ' + Abonada';
   if (v.porCajas) out += ` + Cajas ${v.cajasCount}`;
@@ -93,9 +105,9 @@ function CargaPorLata({
 }) {
   const vacio = !valores.l185.trim() && !valores.l750.trim() && !valores.l2500.trim() && !valores.l8kg.trim();
   const latas = [
-    ['l185', 'Lata 185'],
-    ['l750', 'Lata 750'],
-    ['l2500', 'Lata 2500'],
+    ['l185', 'Lata 185 grs'],
+    ['l750', 'Lata 750 grs'],
+    ['l2500', 'Lata 2500 grs'],
     ['l8kg', 'Lata 8 kgs'],
   ] as const;
   return (
@@ -119,65 +131,57 @@ function CargaPorLata({
   );
 }
 
+/** Un origen dentro de un tipo de carga: se tilda y pide su cantidad. */
+interface Subtipo {
+  label: string;
+  etiquetaCampo: string;
+  check: boolean;
+  onCheck: (v: boolean) => void;
+  valor: string;
+  onValor: (v: string) => void;
+}
+
 /**
- * Descarga y Carga (FABRICA): se tilda el tipo, se elige jaula y/o camion, y
- * cada opcion tildada pide su cantidad.
+ * Tipo de carga que se abre en dos origenes: se tilda el tipo, se elige uno o
+ * los dos, y cada uno tildado pide su numero. Lo usan Descarga y Carga
+ * (jaula/camion), Cosecha (Cañadas/Raigon-Inv) y Tantero (invernadero/campo).
  */
-function CargaJaulaCamion({
+function CargaDosSubtipos({
   label,
   checked,
   onCheck,
-  jaulaCheck,
-  onJaulaCheck,
-  jaulaValor,
-  onJaulaValor,
-  camionCheck,
-  onCamionCheck,
-  camionValor,
-  onCamionValor,
+  subtipos,
+  extra,
 }: {
   label: string;
   checked: boolean;
   onCheck: (v: boolean) => void;
-  jaulaCheck: boolean;
-  onJaulaCheck: (v: boolean) => void;
-  jaulaValor: string;
-  onJaulaValor: (v: string) => void;
-  camionCheck: boolean;
-  onCamionCheck: (v: boolean) => void;
-  camionValor: string;
-  onCamionValor: (v: string) => void;
+  subtipos: [Subtipo, Subtipo];
+  extra?: ReactNode;
 }) {
-  const faltaOpcion = !jaulaCheck && !camionCheck;
+  const faltaOpcion = !subtipos[0].check && !subtipos[1].check && !extra;
   return (
     <div>
       <Check label={label} checked={checked} onChange={onCheck} negrita />
       {checked && (
         <div style={{ paddingLeft: 16 }}>
-          <Check label="Jaula" checked={jaulaCheck} onChange={onJaulaCheck} />
-          {jaulaCheck && (
-            <div style={{ paddingLeft: 16 }}>
-              <TextField
-                value={jaulaValor}
-                onChange={onJaulaValor}
-                label="Cantidad de jaulas"
-                soloNumeros
-                error={!jaulaValor.trim()}
-              />
+          {extra}
+          {subtipos.map((sub) => (
+            <div key={sub.label}>
+              <Check label={sub.label} checked={sub.check} onChange={sub.onCheck} />
+              {sub.check && (
+                <div style={{ paddingLeft: 16 }}>
+                  <TextField
+                    value={sub.valor}
+                    onChange={sub.onValor}
+                    label={sub.etiquetaCampo}
+                    soloNumeros
+                    error={!sub.valor.trim()}
+                  />
+                </div>
+              )}
             </div>
-          )}
-          <Check label="Camión" checked={camionCheck} onChange={onCamionCheck} />
-          {camionCheck && (
-            <div style={{ paddingLeft: 16 }}>
-              <TextField
-                value={camionValor}
-                onChange={onCamionValor}
-                label="Cantidad de camiones"
-                soloNumeros
-                error={!camionValor.trim()}
-              />
-            </div>
-          )}
+          ))}
           {faltaOpcion && <div style={{ fontSize: 12, color: 'var(--error)' }}>Marcá al menos una opción</div>}
         </div>
       )}
@@ -284,13 +288,93 @@ export function FormularioCarga({
       <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: 0 }} />
 
       {tiposCarga.includes('cosecha') && (
-        <CargaSimple
+        <CargaDosSubtipos
           label="Cosecha"
           checked={valores.porCosecha}
-          valor={valores.cachosCount}
-          onCheck={(v) => set({ porCosecha: v, cachosCount: v ? valores.cachosCount : '' })}
-          onValor={(v) => set({ cachosCount: v })}
-          placeholder="Cantidad de cachos (obligatorio)"
+          onCheck={(v) =>
+            set(
+              v
+                ? { porCosecha: true }
+                : {
+                    porCosecha: false,
+                    cosechaCanadasCheck: false,
+                    cosechaCanadasValor: '',
+                    cosechaInvCheck: false,
+                    cosechaInvValor: '',
+                    cachosLegacy: '',
+                  },
+            )
+          }
+          // Una tarja vieja se cargo con un solo numero, sin decir de donde
+          // salio. Se muestra para poder corregirla sin inventarle un origen.
+          extra={
+            valores.cachosLegacy.trim() ? (
+              <div style={{ paddingBottom: 8 }}>
+                <TextField
+                  value={valores.cachosLegacy}
+                  onChange={(v) => set({ cachosLegacy: v })}
+                  label="Cantidad de cachos (carga vieja, sin origen)"
+                  soloNumeros
+                />
+              </div>
+            ) : undefined
+          }
+          subtipos={[
+            {
+              label: 'Cañadas',
+              etiquetaCampo: 'Cantidad de cachos',
+              check: valores.cosechaCanadasCheck,
+              onCheck: (v) => set({ cosechaCanadasCheck: v, cosechaCanadasValor: v ? valores.cosechaCanadasValor : '' }),
+              valor: valores.cosechaCanadasValor,
+              onValor: (v) => set({ cosechaCanadasValor: v }),
+            },
+            {
+              label: 'Raigón / Inv',
+              etiquetaCampo: 'Cantidad de cachos',
+              check: valores.cosechaInvCheck,
+              onCheck: (v) => set({ cosechaInvCheck: v, cosechaInvValor: v ? valores.cosechaInvValor : '' }),
+              valor: valores.cosechaInvValor,
+              onValor: (v) => set({ cosechaInvValor: v }),
+            },
+          ]}
+        />
+      )}
+
+      {tiposCarga.includes('tantero') && (
+        <CargaDosSubtipos
+          label="Tantero"
+          checked={valores.porTantero}
+          onCheck={(v) =>
+            set(
+              v
+                ? { porTantero: true }
+                : {
+                    porTantero: false,
+                    tanteroInvCheck: false,
+                    tanteroInvValor: '',
+                    tanteroCampoCheck: false,
+                    tanteroCampoValor: '',
+                  },
+            )
+          }
+          subtipos={[
+            {
+              label: 'Invernadero',
+              etiquetaCampo: 'Cantidad',
+              check: valores.tanteroInvCheck,
+              onCheck: (v) => set({ tanteroInvCheck: v, tanteroInvValor: v ? valores.tanteroInvValor : '' }),
+              valor: valores.tanteroInvValor,
+              onValor: (v) => set({ tanteroInvValor: v }),
+            },
+            {
+              label: 'Campo',
+              etiquetaCampo: 'Cantidad',
+              check: valores.tanteroCampoCheck,
+              onCheck: (v) => set({ tanteroCampoCheck: v, tanteroCampoValor: v ? valores.tanteroCampoValor : '' }),
+              valor: valores.tanteroCampoValor,
+              onValor: (v) => set({ tanteroCampoValor: v }),
+            },
+          ]}
         />
       )}
 
@@ -328,16 +412,6 @@ export function FormularioCarga({
 
       {tiposCarga.length > 0 && <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: 0 }} />}
 
-      {tiposCarga.includes('km_viajes') && (
-        <CargaSimple
-          label="Km / Viajes"
-          checked={valores.porKm}
-          valor={valores.kmValor}
-          onCheck={(v) => set({ porKm: v, kmValor: v ? valores.kmValor : '' })}
-          onValor={(v) => set({ kmValor: v })}
-          placeholder="Cantidad (obligatorio)"
-        />
-      )}
       {tiposCarga.includes('has_fumigadas') && (
         <CargaSimple
           label="Hectáreas fumigadas"
@@ -402,7 +476,7 @@ export function FormularioCarga({
       )}
 
       {tiposCarga.includes('descarga') && (
-        <CargaJaulaCamion
+        <CargaDosSubtipos
           label="Descarga"
           checked={valores.porDescarga}
           onCheck={(v) =>
@@ -412,19 +486,29 @@ export function FormularioCarga({
                 : { porDescarga: false, descargaJaulaCheck: false, descargaJaulaValor: '', descargaCamionCheck: false, descargaCamionValor: '' },
             )
           }
-          jaulaCheck={valores.descargaJaulaCheck}
-          onJaulaCheck={(v) => set({ descargaJaulaCheck: v, descargaJaulaValor: v ? valores.descargaJaulaValor : '' })}
-          jaulaValor={valores.descargaJaulaValor}
-          onJaulaValor={(v) => set({ descargaJaulaValor: v })}
-          camionCheck={valores.descargaCamionCheck}
-          onCamionCheck={(v) => set({ descargaCamionCheck: v, descargaCamionValor: v ? valores.descargaCamionValor : '' })}
-          camionValor={valores.descargaCamionValor}
-          onCamionValor={(v) => set({ descargaCamionValor: v })}
+          subtipos={[
+            {
+              label: 'Jaula',
+              etiquetaCampo: 'Cantidad de jaulas',
+              check: valores.descargaJaulaCheck,
+              onCheck: (v) => set({ descargaJaulaCheck: v, descargaJaulaValor: v ? valores.descargaJaulaValor : '' }),
+              valor: valores.descargaJaulaValor,
+              onValor: (v) => set({ descargaJaulaValor: v }),
+            },
+            {
+              label: 'Camión',
+              etiquetaCampo: 'Cantidad de camiones',
+              check: valores.descargaCamionCheck,
+              onCheck: (v) => set({ descargaCamionCheck: v, descargaCamionValor: v ? valores.descargaCamionValor : '' }),
+              valor: valores.descargaCamionValor,
+              onValor: (v) => set({ descargaCamionValor: v }),
+            },
+          ]}
         />
       )}
 
       {tiposCarga.includes('carga') && (
-        <CargaJaulaCamion
+        <CargaDosSubtipos
           label="Carga"
           checked={valores.porCarga}
           onCheck={(v) =>
@@ -434,14 +518,24 @@ export function FormularioCarga({
                 : { porCarga: false, cargaJaulaCheck: false, cargaJaulaValor: '', cargaCamionCheck: false, cargaCamionValor: '' },
             )
           }
-          jaulaCheck={valores.cargaJaulaCheck}
-          onJaulaCheck={(v) => set({ cargaJaulaCheck: v, cargaJaulaValor: v ? valores.cargaJaulaValor : '' })}
-          jaulaValor={valores.cargaJaulaValor}
-          onJaulaValor={(v) => set({ cargaJaulaValor: v })}
-          camionCheck={valores.cargaCamionCheck}
-          onCamionCheck={(v) => set({ cargaCamionCheck: v, cargaCamionValor: v ? valores.cargaCamionValor : '' })}
-          camionValor={valores.cargaCamionValor}
-          onCamionValor={(v) => set({ cargaCamionValor: v })}
+          subtipos={[
+            {
+              label: 'Jaula',
+              etiquetaCampo: 'Cantidad de jaulas',
+              check: valores.cargaJaulaCheck,
+              onCheck: (v) => set({ cargaJaulaCheck: v, cargaJaulaValor: v ? valores.cargaJaulaValor : '' }),
+              valor: valores.cargaJaulaValor,
+              onValor: (v) => set({ cargaJaulaValor: v }),
+            },
+            {
+              label: 'Camión',
+              etiquetaCampo: 'Cantidad de camiones',
+              check: valores.cargaCamionCheck,
+              onCheck: (v) => set({ cargaCamionCheck: v, cargaCamionValor: v ? valores.cargaCamionValor : '' }),
+              valor: valores.cargaCamionValor,
+              onValor: (v) => set({ cargaCamionValor: v }),
+            },
+          ]}
         />
       )}
       {tiposCarga.includes('carga_camion') && (

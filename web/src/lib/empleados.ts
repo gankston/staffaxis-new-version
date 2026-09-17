@@ -151,6 +151,10 @@ interface FilaSubmission {
   notes: string | null;
   status: string | null;
   km_viajes: number | null;
+  cosecha_canadas?: number | null;
+  cosecha_inv?: number | null;
+  tantero_invernadero?: number | null;
+  tantero_campo?: number | null;
   has_fumigadas: number | null;
   siembra_trilla: number | null;
   bolseros: number | null;
@@ -201,6 +205,10 @@ function aRegistro(f: FilaSubmission): Registro {
       descargaCamion: f.descarga_camion ?? null,
       cargaJaula: f.carga_jaula ?? null,
       cargaCamionCantidad: f.carga_camion_cantidad ?? null,
+      cosechaCanadas: f.cosecha_canadas ?? null,
+      cosechaInv: f.cosecha_inv ?? null,
+      tanteroInvernadero: f.tantero_invernadero ?? null,
+      tanteroCampo: f.tantero_campo ?? null,
     },
   };
 }

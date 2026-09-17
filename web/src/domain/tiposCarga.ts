@@ -27,6 +27,12 @@ export interface TiposCargaNuevos {
   descargaCamion: number | null;
   cargaJaula: number | null;
   cargaCamionCantidad: number | null;
+  // Cosecha abierta por origen, y Tantero. Igual que el resto de los tipos
+  // nuevos: viven SOLO en su columna, nunca dentro de minutes_worked.
+  cosechaCanadas: number | null;
+  cosechaInv: number | null;
+  tanteroInvernadero: number | null;
+  tanteroCampo: number | null;
 }
 
 export const TIPOS_NUEVOS_VACIO: TiposCargaNuevos = {
@@ -49,6 +55,10 @@ export const TIPOS_NUEVOS_VACIO: TiposCargaNuevos = {
   descargaCamion: null,
   cargaJaula: null,
   cargaCamionCantidad: null,
+  cosechaCanadas: null,
+  cosechaInv: null,
+  tanteroInvernadero: null,
+  tanteroCampo: null,
 };
 
 export function estaVacio(t: TiposCargaNuevos): boolean {
@@ -71,7 +81,11 @@ export function estaVacio(t: TiposCargaNuevos): boolean {
     t.descargaJaula === null &&
     t.descargaCamion === null &&
     t.cargaJaula === null &&
-    t.cargaCamionCantidad === null
+    t.cargaCamionCantidad === null &&
+    t.cosechaCanadas === null &&
+    t.cosechaInv === null &&
+    t.tanteroInvernadero === null &&
+    t.tanteroCampo === null
   );
 }
 
@@ -107,6 +121,10 @@ export function sumarTipos(a: TiposCargaNuevos, b: TiposCargaNuevos): TiposCarga
     descargaCamion: sumarNum(a.descargaCamion, b.descargaCamion),
     cargaJaula: sumarNum(a.cargaJaula, b.cargaJaula),
     cargaCamionCantidad: sumarNum(a.cargaCamionCantidad, b.cargaCamionCantidad),
+    cosechaCanadas: sumarNum(a.cosechaCanadas, b.cosechaCanadas),
+    cosechaInv: sumarNum(a.cosechaInv, b.cosechaInv),
+    tanteroInvernadero: sumarNum(a.tanteroInvernadero, b.tanteroInvernadero),
+    tanteroCampo: sumarNum(a.tanteroCampo, b.tanteroCampo),
   };
 }
 

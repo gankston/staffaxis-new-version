@@ -50,15 +50,25 @@ export function buildCajasCajonesSegment(
 export interface ValoresCarga {
   horas: number;
   porCosecha: boolean;
-  cachosCount: string;
+  // Cosecha abierta por origen. `cachosLegacy` es lo que traen las tarjas
+  // viejas, que se cargaron como un solo numero sin decir de donde salio: se
+  // muestra al editar para no perderlo, pero ya no se carga asi.
+  cosechaCanadasCheck: boolean;
+  cosechaCanadasValor: string;
+  cosechaInvCheck: boolean;
+  cosechaInvValor: string;
+  cachosLegacy: string;
+  porTantero: boolean;
+  tanteroInvCheck: boolean;
+  tanteroInvValor: string;
+  tanteroCampoCheck: boolean;
+  tanteroCampoValor: string;
   porAbonada: boolean;
   abonadaValor: string;
   porCajas: boolean;
   cajasCount: string;
   porCajones: boolean;
   cajonesCount: string;
-  porKm: boolean;
-  kmValor: string;
   porHasFumigadas: boolean;
   hasFumigadasValor: string;
   porSiembraTrilla: boolean;
@@ -97,15 +107,22 @@ export interface ValoresCarga {
 export const VALORES_CARGA_INICIAL: ValoresCarga = {
   horas: 8,
   porCosecha: false,
-  cachosCount: '',
+  cosechaCanadasCheck: false,
+  cosechaCanadasValor: '',
+  cosechaInvCheck: false,
+  cosechaInvValor: '',
+  cachosLegacy: '',
+  porTantero: false,
+  tanteroInvCheck: false,
+  tanteroInvValor: '',
+  tanteroCampoCheck: false,
+  tanteroCampoValor: '',
   porAbonada: false,
   abonadaValor: '',
   porCajas: false,
   cajasCount: '',
   porCajones: false,
   cajonesCount: '',
-  porKm: false,
-  kmValor: '',
   porHasFumigadas: false,
   hasFumigadasValor: '',
   porSiembraTrilla: false,
@@ -144,11 +161,21 @@ export const VALORES_CARGA_INICIAL: ValoresCarga = {
  * guardarHoras()/guardarEdicionRegistro(): cada tipo tildado exige su valor.
  */
 export function puedeGuardar(v: ValoresCarga): boolean {
-  if (v.porCosecha && !v.cachosCount.trim()) return false;
+  // Cosecha: si es una tarja vieja alcanza con su numero; si no, hay que tildar
+  // al menos un origen y el tildado pide cantidad.
+  if (v.porCosecha) {
+    if (!v.cachosLegacy.trim() && !v.cosechaCanadasCheck && !v.cosechaInvCheck) return false;
+    if (v.cosechaCanadasCheck && !v.cosechaCanadasValor.trim()) return false;
+    if (v.cosechaInvCheck && !v.cosechaInvValor.trim()) return false;
+  }
+  if (v.porTantero) {
+    if (!v.tanteroInvCheck && !v.tanteroCampoCheck) return false;
+    if (v.tanteroInvCheck && !v.tanteroInvValor.trim()) return false;
+    if (v.tanteroCampoCheck && !v.tanteroCampoValor.trim()) return false;
+  }
   if (v.porAbonada && !v.abonadaValor.trim()) return false;
   if (v.porCajas && !v.cajasCount.trim()) return false;
   if (v.porCajones && !v.cajonesCount.trim()) return false;
-  if (v.porKm && !v.kmValor.trim()) return false;
   if (v.porHasFumigadas && !v.hasFumigadasValor.trim()) return false;
   if (v.porSiembraTrilla && !v.siembraTrillaValor.trim()) return false;
   if (v.porBolseros && !v.bolserosValor.trim()) return false;
@@ -192,7 +219,9 @@ export function puedeGuardar(v: ValoresCarga): boolean {
 /** minutes_worked: si queda una sola parte va sola, si no se unen con "|". */
 export function buildMinutesWorked(v: ValoresCarga): string {
   const parts: string[] = [formatHorasValue(v.horas)];
-  if (v.porCosecha) parts.push(`C:${v.cachosCount.trim()}`);
+  // Solo se reescribe el "C:" de una tarja vieja que ya lo tenia. La cosecha
+  // abierta por origen va a sus columnas y no toca este texto.
+  if (v.porCosecha && v.cachosLegacy.trim()) parts.push(`C:${v.cachosLegacy.trim()}`);
   if (v.porAbonada) parts.push(`AB:${v.abonadaValor.trim()}`);
   const cajasCajones = buildCajasCajonesSegment(v.porCajas, v.cajasCount, v.porCajones, v.cajonesCount);
   if (cajasCajones.trim()) parts.push(cajasCajones);
@@ -201,7 +230,7 @@ export function buildMinutesWorked(v: ValoresCarga): string {
 
 export function buildTiposNuevos(v: ValoresCarga): TiposCargaNuevos {
   return {
-    kmViajes: v.porKm ? toFloatOrNull(comaAPunto(v.kmValor)) : null,
+    kmViajes: null,
     hasFumigadas: v.porHasFumigadas ? toFloatOrNull(comaAPunto(v.hasFumigadasValor)) : null,
     siembraTrilla: v.porSiembraTrilla ? toFloatOrNull(comaAPunto(v.siembraTrillaValor)) : null,
     bolseros: v.porBolseros ? toFloatOrNull(comaAPunto(v.bolserosValor)) : null,
@@ -215,6 +244,10 @@ export function buildTiposNuevos(v: ValoresCarga): TiposCargaNuevos {
     descargaCamion: v.porDescarga && v.descargaCamionCheck ? toFloatOrNull(comaAPunto(v.descargaCamionValor)) : null,
     cargaJaula: v.porCarga && v.cargaJaulaCheck ? toFloatOrNull(comaAPunto(v.cargaJaulaValor)) : null,
     cargaCamionCantidad: v.porCarga && v.cargaCamionCheck ? toFloatOrNull(comaAPunto(v.cargaCamionValor)) : null,
+    cosechaCanadas: v.porCosecha && v.cosechaCanadasCheck ? toFloatOrNull(comaAPunto(v.cosechaCanadasValor)) : null,
+    cosechaInv: v.porCosecha && v.cosechaInvCheck ? toFloatOrNull(comaAPunto(v.cosechaInvValor)) : null,
+    tanteroInvernadero: v.porTantero && v.tanteroInvCheck ? toFloatOrNull(comaAPunto(v.tanteroInvValor)) : null,
+    tanteroCampo: v.porTantero && v.tanteroCampoCheck ? toFloatOrNull(comaAPunto(v.tanteroCampoValor)) : null,
     cargaCamionKg50: v.porCargaCamion && v.cargaCamion50 ? true : null,
     cargaCamionKg25: v.porCargaCamion && v.cargaCamion25 ? true : null,
     cargaCamionOtro:
@@ -233,7 +266,10 @@ export function buildTiposNuevos(v: ValoresCarga): TiposCargaNuevos {
 /** Campos tipados que acompanian al string (cosecha/cajas/cajones/abonada). */
 export function buildTipados(v: ValoresCarga) {
   return {
-    cosecha: v.porCosecha ? toFloatOrNull(comaAPunto(v.cachosCount)) : null,
+    // Solo se manda el numero de una tarja vieja. Cuando hay origenes cargados
+    // el total lo suma el servidor desde las columnas, para que haya un solo
+    // lugar donde se decide cuanto es la cosecha del dia.
+    cosecha: v.porCosecha && v.cachosLegacy.trim() ? toFloatOrNull(comaAPunto(v.cachosLegacy)) : null,
     cajas: v.porCajas ? toIntOrNull(v.cajasCount) : null,
     cajones: v.porCajones ? toIntOrNull(v.cajonesCount) : null,
     abonada: v.porAbonada ? toFloatOrNull(comaAPunto(v.abonadaValor)) : null,
@@ -256,7 +292,7 @@ export function valoresDesdeRegistro(
   const cosechaPart = parts.find((p) => p === 'C' || p.startsWith('C:'));
   const abonadaPart = parts.find((p) => p.startsWith('AB:'));
   const esCosecha = cosechaPart !== undefined;
-  const cachosCount = cosechaPart?.startsWith('C:') ? cosechaPart.slice(2) : '';
+  const cachosLegacy = cosechaPart?.startsWith('C:') ? cosechaPart.slice(2) : '';
   const esAbonada = abonadaPart !== undefined;
   const abonadaValor = abonadaPart ? abonadaPart.slice(3) : '';
 
@@ -266,27 +302,35 @@ export function valoresDesdeRegistro(
 
   const horasPartNuevo = parts.find((p) => p.startsWith('H '));
   const horasPartViejo = parts.find((p) => toFloatOrNull(p) !== null);
+  const hayCosechaAbierta = t.cosechaCanadas !== null || t.cosechaInv !== null;
   const esCajas = cajasMatch !== null;
   const esCajones = cajonesMatch !== null;
   const horas =
     (horasPartNuevo ? toFloatOrNull(horasPartNuevo.slice(2)) : null) ??
     (horasPartViejo ? toFloatOrNull(horasPartViejo) : null) ??
-    (esCosecha || esAbonada || esCajas || esCajones
+    (esCosecha || hayCosechaAbierta || esAbonada || esCajas || esCajones
       ? 0
       : (minutesWorked ? toFloatOrNull(minutesWorked) : null) ?? 8);
 
   return {
     horas,
-    porCosecha: esCosecha,
-    cachosCount,
+    porCosecha: esCosecha || hayCosechaAbierta,
+    cosechaCanadasCheck: t.cosechaCanadas !== null,
+    cosechaCanadasValor: t.cosechaCanadas !== null ? fmtValor(t.cosechaCanadas) : '',
+    cosechaInvCheck: t.cosechaInv !== null,
+    cosechaInvValor: t.cosechaInv !== null ? fmtValor(t.cosechaInv) : '',
+    cachosLegacy: hayCosechaAbierta ? '' : cachosLegacy,
+    porTantero: t.tanteroInvernadero !== null || t.tanteroCampo !== null,
+    tanteroInvCheck: t.tanteroInvernadero !== null,
+    tanteroInvValor: t.tanteroInvernadero !== null ? fmtValor(t.tanteroInvernadero) : '',
+    tanteroCampoCheck: t.tanteroCampo !== null,
+    tanteroCampoValor: t.tanteroCampo !== null ? fmtValor(t.tanteroCampo) : '',
     porAbonada: esAbonada,
     abonadaValor,
     porCajas: esCajas,
     cajasCount: cajasMatch?.[1] ?? '',
     porCajones: esCajones,
     cajonesCount: cajonesMatch?.[1] ?? '',
-    porKm: t.kmViajes !== null,
-    kmValor: t.kmViajes !== null ? fmtValor(t.kmViajes) : '',
     porHasFumigadas: t.hasFumigadas !== null,
     hasFumigadasValor: t.hasFumigadas !== null ? fmtValor(t.hasFumigadas) : '',
     porSiembraTrilla: t.siembraTrilla !== null,
@@ -347,7 +391,16 @@ export function filtrarEmpleados<T extends { apellido: string }>(lista: T[], q: 
  */
 export function formatTiposNuevosRegistro(t: TiposCargaNuevos): string {
   const partes: string[] = [];
-  if (t.kmViajes != null) partes.push(`Km ${fmtValor(t.kmViajes)}`);
+  const cosecha = [
+    t.cosechaCanadas != null ? `CC ${fmtValor(t.cosechaCanadas)}` : null,
+    t.cosechaInv != null ? `CI ${fmtValor(t.cosechaInv)}` : null,
+  ].filter(Boolean).join(' ');
+  if (cosecha) partes.push(`Cosecha ${cosecha}`);
+  const tantero = [
+    t.tanteroInvernadero != null ? `Invernadero ${fmtValor(t.tanteroInvernadero)}` : null,
+    t.tanteroCampo != null ? `Campo ${fmtValor(t.tanteroCampo)}` : null,
+  ].filter(Boolean).join(' ');
+  if (tantero) partes.push(`Tantero ${tantero}`);
   if (t.hasFumigadas != null) partes.push(`Ha ${fmtValor(t.hasFumigadas)}`);
   if (t.siembraTrilla != null) partes.push(`Siembra/Trilla ${fmtValor(t.siembraTrilla)}`);
   if (t.bolseros != null) partes.push(`Bolseros ${fmtValor(t.bolseros)}`);

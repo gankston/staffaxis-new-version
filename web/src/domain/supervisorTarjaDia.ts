@@ -101,6 +101,10 @@ export interface PendienteConTipos extends SupervisorPendingItemDto {
 export function aTiposNuevos(p: SupervisorPendingItemDto): TiposCargaNuevos {
   return {
     kmViajes: p.kmViajes ?? null,
+    cosechaCanadas: p.cosechaCanadas ?? null,
+    cosechaInv: p.cosechaInv ?? null,
+    tanteroInvernadero: p.tanteroInvernadero ?? null,
+    tanteroCampo: p.tanteroCampo ?? null,
     hasFumigadas: p.hasFumigadas ?? null,
     siembraTrilla: p.siembraTrilla ?? null,
     bolseros: p.bolseros ?? null,

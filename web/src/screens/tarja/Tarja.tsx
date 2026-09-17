@@ -8,7 +8,8 @@ import { api } from '../../lib/api';
 import { listarEmpleados, listarRegistros, type Empleado } from '../../lib/empleados';
 import { getSectoresPermitidos, guardarSectorActivo, solicitarAcceso, type Sector } from '../../lib/auth';
 import { sesion } from '../../lib/session';
-import { sumar } from '../../domain/tarjaValores';
+import { cosechaDe, sumar } from '../../domain/tarjaValores';
+import type { Registro } from '../../lib/empleados';
 import { hoyISO } from '../../domain/fechaCarga';
 import { calcularPeriodo, cierreLocal, fmtAbonada, fmtCantidad, fmtHoras, HORAS_POR_JORNAL } from './logica';
 import { IconoAnterior, IconoCambiarSector, IconoCheck, IconoCheckCirculo, IconoEnviar, IconoGrafico, IconoSiguiente } from '../../components/iconos';
@@ -35,7 +36,7 @@ export function Tarja({
 
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [ausentesHoy, setAusentesHoy] = useState(0);
-  const [registrosHoy, setRegistrosHoy] = useState<Array<{ employeeId: string; minutesWorked: string | null }>>([]);
+  const [registrosHoy, setRegistrosHoy] = useState<Registro[]>([]);
   const [rechazadas, setRechazadas] = useState<Array<{ id: string; empleado: string; date: string; motivo: string | null }>>([]);
   const [cargando, setCargando] = useState(true);
   const [cerrando, setCerrando] = useState(false);
@@ -59,7 +60,7 @@ export function Tarja({
         api.getRechazadas().catch(() => ({ items: [] })),
       ]);
       setEmpleados(emps);
-      setRegistrosHoy(regs.map((r) => ({ employeeId: r.employeeId, minutesWorked: r.minutesWorked })));
+      setRegistrosHoy(regs);
       setAusentesHoy(
         (aus.absences ?? []).filter(
           (a) => a.is_justified && a.start_date.slice(0, 10) <= hoy && a.end_date.slice(0, 10) >= hoy,
@@ -79,7 +80,12 @@ export function Tarja({
   }, []);
 
   // Totales en vivo del día, con el mismo parser que la app.
-  const valores = useMemo(() => sumar(registrosHoy.map((r) => r.minutesWorked)), [registrosHoy]);
+  const valores = useMemo(() => {
+    const v = sumar(registrosHoy.map((r) => r.minutesWorked));
+    // La cosecha se recalcula leyendo las columnas: el "C:" del texto ya no se
+    // escribe y sumarlo solo de ahi dejaria en cero todo lo cargado por origen.
+    return { ...v, cosecha: registrosHoy.reduce((acc, r) => acc + cosechaDe(r.minutesWorked, r.tiposNuevos), 0) };
+  }, [registrosHoy]);
   const periodo = useMemo(() => calcularPeriodo(hoy, periodoOffset), [hoy, periodoOffset]);
 
   const cerrarTarja = async () => {
