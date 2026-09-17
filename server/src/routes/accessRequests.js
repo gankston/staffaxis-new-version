@@ -111,6 +111,58 @@ export async function accessRequestRoutes(app) {
     return reply.send({ status: 'pending', request_id: ins.rows[0].id });
   });
 
+  /**
+   * POST /api/auth/sesion-existente
+   *
+   * Un telefono que ya estaba autorizado y que perdio el almacenamiento local
+   * (pasar del APK nativo al shell: el WebView arranca con el localStorage vacio)
+   * vuelve a entrar solo, sin que el encargado tenga que elegir el sector de nuevo.
+   * El servidor ya sabe en que sector esta y como se llama: no hay nada que
+   * preguntarle al usuario.
+   *
+   * Mismo criterio de confianza que request-access: alcanza con el device_id, que
+   * es el ANDROID_ID del telefono. No autoriza a nadie nuevo — si el dispositivo no
+   * estaba aprobado (o fue revocado) contesta que no hay sesion y el alta sigue el
+   * camino normal, con su pedido pendiente.
+   */
+  app.post('/api/auth/sesion-existente', async (req, reply) => {
+    const { device_id } = req.body ?? {};
+    if (!device_id) return reply.status(400).send({ error: 'Falta device_id' });
+
+    // El sector viene entero (igual que /api/sectors) para que el cliente pueda
+    // dejar la sesion armada de una, sin un segundo pedido.
+    const r = await db.query(
+      `SELECT d.token, d.encargado_name, d.is_master, d.approved, d.revoked,
+              s.id AS sector_id, s.name AS sector_name, s.tipo_carga, s.encargado,
+              COALESCE(
+                (SELECT ARRAY_AGG(stc.tipo ORDER BY stc.tipo)
+                   FROM sector_tipos_carga stc WHERE stc.sector_id = s.id),
+                '{}'
+              ) AS tipos_carga
+       FROM devices d LEFT JOIN sectors s ON s.id = d.sector_id
+       WHERE d.device_id = $1`,
+      [device_id]
+    );
+    const dev = r.rows[0];
+    if (!dev || dev.revoked || !dev.token || !(dev.approved || dev.is_master) || !dev.sector_id) {
+      return reply.send({ hay_sesion: false });
+    }
+
+    return reply.send({
+      hay_sesion: true,
+      token: dev.token,
+      is_master: dev.is_master === true,
+      encargado_name: dev.encargado_name,
+      sector: {
+        id: dev.sector_id,
+        name: dev.sector_name,
+        tipoCarga: dev.tipo_carga,
+        tiposCarga: dev.tipos_carga,
+        encargado: dev.encargado ?? null,
+      },
+    });
+  });
+
   // GET /api/auth/request-access/:id — la app hace polling de esto
   app.get('/api/auth/request-access/:id', async (req, reply) => {
     const { id } = req.params;

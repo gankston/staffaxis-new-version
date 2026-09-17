@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { alRevocarse, api } from './lib/api';
+import { recuperarSesion } from './lib/auth';
+import { Spinner } from './components/ui';
 import { sesion } from './lib/session';
 import { getDeviceId } from './lib/bridge';
 import { SinConexion } from './screens/SinConexion';
@@ -25,9 +27,23 @@ function destinoInicial(): Ruta {
 
 export function App() {
   const [ruta, setRuta] = useState<Ruta>(() => destinoInicial());
+  // Solo mientras se pregunta si este telefono ya tenia sesion en el servidor.
+  const [recuperando, setRecuperando] = useState(() => destinoInicial() === 'bienvenida');
   const [sinConexion, setSinConexion] = useState(() => !navigator.onLine);
   const [recargas, setRecargas] = useState(0);
   const esMiTelefono = useRef(getDeviceId() === MI_TELEFONO_DEVICE_ID).current;
+
+  // Antes de mandar a elegir sector, preguntar si el telefono ya estaba autorizado.
+  // Sin esto, pasar del APK nativo al shell hacia que todos tuvieran que elegir su
+  // sector de nuevo, aunque el servidor ya supiera cual era.
+  useEffect(() => {
+    if (!recuperando) return;
+    let vivo = true;
+    recuperarSesion()
+      .then((ok) => { if (vivo && ok) setRuta('main'); })
+      .finally(() => { if (vivo) setRecuperando(false); });
+    return () => { vivo = false; };
+  }, [recuperando]);
 
   // Revocacion en caliente: un 403 {revoked:true} en cualquier endpoint corta la
   // sesion y vuelve a bienvenida, sin esperar a que reinicien la app.
@@ -69,6 +85,14 @@ export function App() {
   const recargarMain = useCallback(() => setRecargas((n) => n + 1), []);
 
   if (sinConexion) return <SinConexion onReintentar={() => setSinConexion(!navigator.onLine)} />;
+  // Mientras se pregunta si el telefono ya tenia sesion. Dura lo que tarda un
+  // pedido; sin esto se veria la bienvenida un instante y despues saltaria solo.
+  if (recuperando)
+    return (
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Spinner />
+      </div>
+    );
 
   switch (ruta) {
     case 'bienvenida':

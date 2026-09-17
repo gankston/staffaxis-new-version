@@ -86,6 +86,36 @@ export async function solicitarAcceso(sector: Sector, nombreCompleto: string): P
   throw new Error('Respuesta inesperada del servidor');
 }
 
+/**
+ * Un telefono que ya estaba autorizado pero que perdio lo que tenia guardado
+ * (pasar del APK nativo al shell deja el localStorage del WebView vacio) vuelve
+ * a entrar solo: el servidor ya sabe su sector y su encargado, no hace falta que
+ * el usuario los elija de nuevo.
+ *
+ * Devuelve true si dejo la sesion lista. Si el telefono no estaba autorizado, o
+ * no hay red, devuelve false y sigue el alta normal por la pantalla de bienvenida.
+ */
+export async function recuperarSesion(): Promise<boolean> {
+  try {
+    const deviceId = getDeviceId();
+    if (!deviceId) return false;
+    const r = await api.sesionExistente(deviceId);
+    if (!r?.hay_sesion || !r.token || !r.sector) return false;
+    sesion.guardarDeviceToken(r.token, r.is_master === true);
+    if (r.encargado_name) sesion.guardarFullName(r.encargado_name);
+    sesion.guardarSectorActivo({
+      id: r.sector.id,
+      name: r.sector.name,
+      tipoCarga: r.sector.tipoCarga,
+      encargado: r.sector.encargado,
+      tiposCarga: r.sector.tiposCarga ?? [],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type EstadoAcceso =
   | { tipo: 'pending' }
   | { tipo: 'rejected' }

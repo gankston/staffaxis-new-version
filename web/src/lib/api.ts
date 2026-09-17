@@ -322,6 +322,16 @@ export const api = {
     longitude: number | null;
   }) => pedir<AccessStatusDto>('/api/auth/request-access', { method: 'POST', body }),
 
+  /** Sesion que el telefono ya tenia en el servidor, para no volver a pedir el sector. */
+  sesionExistente: (deviceId: string) =>
+    pedir<{
+      hay_sesion: boolean;
+      token?: string;
+      is_master?: boolean;
+      encargado_name?: string | null;
+      sector?: { id: string; name: string; tipoCarga: string; tiposCarga: string[]; encargado: string | null };
+    }>('/api/auth/sesion-existente', { method: 'POST', body: { device_id: deviceId } }),
+
   estadoAcceso: (requestId: string) =>
     pedir<AccessStatusDto>(`/api/auth/request-access/${encodeURIComponent(requestId)}`),
 
