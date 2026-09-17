@@ -5,7 +5,7 @@
  * ahi sale el caso EXISTS_INACTIVE).
  */
 import { ApiError, api, type EmployeeDto } from './api';
-import type { TiposCargaNuevos } from '../domain/tiposCarga';
+import { aNumero, type TiposCargaNuevos } from '../domain/tiposCarga';
 
 export interface Empleado {
   id: string;
@@ -186,29 +186,29 @@ function aRegistro(f: FilaSubmission): Registro {
     firstName: f.first_name,
     lastName: f.last_name,
     tiposNuevos: {
-      kmViajes: f.km_viajes,
-      hasFumigadas: f.has_fumigadas,
-      siembraTrilla: f.siembra_trilla,
-      bolseros: f.bolseros,
-      etiquetado: f.etiquetado,
+      kmViajes: aNumero(f.km_viajes),
+      hasFumigadas: aNumero(f.has_fumigadas),
+      siembraTrilla: aNumero(f.siembra_trilla),
+      bolseros: aNumero(f.bolseros),
+      etiquetado: aNumero(f.etiquetado),
       cargaCamionKg50: f.carga_camion_kg50,
       cargaCamionKg25: f.carga_camion_kg25,
       cargaCamionOtro: f.carga_camion_otro,
       movimientoEstibaKg50: f.movimiento_estiba_kg50,
       movimientoEstibaKg25: f.movimiento_estiba_kg25,
       movimientoEstibaOtro: f.movimiento_estiba_otro,
-      etiquetadoLata185: f.etiquetado_lata_185 ?? null,
-      etiquetadoLata750: f.etiquetado_lata_750 ?? null,
-      etiquetadoLata2500: f.etiquetado_lata_2500 ?? null,
-      etiquetadoLata8kg: f.etiquetado_lata_8kg ?? null,
-      descargaJaula: f.descarga_jaula ?? null,
-      descargaCamion: f.descarga_camion ?? null,
-      cargaJaula: f.carga_jaula ?? null,
-      cargaCamionCantidad: f.carga_camion_cantidad ?? null,
-      cosechaCanadas: f.cosecha_canadas ?? null,
-      cosechaInv: f.cosecha_inv ?? null,
-      tanteroInvernadero: f.tantero_invernadero ?? null,
-      tanteroCampo: f.tantero_campo ?? null,
+      etiquetadoLata185: aNumero(f.etiquetado_lata_185),
+      etiquetadoLata750: aNumero(f.etiquetado_lata_750),
+      etiquetadoLata2500: aNumero(f.etiquetado_lata_2500),
+      etiquetadoLata8kg: aNumero(f.etiquetado_lata_8kg),
+      descargaJaula: aNumero(f.descarga_jaula),
+      descargaCamion: aNumero(f.descarga_camion),
+      cargaJaula: aNumero(f.carga_jaula),
+      cargaCamionCantidad: aNumero(f.carga_camion_cantidad),
+      cosechaCanadas: aNumero(f.cosecha_canadas),
+      cosechaInv: aNumero(f.cosecha_inv),
+      tanteroInvernadero: aNumero(f.tantero_invernadero),
+      tanteroCampo: aNumero(f.tantero_campo),
     },
   };
 }

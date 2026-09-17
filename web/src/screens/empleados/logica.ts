@@ -427,16 +427,12 @@ export function filtrarEmpleados<T extends { apellido: string }>(lista: T[], q: 
  */
 export function formatTiposNuevosRegistro(t: TiposCargaNuevos): string {
   const partes: string[] = [];
-  const cosecha = [
-    t.cosechaCanadas != null ? `CC ${fmtValor(t.cosechaCanadas)}` : null,
-    t.cosechaInv != null ? `CI ${fmtValor(t.cosechaInv)}` : null,
-  ].filter(Boolean).join(' ');
-  if (cosecha) partes.push(`Cosecha ${cosecha}`);
-  const tantero = [
-    t.tanteroInvernadero != null ? `Invernadero ${fmtValor(t.tanteroInvernadero)}` : null,
-    t.tanteroCampo != null ? `Campo ${fmtValor(t.tanteroCampo)}` : null,
-  ].filter(Boolean).join(' ');
-  if (tantero) partes.push(`Tantero ${tantero}`);
+  // Las siglas van solas: CC = cosecha Cañadas, CI = cosecha Raigon/Inv,
+  // TI = tantero invernadero, TC = tantero campo. Asi las conocen en el campo.
+  if (t.cosechaCanadas != null) partes.push(`CC ${fmtValor(t.cosechaCanadas)}`);
+  if (t.cosechaInv != null) partes.push(`CI ${fmtValor(t.cosechaInv)}`);
+  if (t.tanteroInvernadero != null) partes.push(`TI ${fmtValor(t.tanteroInvernadero)}`);
+  if (t.tanteroCampo != null) partes.push(`TC ${fmtValor(t.tanteroCampo)}`);
   if (t.hasFumigadas != null) partes.push(`Ha ${fmtValor(t.hasFumigadas)}`);
   if (t.siembraTrilla != null) partes.push(`Siembra/Trilla ${fmtValor(t.siembraTrilla)}`);
   if (t.bolseros != null) partes.push(`Bolseros ${fmtValor(t.bolseros)}`);

@@ -61,6 +61,17 @@ export const TIPOS_NUEVOS_VACIO: TiposCargaNuevos = {
   tanteroCampo: null,
 };
 
+/**
+ * Las columnas NUMERIC de Postgres viajan en el JSON como TEXTO: "23", no 23.
+ * Sumarlas asi concatenaba ("0" + "23" + "0" = "0230") y en pantalla salia un
+ * numero larguisimo. Todo lo que entra del servidor pasa por aca.
+ */
+export function aNumero(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function estaVacio(t: TiposCargaNuevos): boolean {
   return (
     t.kmViajes === null &&

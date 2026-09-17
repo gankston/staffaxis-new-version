@@ -4,7 +4,7 @@
  * empleado por empleado.
  */
 import type { SupervisorPendingItemDto } from '../lib/api';
-import { sumarTipos, TIPOS_NUEVOS_VACIO, type TiposCargaNuevos } from './tiposCarga';
+import { sumarTipos, TIPOS_NUEVOS_VACIO, type TiposCargaNuevos, aNumero } from './tiposCarga';
 
 /** Un jornal son 8 horas: el supervisor razona en jornales, no en horas sueltas. */
 export const HORAS_POR_JORNAL = 8;
@@ -100,15 +100,15 @@ export interface PendienteConTipos extends SupervisorPendingItemDto {
 
 export function aTiposNuevos(p: SupervisorPendingItemDto): TiposCargaNuevos {
   return {
-    kmViajes: p.kmViajes ?? null,
-    cosechaCanadas: p.cosechaCanadas ?? null,
-    cosechaInv: p.cosechaInv ?? null,
-    tanteroInvernadero: p.tanteroInvernadero ?? null,
-    tanteroCampo: p.tanteroCampo ?? null,
-    hasFumigadas: p.hasFumigadas ?? null,
-    siembraTrilla: p.siembraTrilla ?? null,
-    bolseros: p.bolseros ?? null,
-    etiquetado: p.etiquetado ?? null,
+    kmViajes: aNumero(p.kmViajes),
+    cosechaCanadas: aNumero(p.cosechaCanadas),
+    cosechaInv: aNumero(p.cosechaInv),
+    tanteroInvernadero: aNumero(p.tanteroInvernadero),
+    tanteroCampo: aNumero(p.tanteroCampo),
+    hasFumigadas: aNumero(p.hasFumigadas),
+    siembraTrilla: aNumero(p.siembraTrilla),
+    bolseros: aNumero(p.bolseros),
+    etiquetado: aNumero(p.etiquetado),
     cargaCamionKg50: p.cargaCamionKg50 ?? null,
     cargaCamionKg25: p.cargaCamionKg25 ?? null,
     cargaCamionOtro: p.cargaCamionOtro ?? null,
