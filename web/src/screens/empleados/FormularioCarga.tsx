@@ -313,7 +313,7 @@ export function FormularioCarga({
                 <TextField
                   value={valores.cachosLegacy}
                   onChange={(v) => set({ cachosLegacy: v })}
-                  label="Cantidad de cachos (carga vieja, sin origen)"
+                  label="Cantidad (carga vieja, sin origen)"
                   soloNumeros
                 />
               </div>
@@ -322,7 +322,7 @@ export function FormularioCarga({
           subtipos={[
             {
               label: 'Cañadas',
-              etiquetaCampo: 'Cantidad de cachos',
+              etiquetaCampo: 'Cantidad',
               check: valores.cosechaCanadasCheck,
               onCheck: (v) => set({ cosechaCanadasCheck: v, cosechaCanadasValor: v ? valores.cosechaCanadasValor : '' }),
               valor: valores.cosechaCanadasValor,
@@ -330,7 +330,7 @@ export function FormularioCarga({
             },
             {
               label: 'Raigón / Inv',
-              etiquetaCampo: 'Cantidad de cachos',
+              etiquetaCampo: 'Cantidad',
               check: valores.cosechaInvCheck,
               onCheck: (v) => set({ cosechaInvCheck: v, cosechaInvValor: v ? valores.cosechaInvValor : '' }),
               valor: valores.cosechaInvValor,
