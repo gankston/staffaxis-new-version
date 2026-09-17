@@ -26,7 +26,10 @@ export async function authRoutes(app) {
     if (existing.rows[0]) {
       const device = existing.rows[0];
       if (device.token) {
-        return reply.send({ token: device.token });
+        // Va tambien is_master: el cliente lo lee de aca para saber si entra en
+        // modo maestro. Sin esto arranca como uno comun y recien se corrige a los
+        // 25 segundos, cuando pega el heartbeat — y en ese rato ve un solo sector.
+        return reply.send({ token: device.token, is_master: device.is_master === true });
       }
       // Dispositivo existente sin token → generar y aprobar ahora
       const token = jwt.sign(
@@ -38,7 +41,7 @@ export async function authRoutes(app) {
         'UPDATE devices SET token = $1, approved = true, sector_id = $2 WHERE device_id = $3',
         [token, sector_id, device_id]
       );
-      return reply.send({ token });
+      return reply.send({ token, is_master: device.is_master === true });
     }
 
     // Nuevo dispositivo → auto-aprobar y generar token
@@ -54,7 +57,8 @@ export async function authRoutes(app) {
       [uuid(), device_id, sector_id, encargado_name, token]
     );
 
-    return reply.send({ token });
+    // Un dispositivo nuevo nunca es maestro: el flag se marca a mano despues.
+    return reply.send({ token, is_master: false });
   });
 
   // GET /api/auth/device/status — heartbeat liviano para que la app detecte una

@@ -8,14 +8,15 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        // Sufijo .web a proposito mientras se prueba: se instala AL LADO de la app
-        // actual, para poder comparar las dos abiertas en el mismo telefono. Cuando
-        // este aprobada se saca el sufijo y ahi si pisa la app de todos.
-        applicationId = "com.registro.empleados.web"
+        // Sin sufijo: mismo applicationId que la app nativa, asi el shell la PISA
+        // en vez de instalarse al lado. Ya no se comparan las dos, la web reemplaza.
+        applicationId = "com.registro.empleados"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        // Tiene que ser mayor que el de la app nativa instalada (la publicada es 64,
+        // la compilada 65), si no Android lo rechaza como si fuera una version vieja.
+        versionCode = 66
+        versionName = "5.0.0"
 
         buildConfigField("String", "WEB_URL", "\"https://staffaxis-new-version-production.up.railway.app/app\"")
     }
@@ -51,6 +52,10 @@ android {
 }
 
 dependencies {
+    // Solo para los tests del actualizador: no entra en el APK.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
+
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">StaffAxis (web)</string>
+    <!-- Tiene que decir exactamente lo mismo que la app nativa: el shell la
+         reemplaza, no convive con ella. El "(web)" era para distinguirlas
+         cuando se instalaban las dos juntas para comparar. -->
+    <string name="app_name">StaffAxis HSM</string>
 </resources>

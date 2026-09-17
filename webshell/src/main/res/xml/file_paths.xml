@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="fotos" path="fotos/" />
+    <!-- El APK de la actualizacion baja a Descargas: sin esta linea getUriForFile
+         tira IllegalArgumentException al momento de instalar. -->
+    <external-path name="external_root" path="." />
 </paths>

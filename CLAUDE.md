@@ -93,7 +93,13 @@ $sectorId = "<uuid-del-sector>"
 
 **Nunca compilar release, empaquetar ni publicar sin autorización explícita del usuario, cada vez.** Compilar en debug para chequear que algo compila está bien.
 
-Publicar la app Android tiene consecuencias grandes: la actualización llega a ~45 teléfonos del campo, y al cambiar el `versionCode` **todos vuelven a la pantalla de autorización** y hay que aprobarlos a mano desde StaffAdmin. No hacerlo un lunes a la mañana.
+Publicar la app Android llega a ~45 teléfonos del campo de una, así que no hacerlo un lunes a la mañana.
+
+**Un teléfono ya autorizado NO se vuelve a pedir autorización.** El `device_id` es el
+`Settings.Secure.ANDROID_ID`, que es del hardware: no se borra al actualizar, ni al
+reinstalar, ni al limpiar los datos del sitio (por eso el shell lo puentea del lado nativo
+en vez de guardarlo en el navegador). Y `POST /api/auth/device/register` devuelve el token
+que el dispositivo ya tenía. No hay nada que aprobar a mano en StaffAdmin.
 
 Antes de publicar un APK, seguir sí o sí lo documentado en `SETUP.md` (sección 6):
 - Compilar **siempre** con `gradlew clean` — sin eso, Gradle puede dejar embebida en el bytecode una constante `BuildConfig.VERSION_CODE` vieja y el cartel de "actualizar" queda en loop

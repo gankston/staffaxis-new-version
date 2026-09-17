@@ -135,6 +135,47 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(web)
         web.loadUrl(BuildConfig.WEB_URL)
+
+        buscarActualizacion()
+    }
+
+    /**
+     * Mira si hay una version nueva del shell. Va en un hilo aparte para no trabar
+     * la apertura: si no hay red, falla en silencio y la app sigue normal.
+     */
+    private fun buscarActualizacion() {
+        Thread {
+            val info = Actualizador.buscar() ?: return@Thread
+            runOnUiThread { if (!isFinishing) Actualizador.mostrarCartel(this, info) }
+        }.start()
+    }
+
+    /** Baja el APK, lo verifica y abre el instalador. */
+    fun bajarEInstalar(info: Actualizador.Info) {
+        val dlg = android.app.ProgressDialog(this).apply {
+            setMessage("Iniciando descarga...")
+            setCancelable(false)
+            show()
+        }
+        Thread {
+            val nombre = Actualizador.descargar(this, info) { texto ->
+                runOnUiThread { dlg.setMessage(texto) }
+            }
+            runOnUiThread {
+                dlg.dismiss()
+                if (nombre != null) {
+                    Actualizador.instalar(this, nombre)
+                } else {
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("No se pudo descargar")
+                        .setMessage("Revisá la conexión e intentá de nuevo.")
+                        .setCancelable(!info.mandatory)
+                        .setPositiveButton("Reintentar") { _, _ -> bajarEInstalar(info) }
+                        .apply { if (!info.mandatory) setNegativeButton("Cerrar", null) }
+                        .show()
+                }
+            }
+        }.start()
     }
 
     override fun onBackPressed() {
