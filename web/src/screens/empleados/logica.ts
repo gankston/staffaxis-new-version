@@ -263,6 +263,42 @@ export function buildTiposNuevos(v: ValoresCarga): TiposCargaNuevos {
   };
 }
 
+/**
+ * El cuerpo del POST, armado DESDE el objeto de tipos y no a mano.
+ *
+ * Antes cada pantalla listaba los campos uno por uno, y cada tipo de carga nuevo
+ * se quedaba afuera en silencio: el formulario lo pedia, el usuario lo cargaba y
+ * se perdia antes de salir del telefono. Con esto, agregar un campo al modelo
+ * alcanza para que viaje.
+ */
+export function payloadTiposNuevos(t: TiposCargaNuevos) {
+  return {
+    km_viajes: t.kmViajes,
+    has_fumigadas: t.hasFumigadas,
+    siembra_trilla: t.siembraTrilla,
+    bolseros: t.bolseros,
+    etiquetado: t.etiquetado,
+    carga_camion_kg50: t.cargaCamionKg50,
+    carga_camion_kg25: t.cargaCamionKg25,
+    carga_camion_otro: t.cargaCamionOtro,
+    movimiento_estiba_kg50: t.movimientoEstibaKg50,
+    movimiento_estiba_kg25: t.movimientoEstibaKg25,
+    movimiento_estiba_otro: t.movimientoEstibaOtro,
+    etiquetado_lata_185: t.etiquetadoLata185,
+    etiquetado_lata_750: t.etiquetadoLata750,
+    etiquetado_lata_2500: t.etiquetadoLata2500,
+    etiquetado_lata_8kg: t.etiquetadoLata8kg,
+    descarga_jaula: t.descargaJaula,
+    descarga_camion: t.descargaCamion,
+    carga_jaula: t.cargaJaula,
+    carga_camion_cantidad: t.cargaCamionCantidad,
+    cosecha_canadas: t.cosechaCanadas,
+    cosecha_inv: t.cosechaInv,
+    tantero_invernadero: t.tanteroInvernadero,
+    tantero_campo: t.tanteroCampo,
+  };
+}
+
 /** Campos tipados que acompanian al string (cosecha/cajas/cajones/abonada). */
 export function buildTipados(v: ValoresCarga) {
   return {

@@ -7,6 +7,7 @@ import {
   buildMinutesWorked,
   buildTipados,
   buildTiposNuevos,
+  payloadTiposNuevos,
   formatMinutesWorkedDisplay,
   formatTiposNuevosRegistro,
   puedeGuardar,
@@ -228,17 +229,7 @@ export function DialogoEditarEmpleado({
         cajas: tip.cajas,
         cajones: tip.cajones,
         abonada: tip.abonada,
-        km_viajes: t.kmViajes,
-        has_fumigadas: t.hasFumigadas,
-        siembra_trilla: t.siembraTrilla,
-        bolseros: t.bolseros,
-        etiquetado: t.etiquetado,
-        carga_camion_kg50: t.cargaCamionKg50,
-        carga_camion_kg25: t.cargaCamionKg25,
-        carga_camion_otro: t.cargaCamionOtro,
-        movimiento_estiba_kg50: t.movimientoEstibaKg50,
-        movimiento_estiba_kg25: t.movimientoEstibaKg25,
-        movimiento_estiba_otro: t.movimientoEstibaOtro,
+        ...payloadTiposNuevos(t),
       });
       setRegistros((await listarRegistros({ empleadoId: empleado.id })).sort((a, b) => b.date.localeCompare(a.date)));
       setEditando(null);
