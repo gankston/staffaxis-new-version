@@ -102,8 +102,63 @@ export async function adminRoutes(app) {
     return reply.status(201).send(result.rows[0]);
   });
 
+  /**
+   * Borrar un sector.
+   *
+   * Antes era un DELETE pelado y fallaba SIEMPRE, incluso con un sector vacio: hay
+   * ocho tablas apuntando a sectors y todas estan en ON DELETE NO ACTION. Del lado
+   * de StaffAdmin se veia como "Error al eliminar sector", sin decir por que.
+   *
+   * Ahora se borra solo lo que es seguro borrar. Un sector con empleados o con
+   * tarjas NO se toca: de esas tarjas sale el sueldo, y borrarlas en cascada por
+   * tocar un boton seria irreversible. En ese caso se explica que lo esta frenando
+   * para que el admin pueda resolverlo (mover los empleados, por ejemplo).
+   */
   app.delete('/api/admin/sectors/:id', { preHandler: verifyAdmin }, async (req, reply) => {
-    await db.query('DELETE FROM sectors WHERE id = $1', [req.params.id]);
+    const id = req.params.id;
+
+    const sector = await db.query('SELECT name FROM sectors WHERE id = $1', [id]);
+    if (!sector.rows[0]) return reply.status(404).send({ error: 'El sector no existe' });
+
+    const { rows: [uso] } = await db.query(
+      `SELECT (SELECT count(*) FROM employees   WHERE sector_id = $1) AS empleados,
+              (SELECT count(*) FROM submissions WHERE sector_id = $1) AS tarjas,
+              (SELECT count(*) FROM devices     WHERE sector_id = $1 AND approved AND NOT revoked) AS telefonos,
+              (SELECT count(*) FROM transfers   WHERE to_sector_id = $1 OR from_sector_id = $1) AS traslados`,
+      [id]
+    );
+
+    const frena = [];
+    if (+uso.empleados > 0) frena.push(`${uso.empleados} empleado${+uso.empleados > 1 ? 's' : ''}`);
+    if (+uso.tarjas > 0) frena.push(`${uso.tarjas} tarja${+uso.tarjas > 1 ? 's' : ''} cargada${+uso.tarjas > 1 ? 's' : ''}`);
+    if (+uso.telefonos > 0) frena.push(`${uso.telefonos} teléfono${+uso.telefonos > 1 ? 's' : ''} autorizado${+uso.telefonos > 1 ? 's' : ''}`);
+    if (+uso.traslados > 0) frena.push(`${uso.traslados} traslado${+uso.traslados > 1 ? 's' : ''} de empleados`);
+
+    if (frena.length) {
+      return reply.status(409).send({
+        error: `No se puede eliminar "${sector.rows[0].name}": tiene ${frena.join(', ')}. ` +
+               'Mové o dá de baja eso primero.',
+      });
+    }
+
+    // Queda limpio: solo hay que sacar lo que cuelga del sector y no es historia.
+    const cliente = await db.connect();
+    try {
+      await cliente.query('BEGIN');
+      await cliente.query('DELETE FROM sector_tipos_carga WHERE sector_id = $1', [id]);
+      await cliente.query('DELETE FROM supervisor_sectors WHERE sector_id = $1', [id]);
+      await cliente.query('DELETE FROM access_requests   WHERE sector_id = $1', [id]);
+      await cliente.query('DELETE FROM devices           WHERE sector_id = $1', [id]);
+      await cliente.query('DELETE FROM sectors           WHERE id = $1', [id]);
+      await cliente.query('COMMIT');
+    } catch (e) {
+      await cliente.query('ROLLBACK');
+      req.log?.error?.(`borrar sector ${id}: ${e.message}`);
+      return reply.status(409).send({ error: `No se pudo eliminar: ${e.message}` });
+    } finally {
+      cliente.release();
+    }
+
     return reply.send({ ok: true });
   });
 
