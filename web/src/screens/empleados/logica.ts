@@ -57,6 +57,8 @@ export interface ValoresCarga {
   cosechaCanadasValor: string;
   cosechaInvCheck: boolean;
   cosechaInvValor: string;
+  cosechaBananasCheck: boolean;
+  cosechaBananasValor: string;
   cachosLegacy: string;
   porTantero: boolean;
   tanteroInvCheck: boolean;
@@ -111,6 +113,8 @@ export const VALORES_CARGA_INICIAL: ValoresCarga = {
   cosechaCanadasValor: '',
   cosechaInvCheck: false,
   cosechaInvValor: '',
+  cosechaBananasCheck: false,
+  cosechaBananasValor: '',
   cachosLegacy: '',
   porTantero: false,
   tanteroInvCheck: false,
@@ -164,9 +168,10 @@ export function puedeGuardar(v: ValoresCarga): boolean {
   // Cosecha: si es una tarja vieja alcanza con su numero; si no, hay que tildar
   // al menos un origen y el tildado pide cantidad.
   if (v.porCosecha) {
-    if (!v.cachosLegacy.trim() && !v.cosechaCanadasCheck && !v.cosechaInvCheck) return false;
+    if (!v.cachosLegacy.trim() && !v.cosechaCanadasCheck && !v.cosechaInvCheck && !v.cosechaBananasCheck) return false;
     if (v.cosechaCanadasCheck && !v.cosechaCanadasValor.trim()) return false;
     if (v.cosechaInvCheck && !v.cosechaInvValor.trim()) return false;
+    if (v.cosechaBananasCheck && !v.cosechaBananasValor.trim()) return false;
   }
   if (v.porTantero) {
     if (!v.tanteroInvCheck && !v.tanteroCampoCheck) return false;
@@ -246,6 +251,7 @@ export function buildTiposNuevos(v: ValoresCarga): TiposCargaNuevos {
     cargaCamionCantidad: v.porCarga && v.cargaCamionCheck ? toFloatOrNull(comaAPunto(v.cargaCamionValor)) : null,
     cosechaCanadas: v.porCosecha && v.cosechaCanadasCheck ? toFloatOrNull(comaAPunto(v.cosechaCanadasValor)) : null,
     cosechaInv: v.porCosecha && v.cosechaInvCheck ? toFloatOrNull(comaAPunto(v.cosechaInvValor)) : null,
+    cosechaBananas: v.porCosecha && v.cosechaBananasCheck ? toFloatOrNull(comaAPunto(v.cosechaBananasValor)) : null,
     tanteroInvernadero: v.porTantero && v.tanteroInvCheck ? toFloatOrNull(comaAPunto(v.tanteroInvValor)) : null,
     tanteroCampo: v.porTantero && v.tanteroCampoCheck ? toFloatOrNull(comaAPunto(v.tanteroCampoValor)) : null,
     cargaCamionKg50: v.porCargaCamion && v.cargaCamion50 ? true : null,
@@ -294,6 +300,7 @@ export function payloadTiposNuevos(t: TiposCargaNuevos) {
     carga_camion_cantidad: t.cargaCamionCantidad,
     cosecha_canadas: t.cosechaCanadas,
     cosecha_inv: t.cosechaInv,
+    cosecha_bananas: t.cosechaBananas,
     tantero_invernadero: t.tanteroInvernadero,
     tantero_campo: t.tanteroCampo,
   };
@@ -338,7 +345,7 @@ export function valoresDesdeRegistro(
 
   const horasPartNuevo = parts.find((p) => p.startsWith('H '));
   const horasPartViejo = parts.find((p) => toFloatOrNull(p) !== null);
-  const hayCosechaAbierta = t.cosechaCanadas !== null || t.cosechaInv !== null;
+  const hayCosechaAbierta = t.cosechaCanadas !== null || t.cosechaInv !== null || t.cosechaBananas !== null;
   const esCajas = cajasMatch !== null;
   const esCajones = cajonesMatch !== null;
   const horas =
@@ -355,6 +362,8 @@ export function valoresDesdeRegistro(
     cosechaCanadasValor: t.cosechaCanadas !== null ? fmtValor(t.cosechaCanadas) : '',
     cosechaInvCheck: t.cosechaInv !== null,
     cosechaInvValor: t.cosechaInv !== null ? fmtValor(t.cosechaInv) : '',
+    cosechaBananasCheck: t.cosechaBananas !== null,
+    cosechaBananasValor: t.cosechaBananas !== null ? fmtValor(t.cosechaBananas) : '',
     cachosLegacy: hayCosechaAbierta ? '' : cachosLegacy,
     porTantero: t.tanteroInvernadero !== null || t.tanteroCampo !== null,
     tanteroInvCheck: t.tanteroInvernadero !== null,
@@ -431,6 +440,7 @@ export function formatTiposNuevosRegistro(t: TiposCargaNuevos): string {
   // TI = tantero invernadero, TC = tantero campo. Asi las conocen en el campo.
   if (t.cosechaCanadas != null) partes.push(`CC ${fmtValor(t.cosechaCanadas)}`);
   if (t.cosechaInv != null) partes.push(`CI ${fmtValor(t.cosechaInv)}`);
+  if (t.cosechaBananas != null) partes.push(`CB ${fmtValor(t.cosechaBananas)}`);
   if (t.tanteroInvernadero != null) partes.push(`TI ${fmtValor(t.tanteroInvernadero)}`);
   if (t.tanteroCampo != null) partes.push(`TC ${fmtValor(t.tanteroCampo)}`);
   if (t.hasFumigadas != null) partes.push(`Ha ${fmtValor(t.hasFumigadas)}`);

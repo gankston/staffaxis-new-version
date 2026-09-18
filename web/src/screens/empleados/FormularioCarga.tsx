@@ -21,7 +21,8 @@ export function lineaResumen(v: ValoresCarga): string {
     const cosecha = [
       v.cosechaCanadasCheck && v.cosechaCanadasValor.trim() ? `Cañadas ${v.cosechaCanadasValor.trim()}` : '',
       v.cosechaInvCheck && v.cosechaInvValor.trim() ? `Raigón/Inv ${v.cosechaInvValor.trim()}` : '',
-      !v.cosechaCanadasCheck && !v.cosechaInvCheck && v.cachosLegacy.trim() ? v.cachosLegacy.trim() : '',
+      v.cosechaBananasCheck && v.cosechaBananasValor.trim() ? `Bananas ${v.cosechaBananasValor.trim()}` : '',
+      !v.cosechaCanadasCheck && !v.cosechaInvCheck && !v.cosechaBananasCheck && v.cachosLegacy.trim() ? v.cachosLegacy.trim() : '',
     ].filter(Boolean).join(', ');
     out += cosecha ? ` + Cosecha (${cosecha})` : ' + Cosecha';
   }
@@ -142,11 +143,11 @@ interface Subtipo {
 }
 
 /**
- * Tipo de carga que se abre en dos origenes: se tilda el tipo, se elige uno o
- * los dos, y cada uno tildado pide su numero. Lo usan Descarga y Carga
- * (jaula/camion), Cosecha (Cañadas/Raigon-Inv) y Tantero (invernadero/campo).
+ * Tipo de carga que se abre en varios origenes: se tilda el tipo, se eligen los
+ * que correspondan, y cada uno tildado pide su numero. Lo usan Descarga y Carga
+ * (jaula/camion), Cosecha (Cañadas / Raigon-Inv / Bananas) y Tantero.
  */
-function CargaDosSubtipos({
+function CargaSubtipos({
   label,
   checked,
   onCheck,
@@ -156,10 +157,10 @@ function CargaDosSubtipos({
   label: string;
   checked: boolean;
   onCheck: (v: boolean) => void;
-  subtipos: [Subtipo, Subtipo];
+  subtipos: Subtipo[];
   extra?: ReactNode;
 }) {
-  const faltaOpcion = !subtipos[0].check && !subtipos[1].check && !extra;
+  const faltaOpcion = !subtipos.some((s) => s.check) && !extra;
   return (
     <div>
       <Check label={label} checked={checked} onChange={onCheck} negrita />
@@ -288,7 +289,7 @@ export function FormularioCarga({
       <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: 0 }} />
 
       {tiposCarga.includes('cosecha') && (
-        <CargaDosSubtipos
+        <CargaSubtipos
           label="Cosecha"
           checked={valores.porCosecha}
           onCheck={(v) =>
@@ -301,6 +302,8 @@ export function FormularioCarga({
                     cosechaCanadasValor: '',
                     cosechaInvCheck: false,
                     cosechaInvValor: '',
+                    cosechaBananasCheck: false,
+                    cosechaBananasValor: '',
                     cachosLegacy: '',
                   },
             )
@@ -336,12 +339,20 @@ export function FormularioCarga({
               valor: valores.cosechaInvValor,
               onValor: (v) => set({ cosechaInvValor: v }),
             },
+            {
+              label: 'Bananas',
+              etiquetaCampo: 'Cantidad',
+              check: valores.cosechaBananasCheck,
+              onCheck: (v) => set({ cosechaBananasCheck: v, cosechaBananasValor: v ? valores.cosechaBananasValor : '' }),
+              valor: valores.cosechaBananasValor,
+              onValor: (v) => set({ cosechaBananasValor: v }),
+            },
           ]}
         />
       )}
 
       {tiposCarga.includes('tantero') && (
-        <CargaDosSubtipos
+        <CargaSubtipos
           label="Tantero"
           checked={valores.porTantero}
           onCheck={(v) =>
@@ -476,7 +487,7 @@ export function FormularioCarga({
       )}
 
       {tiposCarga.includes('descarga') && (
-        <CargaDosSubtipos
+        <CargaSubtipos
           label="Descarga"
           checked={valores.porDescarga}
           onCheck={(v) =>
@@ -508,7 +519,7 @@ export function FormularioCarga({
       )}
 
       {tiposCarga.includes('carga') && (
-        <CargaDosSubtipos
+        <CargaSubtipos
           label="Carga"
           checked={valores.porCarga}
           onCheck={(v) =>

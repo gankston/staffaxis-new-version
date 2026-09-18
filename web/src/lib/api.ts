@@ -201,6 +201,7 @@ export interface AdminReportRowDto {
   etiquetado_lata_8kg?: number | null;
   cosecha_canadas?: number | null;
   cosecha_inv?: number | null;
+  cosecha_bananas?: number | null;
   tantero_invernadero?: number | null;
   tantero_campo?: number | null;
   descarga_jaula?: number | null;
@@ -223,6 +224,7 @@ export interface SupervisorPendingItemDto {
   kmViajes?: number | null;
   cosechaCanadas?: number | null;
   cosechaInv?: number | null;
+  cosechaBananas?: number | null;
   tanteroInvernadero?: number | null;
   tanteroCampo?: number | null;
   hasFumigadas?: number | null;
@@ -271,6 +273,7 @@ export interface SupervisorResumenRowDto {
   etiquetado_lata_8kg?: number | null;
   cosecha_canadas?: number | null;
   cosecha_inv?: number | null;
+  cosecha_bananas?: number | null;
   tantero_invernadero?: number | null;
   tantero_campo?: number | null;
   descarga_jaula?: number | null;

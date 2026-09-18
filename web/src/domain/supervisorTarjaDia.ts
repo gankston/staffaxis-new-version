@@ -103,6 +103,7 @@ export function aTiposNuevos(p: SupervisorPendingItemDto): TiposCargaNuevos {
     kmViajes: aNumero(p.kmViajes),
     cosechaCanadas: aNumero(p.cosechaCanadas),
     cosechaInv: aNumero(p.cosechaInv),
+    cosechaBananas: aNumero(p.cosechaBananas),
     tanteroInvernadero: aNumero(p.tanteroInvernadero),
     tanteroCampo: aNumero(p.tanteroCampo),
     hasFumigadas: aNumero(p.hasFumigadas),
