@@ -1,11 +1,10 @@
 /** Diálogo "cargar horas" — HorasDialog de EmpleadosScreen.kt. */
-import { useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { TextField } from '../../components/ui';
 import { IconoAlerta, IconoCalendario, IconoGuardar } from '../../components/iconos';
 import { FormularioCarga } from './FormularioCarga';
 import { puedeGuardar, type ValoresCarga } from './logica';
-import { esFechaCargable, fechasCargables, hoyISO, sumarDias } from '../../domain/fechaCarga';
+import { diasAtras, esFechaCargable, hoyISO, sumarDias } from '../../domain/fechaCarga';
 import type { Empleado } from '../../lib/empleados';
 
 const MESES = [
@@ -50,7 +49,8 @@ export function DialogoHoras({
   onGuardar: () => void;
 }) {
   const hoy = hoyISO();
-  const [verSelector, setVerSelector] = useState(false);
+  // Desde que fecha puede cargar este sector (OTITO tres dias, el resto ayer).
+  const masViejo = sumarDias(hoy, -diasAtras(sectorId));
   const faltaDni = !empleado.dni?.trim();
   const habilitado = !faltaDni && puedeGuardar(valores) && !guardando;
 
@@ -127,51 +127,54 @@ export function DialogoHoras({
         </div>
       )}
 
-      {/* Las fechas que deja el sector — casi todos hoy o ayer, OTITO tres dias. */}
-      <button
-        onClick={() => setVerSelector((v) => !v)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          width: '100%',
-          height: 48,
-          borderRadius: 20,
-          border: '1px solid var(--purple80)',
-          background: 'transparent',
-          color: 'var(--purple80)',
-          fontSize: 14,
-          marginBottom: 12,
-        }}
-      >
-        <IconoCalendario size={18} /> {etiquetaFecha(fecha, hoy)}
-      </button>
+      {/*
+        Calendario nativo, igual que el DatePickerDialog de la app. Antes era una
+        fila de botones: con dos fechas entraba, pero apenas el sector permitio
+        tres los botones se salian de la pantalla y quedaban cortados.
 
-      {verSelector && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          {fechasCargables(hoy, sectorId).map((f) => (
-            <button
-              key={f}
-              disabled={!esFechaCargable(f, hoy, sectorId)}
-              onClick={() => {
-                onFecha(f);
-                setVerSelector(false);
-              }}
-              style={{
-                flex: 1,
-                height: 44,
-                borderRadius: 12,
-                border: `1px solid ${f === fecha ? 'var(--teal)' : '#555'}`,
-                background: f === fecha ? 'rgba(38,198,218,0.12)' : 'transparent',
-                color: f === fecha ? 'var(--teal)' : 'white',
-              }}
-            >
-              {etiquetaFecha(f, hoy)}
-            </button>
-          ))}
+        El <input type="date"> va transparente ENCIMA del boton en vez de oculto:
+        asi el toque le llega a el y abre el calendario del telefono. Con el input
+        escondido hay WebViews donde no abre nada.
+      */}
+      <div style={{ position: 'relative', width: '100%', height: 48, marginBottom: 12 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            width: '100%',
+            height: '100%',
+            borderRadius: 20,
+            border: '1px solid var(--purple80)',
+            color: 'var(--purple80)',
+            fontSize: 14,
+          }}
+        >
+          <IconoCalendario size={18} /> {etiquetaFecha(fecha, hoy)}
         </div>
-      )}
+        <input
+          type="date"
+          value={fecha}
+          min={masViejo}
+          max={hoy}
+          onChange={(e) => {
+            const f = e.target.value;
+            // El min/max del navegador ya lo limita, pero se revalida por las dudas:
+            // en un teclado se puede escribir cualquier cosa.
+            if (f && esFechaCargable(f, hoy, sectorId)) onFecha(f);
+          }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            opacity: 0,
+            border: 'none',
+            background: 'transparent',
+          }}
+        />
+      </div>
 
       <FormularioCarga valores={valores} set={set} tiposCarga={tiposCarga} sectorId={sectorId} />
 
