@@ -5,7 +5,7 @@ import { TextField } from '../../components/ui';
 import { IconoAlerta, IconoCalendario, IconoGuardar } from '../../components/iconos';
 import { FormularioCarga } from './FormularioCarga';
 import { puedeGuardar, type ValoresCarga } from './logica';
-import { esFechaCargable, hoyISO, sumarDias } from '../../domain/fechaCarga';
+import { esFechaCargable, fechasCargables, hoyISO, sumarDias } from '../../domain/fechaCarga';
 import type { Empleado } from '../../lib/empleados';
 
 const MESES = [
@@ -127,7 +127,7 @@ export function DialogoHoras({
         </div>
       )}
 
-      {/* Solo se puede cargar hoy o ayer — esFechaCargable(). */}
+      {/* Las fechas que deja el sector — casi todos hoy o ayer, OTITO tres dias. */}
       <button
         onClick={() => setVerSelector((v) => !v)}
         style={{
@@ -150,10 +150,10 @@ export function DialogoHoras({
 
       {verSelector && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          {[sumarDias(hoy, -1), hoy].map((f) => (
+          {fechasCargables(hoy, sectorId).map((f) => (
             <button
               key={f}
-              disabled={!esFechaCargable(f, hoy)}
+              disabled={!esFechaCargable(f, hoy, sectorId)}
               onClick={() => {
                 onFecha(f);
                 setVerSelector(false);
