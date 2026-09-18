@@ -159,14 +159,17 @@ export function aTiposNuevos(p: SupervisorPendingItemDto): TiposCargaNuevos {
     movimientoEstibaKg50: p.movimientoEstibaKg50 ?? null,
     movimientoEstibaKg25: p.movimientoEstibaKg25 ?? null,
     movimientoEstibaOtro: p.movimientoEstibaOtro ?? null,
-    etiquetadoLata185: p.etiquetadoLata185 ?? null,
-    etiquetadoLata750: p.etiquetadoLata750 ?? null,
-    etiquetadoLata2500: p.etiquetadoLata2500 ?? null,
-    etiquetadoLata8kg: p.etiquetadoLata8kg ?? null,
-    descargaJaula: p.descargaJaula ?? null,
-    descargaCamion: p.descargaCamion ?? null,
-    cargaJaula: p.cargaJaula ?? null,
-    cargaCamionCantidad: p.cargaCamionCantidad ?? null,
+    // Ojo: TODAS estas columnas son NUMERIC y llegan como TEXTO ("3", no 3).
+    // Sin aNumero, sumarlas las concatena y fmtNumero directamente explota
+    // porque un string no tiene .toFixed().
+    etiquetadoLata185: aNumero(p.etiquetadoLata185),
+    etiquetadoLata750: aNumero(p.etiquetadoLata750),
+    etiquetadoLata2500: aNumero(p.etiquetadoLata2500),
+    etiquetadoLata8kg: aNumero(p.etiquetadoLata8kg),
+    descargaJaula: aNumero(p.descargaJaula),
+    descargaCamion: aNumero(p.descargaCamion),
+    cargaJaula: aNumero(p.cargaJaula),
+    cargaCamionCantidad: aNumero(p.cargaCamionCantidad),
   };
 }
 
