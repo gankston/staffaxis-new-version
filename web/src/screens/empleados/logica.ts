@@ -434,13 +434,22 @@ export function filtrarEmpleados<T extends { apellido: string }>(lista: T[], q: 
  * undefined, y con !== null se colaba y la pantalla mostraba "Otro: undefined"
  * en una planilla de sueldos.
  */
-export function formatTiposNuevosRegistro(t: TiposCargaNuevos): string {
+export function formatTiposNuevosRegistro(
+  t: TiposCargaNuevos,
+  opciones?: { sinCosecha?: boolean },
+): string {
   const partes: string[] = [];
   // Las siglas van solas: CC = cosecha Cañadas, CI = cosecha Raigon/Inv,
-  // TI = tantero invernadero, TC = tantero campo. Asi las conocen en el campo.
-  if (t.cosechaCanadas != null) partes.push(`CC ${fmtValor(t.cosechaCanadas)}`);
-  if (t.cosechaInv != null) partes.push(`CI ${fmtValor(t.cosechaInv)}`);
-  if (t.cosechaBananas != null) partes.push(`CB ${fmtValor(t.cosechaBananas)}`);
+  // CB = cosecha bananas, TI = tantero invernadero, TC = tantero campo. Asi las
+  // conocen en el campo.
+  //
+  // `sinCosecha` es para las pantallas que ya muestran la cosecha con su propio
+  // total: ahi volver a poner CC/CI/CB al lado hace pensar que se conto dos veces.
+  if (!opciones?.sinCosecha) {
+    if (t.cosechaCanadas != null) partes.push(`CC ${fmtValor(t.cosechaCanadas)}`);
+    if (t.cosechaInv != null) partes.push(`CI ${fmtValor(t.cosechaInv)}`);
+    if (t.cosechaBananas != null) partes.push(`CB ${fmtValor(t.cosechaBananas)}`);
+  }
   if (t.tanteroInvernadero != null) partes.push(`TI ${fmtValor(t.tanteroInvernadero)}`);
   if (t.tanteroCampo != null) partes.push(`TC ${fmtValor(t.tanteroCampo)}`);
   if (t.hasFumigadas != null) partes.push(`Ha ${fmtValor(t.hasFumigadas)}`);

@@ -59,6 +59,10 @@ export async function supervisorRoutes(app) {
         fueModificada: x.fue_editada === true,
         kmViajes: x.km_viajes, hasFumigadas: x.has_fumigadas, siembraTrilla: x.siembra_trilla,
         bolseros: x.bolseros, etiquetado: x.etiquetado,
+        // Estas cinco se leian de la base pero no se mandaban: el panel del
+        // supervisor veia undefined y toda la cosecha por tipo desaparecia.
+        cosechaCanadas: x.cosecha_canadas, cosechaInv: x.cosecha_inv, cosechaBananas: x.cosecha_bananas,
+        tanteroInvernadero: x.tantero_invernadero, tanteroCampo: x.tantero_campo,
         cargaCamionKg50: x.carga_camion_kg50, cargaCamionKg25: x.carga_camion_kg25, cargaCamionOtro: x.carga_camion_otro,
         movimientoEstibaKg50: x.movimiento_estiba_kg50, movimientoEstibaKg25: x.movimiento_estiba_kg25, movimientoEstibaOtro: x.movimiento_estiba_otro,
         etiquetadoLata185: x.etiquetado_lata_185, etiquetadoLata750: x.etiquetado_lata_750, etiquetadoLata2500: x.etiquetado_lata_2500, etiquetadoLata8kg: x.etiquetado_lata_8kg, descargaJaula: x.descarga_jaula, descargaCamion: x.descarga_camion, cargaJaula: x.carga_jaula, cargaCamionCantidad: x.carga_camion_cantidad,

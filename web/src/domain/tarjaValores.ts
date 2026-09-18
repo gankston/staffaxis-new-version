@@ -80,16 +80,26 @@ export function sumar(valores: Array<string | null | undefined>): TarjaValores {
 }
 
 /**
- * Cosecha de un registro. Desde que se abrio en Cañadas / Raigon-Inv el dato vive
- * en sus columnas y el "C:" dejo de escribirse, asi que hay que mirar los dos
- * lados: el texto para las tarjas viejas y las columnas para las nuevas.
+ * Cosecha de un registro. Desde que se abrio en Cañadas / Raigon-Inv / Bananas
+ * el dato vive en sus columnas y el "C:" dejo de escribirse, asi que hay que
+ * mirar los dos lados: el texto para las tarjas viejas y las columnas para las
+ * nuevas.
  *
  * No se duplica: una tarja vieja tiene el texto y los subtipos en null, y una
  * nueva tiene los subtipos y ningun "C:".
+ *
+ * ESTA es la unica forma valida de calcular la cosecha de una tarja. Sumar solo
+ * parse().cosecha deja en cero todo lo que se carga desde que existen los
+ * subtipos, que fue justo lo que paso en la pantalla de horas del periodo.
  */
 export function cosechaDe(
   minutesWorked: string | null | undefined,
-  t?: { cosechaCanadas: number | null; cosechaInv: number | null } | null,
+  t?: { cosechaCanadas: number | null; cosechaInv: number | null; cosechaBananas?: number | null } | null,
 ): number {
-  return parse(minutesWorked).cosecha + (t?.cosechaCanadas ?? 0) + (t?.cosechaInv ?? 0);
+  return (
+    parse(minutesWorked).cosecha +
+    (t?.cosechaCanadas ?? 0) +
+    (t?.cosechaInv ?? 0) +
+    (t?.cosechaBananas ?? 0)
+  );
 }

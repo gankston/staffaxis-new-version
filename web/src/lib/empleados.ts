@@ -141,31 +141,29 @@ export interface Registro {
   lastName: string | null;
 }
 
-interface FilaSubmission {
-  submission_id: string;
-  employee_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  date: string;
-  minutes_worked: string | null;
-  notes: string | null;
-  status: string | null;
-  km_viajes: number | null;
+/**
+ * Las columnas de los tipos nuevos, tal cual las manda el servidor. Van
+ * declaradas aparte porque llegan IGUALES por mas de un endpoint (las tarjas y
+ * el resumen del supervisor) y antes cada pantalla las mapeaba a mano: la que
+ * se olvidaba de una la perdia en silencio.
+ */
+export interface ColumnasTiposNuevos {
+  km_viajes?: number | null;
   cosecha_canadas?: number | null;
   cosecha_inv?: number | null;
   cosecha_bananas?: number | null;
   tantero_invernadero?: number | null;
   tantero_campo?: number | null;
-  has_fumigadas: number | null;
-  siembra_trilla: number | null;
-  bolseros: number | null;
-  etiquetado: number | null;
-  carga_camion_kg50: boolean | null;
-  carga_camion_kg25: boolean | null;
-  carga_camion_otro: string | null;
-  movimiento_estiba_kg50: boolean | null;
-  movimiento_estiba_kg25: boolean | null;
-  movimiento_estiba_otro: string | null;
+  has_fumigadas?: number | null;
+  siembra_trilla?: number | null;
+  bolseros?: number | null;
+  etiquetado?: number | null;
+  carga_camion_kg50?: boolean | null;
+  carga_camion_kg25?: boolean | null;
+  carga_camion_otro?: string | null;
+  movimiento_estiba_kg50?: boolean | null;
+  movimiento_estiba_kg25?: boolean | null;
+  movimiento_estiba_otro?: string | null;
   etiquetado_lata_185?: number | null;
   etiquetado_lata_750?: number | null;
   etiquetado_lata_2500?: number | null;
@@ -174,6 +172,47 @@ interface FilaSubmission {
   descarga_camion?: number | null;
   carga_jaula?: number | null;
   carga_camion_cantidad?: number | null;
+}
+
+/** Unico lugar donde las columnas del servidor se vuelven TiposCargaNuevos. */
+export function tiposDesdeColumnas(f: ColumnasTiposNuevos): TiposCargaNuevos {
+  return {
+    kmViajes: aNumero(f.km_viajes),
+    hasFumigadas: aNumero(f.has_fumigadas),
+    siembraTrilla: aNumero(f.siembra_trilla),
+    bolseros: aNumero(f.bolseros),
+    etiquetado: aNumero(f.etiquetado),
+    cargaCamionKg50: f.carga_camion_kg50 ?? null,
+    cargaCamionKg25: f.carga_camion_kg25 ?? null,
+    cargaCamionOtro: f.carga_camion_otro ?? null,
+    movimientoEstibaKg50: f.movimiento_estiba_kg50 ?? null,
+    movimientoEstibaKg25: f.movimiento_estiba_kg25 ?? null,
+    movimientoEstibaOtro: f.movimiento_estiba_otro ?? null,
+    etiquetadoLata185: aNumero(f.etiquetado_lata_185),
+    etiquetadoLata750: aNumero(f.etiquetado_lata_750),
+    etiquetadoLata2500: aNumero(f.etiquetado_lata_2500),
+    etiquetadoLata8kg: aNumero(f.etiquetado_lata_8kg),
+    descargaJaula: aNumero(f.descarga_jaula),
+    descargaCamion: aNumero(f.descarga_camion),
+    cargaJaula: aNumero(f.carga_jaula),
+    cargaCamionCantidad: aNumero(f.carga_camion_cantidad),
+    cosechaCanadas: aNumero(f.cosecha_canadas),
+    cosechaInv: aNumero(f.cosecha_inv),
+    cosechaBananas: aNumero(f.cosecha_bananas),
+    tanteroInvernadero: aNumero(f.tantero_invernadero),
+    tanteroCampo: aNumero(f.tantero_campo),
+  };
+}
+
+interface FilaSubmission extends ColumnasTiposNuevos {
+  submission_id: string;
+  employee_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  date: string;
+  minutes_worked: string | null;
+  notes: string | null;
+  status: string | null;
 }
 
 function aRegistro(f: FilaSubmission): Registro {
@@ -186,32 +225,7 @@ function aRegistro(f: FilaSubmission): Registro {
     status: f.status ?? "approved",
     firstName: f.first_name,
     lastName: f.last_name,
-    tiposNuevos: {
-      kmViajes: aNumero(f.km_viajes),
-      hasFumigadas: aNumero(f.has_fumigadas),
-      siembraTrilla: aNumero(f.siembra_trilla),
-      bolseros: aNumero(f.bolseros),
-      etiquetado: aNumero(f.etiquetado),
-      cargaCamionKg50: f.carga_camion_kg50,
-      cargaCamionKg25: f.carga_camion_kg25,
-      cargaCamionOtro: f.carga_camion_otro,
-      movimientoEstibaKg50: f.movimiento_estiba_kg50,
-      movimientoEstibaKg25: f.movimiento_estiba_kg25,
-      movimientoEstibaOtro: f.movimiento_estiba_otro,
-      etiquetadoLata185: aNumero(f.etiquetado_lata_185),
-      etiquetadoLata750: aNumero(f.etiquetado_lata_750),
-      etiquetadoLata2500: aNumero(f.etiquetado_lata_2500),
-      etiquetadoLata8kg: aNumero(f.etiquetado_lata_8kg),
-      descargaJaula: aNumero(f.descarga_jaula),
-      descargaCamion: aNumero(f.descarga_camion),
-      cargaJaula: aNumero(f.carga_jaula),
-      cargaCamionCantidad: aNumero(f.carga_camion_cantidad),
-      cosechaCanadas: aNumero(f.cosecha_canadas),
-      cosechaInv: aNumero(f.cosecha_inv),
-      cosechaBananas: aNumero(f.cosecha_bananas),
-      tanteroInvernadero: aNumero(f.tantero_invernadero),
-      tanteroCampo: aNumero(f.tantero_campo),
-    },
+    tiposNuevos: tiposDesdeColumnas(f),
   };
 }
 

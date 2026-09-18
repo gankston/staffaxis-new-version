@@ -25,9 +25,11 @@ import {
   type TipoCargaFiltro,
 } from '../domain/supervisorTarjaDia';
 import { formatMinutesWorkedDisplay, formatTiposNuevosRegistro } from './empleados/logica';
-import { calcularPeriodo, fmtHoras } from './tarja/logica';
+import { calcularPeriodo, fmtAbonada, fmtCantidad, fmtHoras } from './tarja/logica';
 import { hoyISO } from '../domain/fechaCarga';
-import { sumar } from '../domain/tarjaValores';
+import { sumar, type TarjaValores } from '../domain/tarjaValores';
+import { tiposDesdeColumnas } from '../lib/empleados';
+import { sumarTipos, TIPOS_NUEVOS_VACIO, type TiposCargaNuevos } from '../domain/tiposCarga';
 
 const fechaLegible = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 
@@ -388,23 +390,34 @@ function ResumenPeriodo({
   onCerrar: () => void;
 }) {
   const porEmpleado = useMemo(() => {
-    const mapa = new Map<string, { nombre: string; sector: string; mw: Array<string | null>; cosecha: number }>();
+    const mapa = new Map<
+      string,
+      { nombre: string; sector: string; mw: Array<string | null>; tipos: TiposCargaNuevos }
+    >();
     for (const r of rows) {
       const clave = r.employee_id;
       const actual = mapa.get(clave) ?? {
         nombre: `${r.last_name ?? ''} ${r.first_name ?? ''}`.trim(),
         sector: r.sector_name,
         mw: [],
-        cosecha: 0,
+        tipos: TIPOS_NUEVOS_VACIO,
       };
       actual.mw.push(r.minutes_worked);
-      actual.cosecha += (r.cosecha_canadas ?? 0) + (r.cosecha_inv ?? 0);
+      // Las columnas se mapean con la MISMA funcion que el resto de la app.
+      // Aca antes se sumaban dos campos a mano y bananas quedaba afuera.
+      actual.tipos = sumarTipos(actual.tipos, tiposDesdeColumnas(r));
       mapa.set(clave, actual);
     }
     return [...mapa.entries()]
       .map(([id, v]) => {
         const valores = sumar(v.mw);
-        return { id, ...v, valores: { ...valores, cosecha: valores.cosecha + v.cosecha } };
+        // Cosecha = el "C:" de las tarjas viejas + las columnas por tipo.
+        const cosecha =
+          valores.cosecha +
+          (v.tipos.cosechaCanadas ?? 0) +
+          (v.tipos.cosechaInv ?? 0) +
+          (v.tipos.cosechaBananas ?? 0);
+        return { id, ...v, valores: { ...valores, cosecha } };
       })
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [rows]);
@@ -434,12 +447,32 @@ function ResumenPeriodo({
               <div style={{ fontWeight: 600, color: 'white' }}>{e.nombre}</div>
               <div className="label-small" style={{ color: 'var(--texto-tenue)' }}>{e.sector}</div>
             </div>
-            <div style={{ fontWeight: 700, color: 'var(--teal)' }}>{fmtHoras(e.valores.horas)}</div>
+            {/* Antes aca iban SOLO las horas y la cosecha del mes no se veia. */}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 700, color: 'var(--teal)' }}>{fmtHoras(e.valores.horas)}</div>
+              {extrasDelResumen(e.valores, e.tipos).map((t) => (
+                <div key={t} style={{ fontSize: 11, fontWeight: 600, color: '#66bb6a' }}>
+                  {t}
+                </div>
+              ))}
+            </div>
           </div>
         ))
       )}
     </Modal>
   );
+}
+
+/** Los totales del empleado que no son horas, uno por renglon. */
+function extrasDelResumen(v: TarjaValores, tipos: TiposCargaNuevos): string[] {
+  const out: string[] = [];
+  if (v.cosecha > 0) out.push(`Cosecha ${fmtCantidad(v.cosecha)}`);
+  if (v.cajas > 0) out.push(`Cajas ${v.cajas}`);
+  if (v.cajones > 0) out.push(`Cajones ${v.cajones}`);
+  if (v.abonada > 0) out.push(`Abonada ${fmtAbonada(v.abonada)}`);
+  const otros = formatTiposNuevosRegistro(tipos, { sinCosecha: true });
+  if (otros) out.push(...otros.split(' + '));
+  return out;
 }
 
 function Chip({ texto, activo, onClick }: { texto: string; activo: boolean; onClick: () => void }) {

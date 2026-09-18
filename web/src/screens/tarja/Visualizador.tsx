@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { Spinner } from '../../components/ui';
 import { listarRegistros, type Registro } from '../../lib/empleados';
-import { parse, sumarValores, CERO } from '../../domain/tarjaValores';
-import { sumarLista, TIPOS_NUEVOS_VACIO } from '../../domain/tiposCarga';
+import { cosechaDe, parse, sumarValores, CERO } from '../../domain/tarjaValores';
+import { sumarLista, TIPOS_NUEVOS_VACIO, type TiposCargaNuevos } from '../../domain/tiposCarga';
 import { diasDelPeriodo, fmtAbonada, fmtCantidad, fmtHoras } from './logica';
 import { formatMinutesWorkedDisplay, formatTiposNuevosRegistro } from '../empleados/logica';
 
@@ -13,6 +13,7 @@ interface Fila {
   nombre: string;
   apellido: string;
   porDia: Map<string, Registro>;
+  tipos: TiposCargaNuevos;
   totalHoras: number;
   cosechaTotal: number;
   abonadaTotal: number;
@@ -83,8 +84,12 @@ export function Visualizador({
         nombre,
         apellido,
         porDia: new Map(subs.map((s) => [s.date, s])),
+        tipos: sumarLista(subs.map((s) => s.tiposNuevos)),
         totalHoras: v.horas,
-        cosechaTotal: v.cosecha,
+        // La cosecha sale del texto viejo MAS las columnas por tipo. Mirando
+        // solo el texto, todo lo cargado desde que la cosecha se abrio en
+        // Cañadas / Raigon-Inv / Bananas quedaba en cero.
+        cosechaTotal: subs.reduce((acc, s) => acc + cosechaDe(s.minutesWorked, s.tiposNuevos), 0),
         abonadaTotal: v.abonada,
         cajasTotal: v.cajas,
         cajonesTotal: v.cajones,
@@ -114,6 +119,9 @@ export function Visualizador({
     return { ...v, tipos };
   }, [filas, registros]);
 
+  // Lo que no es horas ni cosecha: eso ya tiene su propio total arriba.
+  const otrosTotales = formatTiposNuevosRegistro(totales.tipos, { sinCosecha: true });
+
   return (
     <Modal
       titulo={`Horas — ${sectorName}`}
@@ -138,11 +146,21 @@ export function Visualizador({
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
             <Resumen valor={fmtHoras(totales.horas)} label="Total horas" />
             {totales.cosecha > 0 && <Resumen valor={fmtCantidad(totales.cosecha)} label="Cosecha" />}
+            {/* El desglose por tipo de cosecha, al lado del total. */}
+            {(totales.tipos.cosechaCanadas ?? 0) > 0 && (
+              <Resumen valor={fmtCantidad(totales.tipos.cosechaCanadas ?? 0)} label="Cañadas" />
+            )}
+            {(totales.tipos.cosechaInv ?? 0) > 0 && (
+              <Resumen valor={fmtCantidad(totales.tipos.cosechaInv ?? 0)} label="Raigón/Inv" />
+            )}
+            {(totales.tipos.cosechaBananas ?? 0) > 0 && (
+              <Resumen valor={fmtCantidad(totales.tipos.cosechaBananas ?? 0)} label="Bananas" />
+            )}
             {totales.cajas > 0 && <Resumen valor={String(totales.cajas)} label="Cajas" />}
             {totales.cajones > 0 && <Resumen valor={String(totales.cajones)} label="Cajones" />}
             {totales.abonada > 0 && <Resumen valor={fmtAbonada(totales.abonada)} label="Abonada" />}
-            {totales.tipos !== TIPOS_NUEVOS_VACIO && formatTiposNuevosRegistro(totales.tipos) && (
-              <Resumen valor={formatTiposNuevosRegistro(totales.tipos)} label="Otros" />
+            {totales.tipos !== TIPOS_NUEVOS_VACIO && otrosTotales && (
+              <Resumen valor={otrosTotales} label="Otros" />
             )}
           </div>
 
@@ -156,7 +174,7 @@ export function Visualizador({
                       {d.slice(8)}/{d.slice(5, 7)}
                     </th>
                   ))}
-                  <th style={{ ...celda, minWidth: 70 }}>Total</th>
+                  <th style={{ ...celda, minWidth: 96 }}>Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,7 +195,19 @@ export function Visualizador({
                         </td>
                       );
                     })}
-                    <td style={{ ...celda, fontWeight: 700, color: 'var(--teal)' }}>{fmtHoras(f.totalHoras)}</td>
+                    {/*
+                      Antes esta celda tenia SOLO las horas: el que miraba la
+                      planilla veia 192H y de la cosecha del mes, nada. Ahora
+                      abajo de las horas va el total de cada cosa que cargo.
+                    */}
+                    <td style={{ ...celda, whiteSpace: 'normal', maxWidth: 170, lineHeight: 1.3 }}>
+                      <div style={{ fontWeight: 700, color: 'var(--teal)' }}>{fmtHoras(f.totalHoras)}</div>
+                      {totalesDeFila(f).map((t) => (
+                        <div key={t} style={{ fontSize: 11, fontWeight: 600, color: '#66bb6a' }}>
+                          {t}
+                        </div>
+                      ))}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -187,6 +217,18 @@ export function Visualizador({
       )}
     </Modal>
   );
+}
+
+/** Los totales del empleado que no son horas, uno por renglon. */
+function totalesDeFila(f: Fila): string[] {
+  const out: string[] = [];
+  if (f.cosechaTotal > 0) out.push(`Cosecha ${fmtCantidad(f.cosechaTotal)}`);
+  if (f.cajasTotal > 0) out.push(`Cajas ${f.cajasTotal}`);
+  if (f.cajonesTotal > 0) out.push(`Cajones ${f.cajonesTotal}`);
+  if (f.abonadaTotal > 0) out.push(`Abonada ${fmtAbonada(f.abonadaTotal)}`);
+  const otros = formatTiposNuevosRegistro(f.tipos, { sinCosecha: true });
+  if (otros) out.push(...otros.split(' + '));
+  return out;
 }
 
 function Resumen({ valor, label }: { valor: string; label: string }) {

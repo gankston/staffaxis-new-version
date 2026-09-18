@@ -36,6 +36,15 @@ export function parseCosecha(mw: string | null): number {
 }
 
 /**
+ * La cosecha de una tarja: el "C:" de las viejas MAS las columnas por tipo de
+ * las nuevas. Una tarja tiene una cosa o la otra, nunca las dos, asi que no se
+ * duplica.
+ */
+export function cosechaDeItem(mw: string | null, t: TiposCargaNuevos): number {
+  return parseCosecha(mw) + (t.cosechaCanadas ?? 0) + (t.cosechaInv ?? 0) + (t.cosechaBananas ?? 0);
+}
+
+/**
  * La abonada se devuelve como TEXTO: en la base conviven cantidades ("$ 10200")
  * con descripciones ("barcadilla", "14 bolsas"). Sumarla daría cero.
  */
@@ -71,11 +80,45 @@ export function lineasDeTotales(t: TotalesTarja): string[] {
   if (t.abonadas.length > 0) out.push(`abonada: ${t.abonadas.join(', ')}`);
 
   const n = t.tiposNuevos;
+  // El desglose de la cosecha, abajo del total.
+  const cosechas = [
+    n.cosechaCanadas ? `Cañadas ${fmtNumero(n.cosechaCanadas)}` : null,
+    n.cosechaInv ? `Raigón/Inv ${fmtNumero(n.cosechaInv)}` : null,
+    n.cosechaBananas ? `Bananas ${fmtNumero(n.cosechaBananas)}` : null,
+  ].filter(Boolean) as string[];
+  if (cosechas.length) out.push(cosechas.join(' · '));
+
+  const tanteros = [
+    n.tanteroInvernadero ? `invernadero ${fmtNumero(n.tanteroInvernadero)}` : null,
+    n.tanteroCampo ? `campo ${fmtNumero(n.tanteroCampo)}` : null,
+  ].filter(Boolean) as string[];
+  if (tanteros.length) out.push(`tantero ${tanteros.join(' · ')}`);
+
   if (n.kmViajes !== null && n.kmViajes > 0) out.push(`${fmtNumero(n.kmViajes)} km/viajes`);
   if (n.hasFumigadas !== null && n.hasFumigadas > 0) out.push(`${fmtNumero(n.hasFumigadas)} has fumigadas`);
   if (n.siembraTrilla !== null && n.siembraTrilla > 0) out.push(`${fmtNumero(n.siembraTrilla)} siembra/trilla`);
   if (n.bolseros !== null && n.bolseros > 0) out.push(`${fmtNumero(n.bolseros)} bolseros`);
   if (n.etiquetado !== null && n.etiquetado > 0) out.push(`${fmtNumero(n.etiquetado)} etiquetado`);
+
+  const latas = [
+    n.etiquetadoLata185 ? `185 grs: ${fmtNumero(n.etiquetadoLata185)}` : null,
+    n.etiquetadoLata750 ? `750 grs: ${fmtNumero(n.etiquetadoLata750)}` : null,
+    n.etiquetadoLata2500 ? `2500 grs: ${fmtNumero(n.etiquetadoLata2500)}` : null,
+    n.etiquetadoLata8kg ? `8 kgs: ${fmtNumero(n.etiquetadoLata8kg)}` : null,
+  ].filter(Boolean) as string[];
+  if (latas.length) out.push(`etiquetado ${latas.join(' · ')}`);
+
+  const descarga = [
+    n.descargaJaula ? `jaula ${fmtNumero(n.descargaJaula)}` : null,
+    n.descargaCamion ? `camión ${fmtNumero(n.descargaCamion)}` : null,
+  ].filter(Boolean) as string[];
+  if (descarga.length) out.push(`descarga ${descarga.join(' · ')}`);
+
+  const carga = [
+    n.cargaJaula ? `jaula ${fmtNumero(n.cargaJaula)}` : null,
+    n.cargaCamionCantidad ? `camión ${fmtNumero(n.cargaCamionCantidad)}` : null,
+  ].filter(Boolean) as string[];
+  if (carga.length) out.push(`carga ${carga.join(' · ')}`);
 
   const camion = [
     n.cargaCamionKg50 === true ? '50kg' : null,
@@ -164,7 +207,7 @@ export function agruparEnTarjasDelDia(pendientes: SupervisorPendingItemDto[]): T
       const ab = parseAbonada(it.minutesWorked);
       totales = {
         jornales: totales.jornales + parseHoras(it.minutesWorked) / HORAS_POR_JORNAL,
-        cosecha: totales.cosecha + parseCosecha(it.minutesWorked),
+        cosecha: totales.cosecha + cosechaDeItem(it.minutesWorked, it.tipos),
         cajas: totales.cajas + parseCajas(it.minutesWorked),
         cajones: totales.cajones + parseCajones(it.minutesWorked),
         abonadas: [...new Set([...totales.abonadas, ...(ab ? [ab] : [])])],
@@ -197,6 +240,7 @@ export interface TipoCargaFiltro {
 const TODOS_LOS_FILTROS: TipoCargaFiltro[] = [
   { slug: 'horas', etiqueta: 'Horas' },
   { slug: 'cosecha', etiqueta: 'Cosecha' },
+  { slug: 'tantero', etiqueta: 'Tantero' },
   { slug: 'abonada', etiqueta: 'Abonada' },
   { slug: 'cajas_cajones', etiqueta: 'Cajas y cajones' },
   { slug: 'km_viajes', etiqueta: 'Km / Viajes' },
@@ -204,6 +248,8 @@ const TODOS_LOS_FILTROS: TipoCargaFiltro[] = [
   { slug: 'siembra_trilla', etiqueta: 'Siembra / Trilla' },
   { slug: 'bolseros', etiqueta: 'Bolseros' },
   { slug: 'etiquetado', etiqueta: 'Etiquetado' },
+  { slug: 'descarga', etiqueta: 'Descarga' },
+  { slug: 'carga', etiqueta: 'Carga' },
   { slug: 'carga_camion', etiqueta: 'Carga de camión' },
   { slug: 'movimiento_estiba', etiqueta: 'Movimiento de estiba' },
 ];
@@ -223,7 +269,20 @@ export function tieneDato(filtro: TipoCargaFiltro, item: PendienteConTipos): boo
     case 'horas':
       return parseHoras(item.minutesWorked) > 0;
     case 'cosecha':
-      return partes.some((p) => p === 'C' || p.startsWith('C:'));
+      // Las tarjas nuevas no llevan "C:" en el texto: la cosecha esta en sus
+      // columnas. Con el chequeo viejo el filtro no mostraba ninguna.
+      return (
+        partes.some((p) => p === 'C' || p.startsWith('C:')) ||
+        t.cosechaCanadas !== null ||
+        t.cosechaInv !== null ||
+        t.cosechaBananas !== null
+      );
+    case 'tantero':
+      return t.tanteroInvernadero !== null || t.tanteroCampo !== null;
+    case 'descarga':
+      return t.descargaJaula !== null || t.descargaCamion !== null;
+    case 'carga':
+      return t.cargaJaula !== null || t.cargaCamionCantidad !== null;
     case 'abonada':
       return partes.some((p) => p.startsWith('AB:'));
     case 'cajas_cajones':
