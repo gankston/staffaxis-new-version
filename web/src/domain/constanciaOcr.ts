@@ -178,6 +178,17 @@ async function reconocer(worker: TesseractWorker, dataUrl: string): Promise<stri
   }
 }
 
+/**
+ * Si la palabra esta en mayusculas. La ñ cuenta como mayuscula aunque venga
+ * minuscula: el RENAPER imprime el apellido todo en mayusculas MENOS la ñ
+ * ("CAñAMERO", "MUñOZ"), asi que con el chequeo comun el apellido se cortaba
+ * justo en la ñ y volvia vacio.
+ */
+function enMayusculas(palabra: string): boolean {
+  const conEnie = palabra.replace(/ñ/g, 'Ñ');
+  return conEnie === conEnie.toUpperCase();
+}
+
 /** Saca apellido, nombre, DNI y numero de tramite del texto reconocido. */
 export function parsearConstancia(texto: string): DatosConstancia | null {
   const limpio = texto.replace(/ /g, ' ');
@@ -216,7 +227,7 @@ export function parsearConstancia(texto: string): DatosConstancia | null {
     for (; i < tokens.length; i++) {
       const bruto = tokens[i];
       const palabra = bruto.replace(/,/g, '');
-      if (palabra !== palabra.toUpperCase()) break;
+      if (!enMayusculas(palabra)) break;
       ape.push(palabra);
       if (bruto.includes(',')) { i++; cerroConComa = true; break; }
     }

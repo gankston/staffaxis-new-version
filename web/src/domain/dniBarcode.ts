@@ -93,81 +93,134 @@ export async function leerPdf417(dataUrl: string): Promise<string | null> {
   const img = await conTope(cargarImagen(dataUrl), 15_000);
   if (!img) return null;
 
-  // Primero la foto tal cual. Si no sale, una segunda pasada en blanco y negro
-  // con el contraste estirado: es lo que salva las fotos sacadas a una pantalla,
-  // donde el codigo sale lavado y con el brillo del monitor encima.
-  const bn = await conTope(enBlancoYNegro(img), 10_000);
-  for (const fuente of [img, bn]) {
-    if (!fuente) continue;
-    const r = await conTope(unaPasada(fuente), 30_000);
-    if (r) return r;
-  }
-  return null;
+  // 1) El lector del sistema. Android lo trae y es el mas rapido de todos.
+  const nativo = await conTope(conDetectorDelSistema(img), 15_000);
+  if (nativo) return nativo;
+
+  // 2) ZXing, para los telefonos que no lo tienen.
+  return await conTope(conZxing(img), 30_000);
 }
 
-async function unaPasada(img: HTMLImageElement | HTMLCanvasElement): Promise<string | null> {
+async function conDetectorDelSistema(img: HTMLImageElement): Promise<string | null> {
   const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
-  if (Detector) {
-    try {
-      const formatos = await Detector.getSupportedFormats?.();
-      if (!formatos || formatos.includes('pdf417')) {
-        const det = new Detector({ formats: ['pdf417'] });
-        const encontrados = await det.detect(img);
-        if (encontrados.length > 0 && encontrados[0].rawValue) return encontrados[0].rawValue;
-      }
-    } catch {
-      /* si el detector del sistema falla, sigue ZXing */
-    }
-  }
-
+  if (!Detector) return null;
   try {
-    const { BrowserPDF417Reader } = await import('@zxing/library');
-    const lector = new BrowserPDF417Reader();
-    // ZXing solo lee de un <img>: si le llega un canvas, se le pasa como uno.
-    const elemento =
-      img instanceof HTMLCanvasElement ? await cargarImagen(img.toDataURL('image/png')) : img;
-    const r = await lector.decodeFromImageElement(elemento);
-    return r?.getText() ?? null;
+    const formatos = await Detector.getSupportedFormats?.();
+    if (formatos && !formatos.includes('pdf417')) return null;
+    const encontrados = await new Detector({ formats: ['pdf417'] }).detect(img);
+    return encontrados[0]?.rawValue ?? null;
   } catch {
     return null;
   }
 }
 
 /**
- * Blanco y negro con el contraste estirado, sin achicar. Misma receta que usa
- * el lector de la constancia, que en fotos de verdad cambia bastante lo que se
- * llega a reconocer.
+ * ZXing, pero por la API baja y NO por BrowserPDF417Reader.
+ *
+ * Esto no es capricho. BrowserPDF417Reader arma el BinaryBitmap con
+ * HybridBinarizer y no deja cambiarlo, y con una foto de verdad de un DNI —
+ * plastificado, con reflejos, apoyado en un carton — Hybrid no encuentra el
+ * codigo NUNCA. Probado con la foto que no entraba:
+ *
+ *   BrowserPDF417Reader (Hybrid)          -> no lee
+ *   PDF417Reader + Hybrid + TRY_HARDER    -> no lee
+ *   PDF417Reader + GlobalHistogram        -> lee en 32 ms
+ *
+ * Hybrid divide la imagen en bloques y calcula un umbral por bloque: sirve
+ * cuando la luz cae despareja sobre un papel, pero los reflejos del plastico le
+ * ensucian los bloques justo donde estan las barras. Global saca un unico
+ * umbral de todo el histograma y esos brillos no lo mueven.
+ *
+ * Igual quedan los dos: Global primero, Hybrid despues, porque en una foto con
+ * sombra fuerte de un lado puede ganar Hybrid.
  */
-async function enBlancoYNegro(img: HTMLImageElement): Promise<HTMLCanvasElement | null> {
+async function conZxing(img: HTMLImageElement): Promise<string | null> {
+  let z: typeof import('@zxing/library');
   try {
+    z = await import('@zxing/library');
+  } catch {
+    return null;
+  }
+  const hints = new Map();
+  hints.set(z.DecodeHintType.TRY_HARDER, true);
+  hints.set(z.DecodeHintType.POSSIBLE_FORMATS, [z.BarcodeFormat.PDF_417]);
+
+  for (const lienzo of lienzosAProbar(img)) {
+    if (!lienzo) continue;
+    for (const Binarizador of [z.GlobalHistogramBinarizer, z.HybridBinarizer]) {
+      try {
+        const mapa = new z.BinaryBitmap(
+          new Binarizador(new z.HTMLCanvasElementLuminanceSource(lienzo)),
+        );
+        const texto = new z.PDF417Reader().decode(mapa, hints).getText();
+        if (texto) return texto;
+      } catch {
+        /* esta combinacion no lo encontro, se prueba la siguiente */
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Las versiones de la foto que se le dan al lector, de la mas barata a la mas
+ * cara. Se arman de a una y a medida que se piden: tener tres canvas grandes
+ * vivos al mismo tiempo es justo lo que hace que Android mate la pantalla.
+ */
+function* lienzosAProbar(img: HTMLImageElement): Generator<HTMLCanvasElement | null> {
+  yield aLienzo(img, 1, false);
+  // Contraste estirado: levanta los codigos lavados (foto a una pantalla).
+  yield aLienzo(img, 1, true);
+  // Ampliada, para cuando el documento es una parte chica del cuadro y las
+  // barras quedan de menos de un pixel.
+  yield aLienzo(img, 2, false);
+}
+
+/** Tope de pixeles del canvas, para no volver a quedarnos sin memoria. */
+const PIXELES_MAXIMOS = 8_000_000;
+
+function aLienzo(img: HTMLImageElement, escala: number, contraste: boolean): HTMLCanvasElement | null {
+  try {
+    const w0 = img.naturalWidth || img.width;
+    const h0 = img.naturalHeight || img.height;
+    if (!w0 || !h0) return null;
+    const tope = Math.sqrt(PIXELES_MAXIMOS / (w0 * h0));
+    const e = Math.min(escala, Math.max(0.1, tope));
     const c = document.createElement('canvas');
-    c.width = img.naturalWidth || img.width;
-    c.height = img.naturalHeight || img.height;
-    if (!c.width || !c.height) return null;
+    c.width = Math.round(w0 * e);
+    c.height = Math.round(h0 * e);
     const ctx = c.getContext('2d', { willReadFrequently: true });
     if (!ctx) return null;
-    ctx.drawImage(img, 0, 0);
-    const datos = ctx.getImageData(0, 0, c.width, c.height);
-    const p = datos.data;
-    let min = 255;
-    let max = 0;
-    for (let i = 0; i < p.length; i += 4) {
-      const v = (p[i] * 0.299 + p[i + 1] * 0.587 + p[i + 2] * 0.114) | 0;
-      p[i] = v;
-      if (v < min) min = v;
-      if (v > max) max = v;
-    }
-    const rango = Math.max(1, max - min);
-    for (let i = 0; i < p.length; i += 4) {
-      const v = Math.max(0, Math.min(255, ((p[i] - min) / rango) * 255));
-      p[i] = p[i + 1] = p[i + 2] = v;
-    }
-    ctx.putImageData(datos, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    if (contraste) estirarContraste(ctx, c.width, c.height);
     return c;
   } catch {
     return null;
   }
 }
+
+/** Blanco y negro con el contraste abierto de punta a punta. */
+function estirarContraste(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  const datos = ctx.getImageData(0, 0, w, h);
+  const p = datos.data;
+  let min = 255;
+  let max = 0;
+  for (let i = 0; i < p.length; i += 4) {
+    const v = (p[i] * 0.299 + p[i + 1] * 0.587 + p[i + 2] * 0.114) | 0;
+    p[i] = v;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const rango = Math.max(1, max - min);
+  for (let i = 0; i < p.length; i += 4) {
+    const v = Math.max(0, Math.min(255, ((p[i] - min) / rango) * 255));
+    p[i] = p[i + 1] = p[i + 2] = v;
+  }
+  ctx.putImageData(datos, 0, 0);
+}
+
 
 interface BarcodeDetectorCtor {
   new (opts?: { formats?: string[] }): { detect(src: CanvasImageSource): Promise<Array<{ rawValue?: string }>> };
