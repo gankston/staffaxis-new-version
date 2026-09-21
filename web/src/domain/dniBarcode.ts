@@ -71,14 +71,41 @@ export function parsearDni(crudo: string): DatosDni | null {
   };
 }
 
+/** Nada puede quedar colgado: el tipo esta parado mirando la pantalla. */
+function conTope<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p.catch(() => null),
+    new Promise<null>((r) => setTimeout(() => r(null), ms)),
+  ]);
+}
+
 /**
  * Decodifica el PDF417 de una foto. Se prueba primero el BarcodeDetector del
  * sistema (lo trae el WebView de Android y es mucho mas rapido); si no esta,
  * cae a ZXing, que se carga solo en ese momento para no engordar el bundle.
+ *
+ * ESTA FUNCION NO TIRA NUNCA Y NO SE CUELGA NUNCA. Antes, si la imagen no
+ * cargaba, la promesa de cargarImagen se quedaba sin resolver ni rechazar y la
+ * pantalla quedaba en "Leyendo..." para siempre; y si rechazaba, la excepcion
+ * salia para arriba y dejaba la pantalla trabada igual.
  */
 export async function leerPdf417(dataUrl: string): Promise<string | null> {
-  const img = await cargarImagen(dataUrl);
+  const img = await conTope(cargarImagen(dataUrl), 15_000);
+  if (!img) return null;
 
+  // Primero la foto tal cual. Si no sale, una segunda pasada en blanco y negro
+  // con el contraste estirado: es lo que salva las fotos sacadas a una pantalla,
+  // donde el codigo sale lavado y con el brillo del monitor encima.
+  const bn = await conTope(enBlancoYNegro(img), 10_000);
+  for (const fuente of [img, bn]) {
+    if (!fuente) continue;
+    const r = await conTope(unaPasada(fuente), 30_000);
+    if (r) return r;
+  }
+  return null;
+}
+
+async function unaPasada(img: HTMLImageElement | HTMLCanvasElement): Promise<string | null> {
   const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
   if (Detector) {
     try {
@@ -96,8 +123,47 @@ export async function leerPdf417(dataUrl: string): Promise<string | null> {
   try {
     const { BrowserPDF417Reader } = await import('@zxing/library');
     const lector = new BrowserPDF417Reader();
-    const r = await lector.decodeFromImageElement(img);
+    // ZXing solo lee de un <img>: si le llega un canvas, se le pasa como uno.
+    const elemento =
+      img instanceof HTMLCanvasElement ? await cargarImagen(img.toDataURL('image/png')) : img;
+    const r = await lector.decodeFromImageElement(elemento);
     return r?.getText() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Blanco y negro con el contraste estirado, sin achicar. Misma receta que usa
+ * el lector de la constancia, que en fotos de verdad cambia bastante lo que se
+ * llega a reconocer.
+ */
+async function enBlancoYNegro(img: HTMLImageElement): Promise<HTMLCanvasElement | null> {
+  try {
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth || img.width;
+    c.height = img.naturalHeight || img.height;
+    if (!c.width || !c.height) return null;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0);
+    const datos = ctx.getImageData(0, 0, c.width, c.height);
+    const p = datos.data;
+    let min = 255;
+    let max = 0;
+    for (let i = 0; i < p.length; i += 4) {
+      const v = (p[i] * 0.299 + p[i + 1] * 0.587 + p[i + 2] * 0.114) | 0;
+      p[i] = v;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const rango = Math.max(1, max - min);
+    for (let i = 0; i < p.length; i += 4) {
+      const v = Math.max(0, Math.min(255, ((p[i] - min) / rango) * 255));
+      p[i] = p[i + 1] = p[i + 2] = v;
+    }
+    ctx.putImageData(datos, 0, 0);
+    return c;
   } catch {
     return null;
   }

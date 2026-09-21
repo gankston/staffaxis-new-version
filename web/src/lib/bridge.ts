@@ -179,6 +179,67 @@ export async function getUbicacion(msMaximo = 2500): Promise<Ubicacion | null> {
 }
 
 /**
+ * Achica la foto ANTES de que entre al WebView.
+ *
+ * Una foto de 12MP se vuelve un data URL de ~8MB, se decodifica a ~48MB de
+ * bitmap, y despues el lector de la constancia le hace dos pasadas mas de
+ * canvas encima. El renderer se queda sin memoria, Android lo mata y — como el
+ * proceso del WebView es el de la app — se cierra todo de golpe, sin ningun
+ * error a la vista.
+ *
+ * La camara nunca tuvo este problema porque el shell ya la achicaba del lado
+ * nativo (1600px, JPEG 80). La galeria no pasaba por ahi.
+ *
+ * 2400 y no 1600: las barras del PDF417 del DNI son finisimas y achicar de mas
+ * las borra. La camara se banca 1600 porque el documento ocupa toda la foto,
+ * pero de la galeria vienen fotos donde es una parte chica del cuadro. 2400px
+ * son ~17MB de bitmap, lejos de los ~48MB de una foto de 12MP.
+ *
+ * Devuelve null cuando no hace falta tocarla (ya es chica) o cuando el telefono
+ * no puede decodificarla; en los dos casos se sigue por el camino de siempre.
+ */
+const LADO_MAXIMO = 2400;
+
+async function achicarImagen(file: File): Promise<string | null> {
+  let bitmap: ImageBitmap;
+  try {
+    // `from-image` va explicito: sin eso el bitmap puede salir SIN aplicar la
+    // rotacion del EXIF, y una foto de costado no la lee ningun lector.
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    return null;
+  }
+  try {
+    const escala = Math.min(1, LADO_MAXIMO / Math.max(bitmap.width, bitmap.height));
+    if (escala >= 1) return null;
+    const c = document.createElement('canvas');
+    c.width = Math.round(bitmap.width * escala);
+    c.height = Math.round(bitmap.height * escala);
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, c.width, c.height);
+    // Calidad alta: al 80% el JPEG mete ruido justo donde estan las barras
+    // finas del codigo y despues no hay lector que lo saque.
+    return c.toDataURL('image/jpeg', 0.92);
+  } catch {
+    return null;
+  } finally {
+    // El bitmap grande se suelta si o si, aunque algo de arriba haya fallado.
+    bitmap.close();
+  }
+}
+
+/** El archivo tal cual, sin tocar. Solo para lo que ya viene chico. */
+function leerCrudo(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
  * Elegir una foto ya existente. Va SIEMPRE por <input type="file"> (sin
  * `capture`), que en el shell lo atiende onShowFileChooser y abre el selector
  * del sistema — galeria, archivos, Drive, lo que tenga el telefono.
@@ -191,22 +252,11 @@ export async function elegirDeGaleria(): Promise<string | null> {
     input.style.display = 'none';
     document.body.appendChild(input);
     const limpiar = () => input.remove();
-    input.onchange = () => {
+    input.onchange = async () => {
       const file = input.files?.[0];
-      if (!file) {
-        limpiar();
-        return resolve(null);
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        limpiar();
-        resolve(String(reader.result));
-      };
-      reader.onerror = () => {
-        limpiar();
-        resolve(null);
-      };
-      reader.readAsDataURL(file);
+      limpiar();
+      if (!file) return resolve(null);
+      resolve((await achicarImagen(file)) ?? (await leerCrudo(file)));
     };
     input.oncancel = () => {
       limpiar();
@@ -224,18 +274,16 @@ export async function tomarFoto(): Promise<string | null> {
     return r?.dataUrl ?? null;
   }
   // Desarrollo en navegador: selector de archivo con la camara como preferencia.
+  // Tambien se achica, por las mismas razones que la galeria.
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
     input.setAttribute('capture', 'environment');
-    input.onchange = () => {
+    input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return resolve(null);
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(file);
+      resolve((await achicarImagen(file)) ?? (await leerCrudo(file)));
     };
     input.oncancel = () => resolve(null);
     input.click();

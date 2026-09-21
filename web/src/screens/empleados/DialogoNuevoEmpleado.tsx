@@ -71,7 +71,15 @@ export function DialogoNuevoEmpleado({
     if (!foto) return;
 
     setPaso('leyendo');
-    const crudo = await leerPdf417(foto);
+    // El try/catch no es de adorno: si el lector tiraba una excepcion, la
+    // pantalla se quedaba en "Leyendo..." para siempre y no habia forma de
+    // salir mas que cerrando la app.
+    let crudo: string | null = null;
+    try {
+      crudo = await leerPdf417(foto);
+    } catch {
+      crudo = null;
+    }
     const datos = crudo ? parsearDni(crudo) : null;
 
     if (!datos) {
@@ -107,7 +115,12 @@ export function DialogoNuevoEmpleado({
     if (!foto) return;
 
     setPaso('leyendoConstancia');
-    const datos = await leerHoja(foto);
+    let datos: Awaited<ReturnType<typeof leerHoja>> = null;
+    try {
+      datos = await leerHoja(foto);
+    } catch {
+      datos = null;
+    }
 
     if (!datos) {
       setPaso('instrucciones');
