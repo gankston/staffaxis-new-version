@@ -17,6 +17,8 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.RenderProcessGoneDetail
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -131,12 +133,54 @@ class MainActivity : AppCompatActivity() {
                         null, HTML_SIN_CONEXION, "text/html", "utf-8", null
                     )
                 }
+
+                /**
+                 * El WebView dibuja en un proceso aparte que Android puede matar,
+                 * sobre todo por falta de memoria (una foto grande, por ejemplo).
+                 * Si no se atiende este aviso, el sistema se lleva puesto el
+                 * proceso de la app: al tipo se le CIERRA todo de golpe y sin
+                 * ningun error, en medio de una carga.
+                 *
+                 * Devolviendo true la app sigue viva: se tira el WebView muerto,
+                 * se arma uno nuevo y se vuelve a cargar la web. Como cada tarja
+                 * se manda al guardarla, no se pierde nada.
+                 */
+                override fun onRenderProcessGone(
+                    view: WebView?,
+                    detail: RenderProcessGoneDetail?
+                ): Boolean {
+                    val seQuedoSinMemoria =
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && detail?.didCrash() == false
+                    rehacerWebView(
+                        if (seQuedoSinMemoria) "La app se quedó sin memoria y se reinició. Probá con una foto más chica."
+                        else "La pantalla se reinició sola. Podés seguir."
+                    )
+                    return true
+                }
             }
         }
         setContentView(web)
         web.loadUrl(BuildConfig.WEB_URL)
 
         buscarActualizacion()
+    }
+
+    /**
+     * Levanta un WebView nuevo despues de que el anterior murio. El viejo hay
+     * que sacarlo de la pantalla y destruirlo si o si: si se lo deja puesto, la
+     * app queda con una pantalla negra que no responde.
+     */
+    private fun rehacerWebView(aviso: String) {
+        val viejo = web
+        (viejo.parent as? android.view.ViewGroup)?.removeView(viejo)
+        viejo.destroy()
+        // Cualquier pedido que la web haya dejado abierto murio con ella.
+        callbackArchivos?.onReceiveValue(null)
+        callbackArchivos = null
+        pedidoFoto = null
+        pedidoUbicacion = null
+        recreate()
+        Toast.makeText(this, aviso, Toast.LENGTH_LONG).show()
     }
 
     /**
