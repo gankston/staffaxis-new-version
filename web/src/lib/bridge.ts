@@ -16,6 +16,8 @@
  * Si no hay shell nativo (desarrollo en el navegador de escritorio) cae en un
  * stub para poder trabajar sin compilar un APK en cada cambio.
  */
+import { marcarPaso, pasoTerminado } from './rastro';
+
 
 interface AndroidNativeInterface {
   getDeviceId(): string;
@@ -200,24 +202,83 @@ export async function getUbicacion(msMaximo = 2500): Promise<Ubicacion | null> {
  */
 const LADO_MAXIMO = 2400;
 
-async function achicarImagen(file: File): Promise<string | null> {
-  let bitmap: ImageBitmap;
+/**
+ * Cuanto mide un JPEG, leido del encabezado y SIN decodificarlo.
+ *
+ * Hace falta saberlo antes de decodificar: si primero se decodifica para
+ * medirlo, ya se reservo la memoria que justamente hay que evitar. Solo se
+ * leen los primeros 256 KB, donde siempre esta el marcador SOF.
+ */
+async function medirJpeg(file: File): Promise<{ ancho: number; alto: number } | null> {
   try {
+    const b = new Uint8Array(await file.slice(0, 256 * 1024).arrayBuffer());
+    if (b[0] !== 0xff || b[1] !== 0xd8) return null; // no es JPEG
+    let i = 2;
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const marca = b[i + 1];
+      // SOF0..SOF15 (menos DHT, JPG y DAC) es donde vienen alto y ancho.
+      if (marca >= 0xc0 && marca <= 0xcf && marca !== 0xc4 && marca !== 0xc8 && marca !== 0xcc) {
+        return { alto: (b[i + 5] << 8) | b[i + 6], ancho: (b[i + 7] << 8) | b[i + 8] };
+      }
+      const largo = (b[i + 2] << 8) | b[i + 3];
+      if (largo < 2) return null;
+      i += 2 + largo;
+    }
+  } catch {
+    /* si no se puede medir, abajo se decodifica con un tope igual */
+  }
+  return null;
+}
+
+async function achicarImagen(file: File): Promise<string | null> {
+  const tam = `${(file.size / 1048576).toFixed(1)}MB ${file.type || 'sin tipo'}`;
+  // ACA ESTABA EL PROBLEMA DE VERDAD. Antes esto era createImageBitmap(file) a
+  // secas: el navegador decodificaba la foto ENTERA y recien despues se
+  // achicaba. Una foto de 50MP (las que saca cualquier telefono de ahora) son
+  // 200MB de bitmap en ese instante, Android mata el renderer y se cierra la
+  // app. Y de eso no salva ningun try/catch: el proceso ya murio.
+  //
+  // resizeWidth/resizeHeight hacen que el decodificador escale MIENTRAS
+  // decodifica, asi la imagen grande no existe nunca.
+  marcarPaso('galeria: midiendo la foto', tam);
+  const medida = await medirJpeg(file);
+  const opciones: ImageBitmapOptions = {
     // `from-image` va explicito: sin eso el bitmap puede salir SIN aplicar la
     // rotacion del EXIF, y una foto de costado no la lee ningun lector.
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    imageOrientation: 'from-image',
+    resizeQuality: 'high',
+  };
+  if (medida) {
+    const escala = Math.min(1, LADO_MAXIMO / Math.max(medida.ancho, medida.alto));
+    if (escala >= 1) return null; // ya es chica, se lee tal cual
+    opciones.resizeWidth = Math.round(medida.ancho * escala);
+    opciones.resizeHeight = Math.round(medida.alto * escala);
+  } else {
+    // No se pudo medir (un PNG, un HEIC, un archivo raro). Igual se le pone
+    // tope al ancho: el alto lo ajusta el navegador solo, y asi lo peor que
+    // puede pasar es una foto altisima, no una de 50MP.
+    opciones.resizeWidth = LADO_MAXIMO;
+  }
+
+  let bitmap: ImageBitmap;
+  marcarPaso(
+    'galeria: decodificando la foto',
+    `${tam}${medida ? ` ${medida.ancho}x${medida.alto}` : ' (no se pudo medir)'}`,
+  );
+  try {
+    bitmap = await createImageBitmap(file, opciones);
   } catch {
+    pasoTerminado();
     return null;
   }
   try {
-    const escala = Math.min(1, LADO_MAXIMO / Math.max(bitmap.width, bitmap.height));
-    if (escala >= 1) return null;
     const c = document.createElement('canvas');
-    c.width = Math.round(bitmap.width * escala);
-    c.height = Math.round(bitmap.height * escala);
+    c.width = bitmap.width;
+    c.height = bitmap.height;
     const ctx = c.getContext('2d');
     if (!ctx) return null;
-    ctx.drawImage(bitmap, 0, 0, c.width, c.height);
+    ctx.drawImage(bitmap, 0, 0);
     // Calidad alta: al 80% el JPEG mete ruido justo donde estan las barras
     // finas del codigo y despues no hay lector que lo saque.
     return c.toDataURL('image/jpeg', 0.92);
@@ -256,7 +317,9 @@ export async function elegirDeGaleria(): Promise<string | null> {
       const file = input.files?.[0];
       limpiar();
       if (!file) return resolve(null);
-      resolve((await achicarImagen(file)) ?? (await leerCrudo(file)));
+      const r = (await achicarImagen(file)) ?? (await leerCrudo(file));
+      pasoTerminado();
+      resolve(r);
     };
     input.oncancel = () => {
       limpiar();

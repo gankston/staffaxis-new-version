@@ -22,6 +22,7 @@ import {
 } from '../../components/iconos';
 import { leerPdf417, parsearDni, type DatosDni } from '../../domain/dniBarcode';
 import { leerConstancia as leerHoja } from '../../domain/constanciaOcr';
+import { conRastro, rastroCaido } from '../../lib/rastro';
 import { api } from '../../lib/api';
 import { crearEmpleado, reactivarEmpleado, type Empleado } from '../../lib/empleados';
 
@@ -64,6 +65,13 @@ export function DialogoNuevoEmpleado({
   const [inactivo, setInactivo] = useState<{ id: string; nombre: string } | null>(null);
   const [errorDni, setErrorDni] = useState<string | null>(null);
 
+  /**
+   * Si la vez anterior la app se cerro sola en medio de un alta, aca aparece en
+   * que paso fue. Es la unica forma de saberlo: cuando Android mata el proceso
+   * no queda ningun error en ningun lado.
+   */
+  const [seCayoEn] = useState(() => rastroCaido());
+
   /** Saca (o elige) la foto del frente, la decodifica y completa los datos. */
   const escanear = async (obtener: () => Promise<string | null>) => {
     setErrorLectura(null);
@@ -76,7 +84,7 @@ export function DialogoNuevoEmpleado({
     // salir mas que cerrando la app.
     let crudo: string | null = null;
     try {
-      crudo = await leerPdf417(foto);
+      crudo = await conRastro('escaneo: leyendo el codigo de barras', undefined, () => leerPdf417(foto));
     } catch {
       crudo = null;
     }
@@ -117,7 +125,8 @@ export function DialogoNuevoEmpleado({
     setPaso('leyendoConstancia');
     let datos: Awaited<ReturnType<typeof leerHoja>> = null;
     try {
-      datos = await leerHoja(foto);
+      // El que mas memoria usa de todos: levanta el motor de OCR entero.
+      datos = await conRastro('constancia: leyendo el texto (motor de OCR)', undefined, () => leerHoja(foto));
     } catch {
       datos = null;
     }
@@ -299,6 +308,36 @@ export function DialogoNuevoEmpleado({
             <li>Que el código entre completo y derecho en la foto.</li>
             <li>Buena luz y sin reflejos ni sombras encima.</li>
           </ul>
+
+          {/*
+            Cuando Android mata la app no queda ni un error en ningun lado. Por
+            eso cada paso riesgoso deja una marca antes de empezar: si la app
+            vuelve a abrirse y la marca sigue puesta, ese es el paso que la mato.
+            Es la unica forma de saberlo sin tocar el APK.
+          */}
+          {seCayoEn && (
+            <div
+              style={{
+                background: 'rgba(255,171,64,0.12)',
+                border: '1px solid #ffab40',
+                borderRadius: 12,
+                padding: 14,
+                alignSelf: 'stretch',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ color: '#ffab40', fontWeight: 700, fontSize: 14, marginBottom: 4 }}>
+                La app se cerró sola la última vez
+              </div>
+              <div style={{ color: '#ffab40', fontSize: 13 }}>
+                Fue en: {seCayoEn.paso}
+                {seCayoEn.detalle ? ` (${seCayoEn.detalle})` : ''}
+              </div>
+              <div style={{ color: 'var(--texto-tenue)', fontSize: 11, marginTop: 6 }}>
+                Mandale esta pantalla a Gastón.
+              </div>
+            </div>
+          )}
 
           {errorLectura && (
             <div
