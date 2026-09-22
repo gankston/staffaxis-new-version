@@ -14,6 +14,8 @@
  * caso normal hay una pasada de rescate que busca el DNI por forma.
  */
 
+import { marcarPaso } from '../lib/rastro';
+
 export interface DatosDni {
   dni: string;
   apellido: string;
@@ -90,15 +92,29 @@ function conTope<T>(p: Promise<T>, ms: number): Promise<T | null> {
  * salia para arriba y dejaba la pantalla trabada igual.
  */
 export async function leerPdf417(dataUrl: string): Promise<string | null> {
+  marcarPaso('escaneo: abriendo la foto');
   const img = await conTope(cargarImagen(dataUrl), 15_000);
   if (!img) return null;
 
-  // 1) El lector del sistema. Android lo trae y es el mas rapido de todos.
-  const nativo = await conTope(conDetectorDelSistema(img), 15_000);
-  if (nativo) return nativo;
+  // 1) ZXing PRIMERO, y el lector del sistema despues. El orden es al reves de
+  //    lo que parece razonable (el del sistema es nativo y mas rapido) y esta
+  //    asi a proposito:
+  //
+  //    el BarcodeDetector de Android no es javascript, es una llamada a Google
+  //    Play Services. Si esa llamada se cae, no hay try/catch que valga: se
+  //    lleva puesto el proceso del WebView, o sea la app entera, al instante y
+  //    sin dejar ningun error. Y es el UNICO paso de todo el escaneo que no se
+  //    puede probar desde la PC, porque ahi BarcodeDetector no existe.
+  //
+  //    ZXing lee las fotos de verdad en menos de medio segundo (probado con la
+  //    que venia fallando: 53 ms), asi que poniendolo adelante el camino nativo
+  //    directamente no se pisa salvo que ZXing no pueda.
+  marcarPaso('escaneo: leyendo con ZXing');
+  const zxing = await conTope(conZxing(img), 30_000);
+  if (zxing) return zxing;
 
-  // 2) ZXing, para los telefonos que no lo tienen.
-  return await conTope(conZxing(img), 30_000);
+  marcarPaso('escaneo: lector de codigos de Android');
+  return await conTope(conDetectorDelSistema(img), 15_000);
 }
 
 async function conDetectorDelSistema(img: HTMLImageElement): Promise<string | null> {
@@ -137,6 +153,7 @@ async function conDetectorDelSistema(img: HTMLImageElement): Promise<string | nu
 async function conZxing(img: HTMLImageElement): Promise<string | null> {
   let z: typeof import('@zxing/library');
   try {
+    marcarPaso('escaneo: bajando el lector ZXing');
     z = await import('@zxing/library');
   } catch {
     return null;
@@ -145,8 +162,10 @@ async function conZxing(img: HTMLImageElement): Promise<string | null> {
   hints.set(z.DecodeHintType.TRY_HARDER, true);
   hints.set(z.DecodeHintType.POSSIBLE_FORMATS, [z.BarcodeFormat.PDF_417]);
 
+  let intento = 0;
   for (const lienzo of lienzosAProbar(img)) {
     if (!lienzo) continue;
+    marcarPaso(`escaneo: ZXing, pasada ${++intento}`, `${lienzo.width}x${lienzo.height}`);
     for (const Binarizador of [z.GlobalHistogramBinarizer, z.HybridBinarizer]) {
       try {
         const mapa = new z.BinaryBitmap(
