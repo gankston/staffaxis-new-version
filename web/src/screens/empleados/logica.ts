@@ -99,11 +99,19 @@ export interface ValoresCarga {
   cargaCamion25: boolean;
   cargaCamionOtroCheck: boolean;
   cargaCamionOtro: string;
+  // Cuantas bolsas de cada peso. Van como texto porque es lo que escribe el
+  // usuario; el numero recien se arma al guardar.
+  cargaCamion50Bolsas: string;
+  cargaCamion25Bolsas: string;
+  cargaCamionOtroBolsas: string;
   porMovimientoEstiba: boolean;
   movimientoEstiba50: boolean;
   movimientoEstiba25: boolean;
   movimientoEstibaOtroCheck: boolean;
   movimientoEstibaOtro: string;
+  movimientoEstiba50Bolsas: string;
+  movimientoEstiba25Bolsas: string;
+  movimientoEstibaOtroBolsas: string;
 }
 
 export const VALORES_CARGA_INICIAL: ValoresCarga = {
@@ -153,11 +161,17 @@ export const VALORES_CARGA_INICIAL: ValoresCarga = {
   cargaCamion25: false,
   cargaCamionOtroCheck: false,
   cargaCamionOtro: '',
+  cargaCamion50Bolsas: '',
+  cargaCamion25Bolsas: '',
+  cargaCamionOtroBolsas: '',
   porMovimientoEstiba: false,
   movimientoEstiba50: false,
   movimientoEstiba25: false,
   movimientoEstibaOtroCheck: false,
   movimientoEstibaOtro: '',
+  movimientoEstiba50Bolsas: '',
+  movimientoEstiba25Bolsas: '',
+  movimientoEstibaOtroBolsas: '',
 };
 
 /**
@@ -204,20 +218,21 @@ export function puedeGuardar(v: ValoresCarga): boolean {
     if (v.cargaJaulaCheck && !v.cargaJaulaValor.trim()) return false;
     if (v.cargaCamionCheck && !v.cargaCamionValor.trim()) return false;
   }
-  if (
-    v.porCargaCamion &&
-    !v.cargaCamion50 &&
-    !v.cargaCamion25 &&
-    !(v.cargaCamionOtroCheck && v.cargaCamionOtro.trim())
-  )
-    return false;
-  if (
-    v.porMovimientoEstiba &&
-    !v.movimientoEstiba50 &&
-    !v.movimientoEstiba25 &&
-    !(v.movimientoEstibaOtroCheck && v.movimientoEstibaOtro.trim())
-  )
-    return false;
+  // Carga de camion y movimiento de estiba: hay que tildar al menos un peso, y
+  // cada peso tildado pide cuantas bolsas. "Otro" ademas pide que peso es.
+  if (v.porCargaCamion) {
+    if (!v.cargaCamion50 && !v.cargaCamion25 && !v.cargaCamionOtroCheck) return false;
+    if (v.cargaCamion50 && !v.cargaCamion50Bolsas.trim()) return false;
+    if (v.cargaCamion25 && !v.cargaCamion25Bolsas.trim()) return false;
+    if (v.cargaCamionOtroCheck && (!v.cargaCamionOtro.trim() || !v.cargaCamionOtroBolsas.trim())) return false;
+  }
+  if (v.porMovimientoEstiba) {
+    if (!v.movimientoEstiba50 && !v.movimientoEstiba25 && !v.movimientoEstibaOtroCheck) return false;
+    if (v.movimientoEstiba50 && !v.movimientoEstiba50Bolsas.trim()) return false;
+    if (v.movimientoEstiba25 && !v.movimientoEstiba25Bolsas.trim()) return false;
+    if (v.movimientoEstibaOtroCheck && (!v.movimientoEstibaOtro.trim() || !v.movimientoEstibaOtroBolsas.trim()))
+      return false;
+  }
   return true;
 }
 
@@ -256,12 +271,26 @@ export function buildTiposNuevos(v: ValoresCarga): TiposCargaNuevos {
     tanteroCampo: v.porTantero && v.tanteroCampoCheck ? toFloatOrNull(comaAPunto(v.tanteroCampoValor)) : null,
     cargaCamionKg50: v.porCargaCamion && v.cargaCamion50 ? true : null,
     cargaCamionKg25: v.porCargaCamion && v.cargaCamion25 ? true : null,
+    cargaCamionBolsas50:
+      v.porCargaCamion && v.cargaCamion50 ? toFloatOrNull(comaAPunto(v.cargaCamion50Bolsas)) : null,
+    cargaCamionBolsas25:
+      v.porCargaCamion && v.cargaCamion25 ? toFloatOrNull(comaAPunto(v.cargaCamion25Bolsas)) : null,
+    cargaCamionBolsasOtro:
+      v.porCargaCamion && v.cargaCamionOtroCheck ? toFloatOrNull(comaAPunto(v.cargaCamionOtroBolsas)) : null,
     cargaCamionOtro:
       v.porCargaCamion && v.cargaCamionOtroCheck && v.cargaCamionOtro.trim()
         ? v.cargaCamionOtro.trim()
         : null,
     movimientoEstibaKg50: v.porMovimientoEstiba && v.movimientoEstiba50 ? true : null,
     movimientoEstibaKg25: v.porMovimientoEstiba && v.movimientoEstiba25 ? true : null,
+    movimientoEstibaBolsas50:
+      v.porMovimientoEstiba && v.movimientoEstiba50 ? toFloatOrNull(comaAPunto(v.movimientoEstiba50Bolsas)) : null,
+    movimientoEstibaBolsas25:
+      v.porMovimientoEstiba && v.movimientoEstiba25 ? toFloatOrNull(comaAPunto(v.movimientoEstiba25Bolsas)) : null,
+    movimientoEstibaBolsasOtro:
+      v.porMovimientoEstiba && v.movimientoEstibaOtroCheck
+        ? toFloatOrNull(comaAPunto(v.movimientoEstibaOtroBolsas))
+        : null,
     movimientoEstibaOtro:
       v.porMovimientoEstiba && v.movimientoEstibaOtroCheck && v.movimientoEstibaOtro.trim()
         ? v.movimientoEstibaOtro.trim()
@@ -290,6 +319,12 @@ export function payloadTiposNuevos(t: TiposCargaNuevos) {
     movimiento_estiba_kg50: t.movimientoEstibaKg50,
     movimiento_estiba_kg25: t.movimientoEstibaKg25,
     movimiento_estiba_otro: t.movimientoEstibaOtro,
+    carga_camion_bolsas_50: t.cargaCamionBolsas50,
+    carga_camion_bolsas_25: t.cargaCamionBolsas25,
+    carga_camion_bolsas_otro: t.cargaCamionBolsasOtro,
+    movimiento_estiba_bolsas_50: t.movimientoEstibaBolsas50,
+    movimiento_estiba_bolsas_25: t.movimientoEstibaBolsas25,
+    movimiento_estiba_bolsas_otro: t.movimientoEstibaBolsasOtro,
     etiquetado_lata_185: t.etiquetadoLata185,
     etiquetado_lata_750: t.etiquetadoLata750,
     etiquetado_lata_2500: t.etiquetadoLata2500,
@@ -409,12 +444,19 @@ export function valoresDesdeRegistro(
     cargaCamion25: t.cargaCamionKg25 === true,
     cargaCamionOtroCheck: t.cargaCamionOtro !== null,
     cargaCamionOtro: t.cargaCamionOtro ?? '',
+    cargaCamion50Bolsas: t.cargaCamionBolsas50 !== null ? fmtValor(t.cargaCamionBolsas50) : '',
+    cargaCamion25Bolsas: t.cargaCamionBolsas25 !== null ? fmtValor(t.cargaCamionBolsas25) : '',
+    cargaCamionOtroBolsas: t.cargaCamionBolsasOtro !== null ? fmtValor(t.cargaCamionBolsasOtro) : '',
     porMovimientoEstiba:
       t.movimientoEstibaKg50 === true || t.movimientoEstibaKg25 === true || t.movimientoEstibaOtro !== null,
     movimientoEstiba50: t.movimientoEstibaKg50 === true,
     movimientoEstiba25: t.movimientoEstibaKg25 === true,
     movimientoEstibaOtroCheck: t.movimientoEstibaOtro !== null,
     movimientoEstibaOtro: t.movimientoEstibaOtro ?? '',
+    movimientoEstiba50Bolsas: t.movimientoEstibaBolsas50 !== null ? fmtValor(t.movimientoEstibaBolsas50) : '',
+    movimientoEstiba25Bolsas: t.movimientoEstibaBolsas25 !== null ? fmtValor(t.movimientoEstibaBolsas25) : '',
+    movimientoEstibaOtroBolsas:
+      t.movimientoEstibaBolsasOtro !== null ? fmtValor(t.movimientoEstibaBolsasOtro) : '',
   };
 }
 
@@ -476,17 +518,19 @@ export function formatTiposNuevosRegistro(
   ].filter(Boolean).join(' ');
   if (carga) partes.push(`Carga ${carga}`);
 
+  // Las bolsas van pegadas al peso: "50kg: 340".
+  const bolsas = (peso: string, n: number | null) => (n != null ? `${peso}: ${fmtValor(n)}` : peso);
   const camion = [
-    t.cargaCamionKg50 === true ? '50kg' : null,
-    t.cargaCamionKg25 === true ? '25kg' : null,
-    t.cargaCamionOtro != null ? `Otro: ${t.cargaCamionOtro}` : null,
+    t.cargaCamionKg50 === true ? bolsas('50kg', t.cargaCamionBolsas50) : null,
+    t.cargaCamionKg25 === true ? bolsas('25kg', t.cargaCamionBolsas25) : null,
+    t.cargaCamionOtro != null ? bolsas(t.cargaCamionOtro, t.cargaCamionBolsasOtro) : null,
   ].filter(Boolean).join(' ');
   if (camion.trim()) partes.push(`Carga Camión ${camion}`);
 
   const estiba = [
-    t.movimientoEstibaKg50 === true ? '50kg' : null,
-    t.movimientoEstibaKg25 === true ? '25kg' : null,
-    t.movimientoEstibaOtro != null ? `Otro: ${t.movimientoEstibaOtro}` : null,
+    t.movimientoEstibaKg50 === true ? bolsas('50kg', t.movimientoEstibaBolsas50) : null,
+    t.movimientoEstibaKg25 === true ? bolsas('25kg', t.movimientoEstibaBolsas25) : null,
+    t.movimientoEstibaOtro != null ? bolsas(t.movimientoEstibaOtro, t.movimientoEstibaBolsasOtro) : null,
   ].filter(Boolean).join(' ');
   if (estiba.trim()) partes.push(`Mov. Estiba ${estiba}`);
 

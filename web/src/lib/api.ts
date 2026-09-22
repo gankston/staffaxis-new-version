@@ -195,6 +195,12 @@ export interface AdminReportRowDto {
   movimiento_estiba_kg50: boolean | null;
   movimiento_estiba_kg25: boolean | null;
   movimiento_estiba_otro: string | null;
+  carga_camion_bolsas_50?: number | null;
+  carga_camion_bolsas_25?: number | null;
+  carga_camion_bolsas_otro?: number | null;
+  movimiento_estiba_bolsas_50?: number | null;
+  movimiento_estiba_bolsas_25?: number | null;
+  movimiento_estiba_bolsas_otro?: number | null;
   etiquetado_lata_185?: number | null;
   etiquetado_lata_750?: number | null;
   etiquetado_lata_2500?: number | null;
@@ -237,6 +243,12 @@ export interface SupervisorPendingItemDto {
   movimientoEstibaKg50?: boolean | null;
   movimientoEstibaKg25?: boolean | null;
   movimientoEstibaOtro?: string | null;
+  cargaCamionBolsas50?: number | null;
+  cargaCamionBolsas25?: number | null;
+  cargaCamionBolsasOtro?: number | null;
+  movimientoEstibaBolsas50?: number | null;
+  movimientoEstibaBolsas25?: number | null;
+  movimientoEstibaBolsasOtro?: number | null;
   etiquetadoLata185?: number | null;
   etiquetadoLata750?: number | null;
   etiquetadoLata2500?: number | null;
@@ -267,6 +279,12 @@ export interface SupervisorResumenRowDto {
   movimiento_estiba_kg50?: boolean | null;
   movimiento_estiba_kg25?: boolean | null;
   movimiento_estiba_otro?: string | null;
+  carga_camion_bolsas_50?: number | null;
+  carga_camion_bolsas_25?: number | null;
+  carga_camion_bolsas_otro?: number | null;
+  movimiento_estiba_bolsas_50?: number | null;
+  movimiento_estiba_bolsas_25?: number | null;
+  movimiento_estiba_bolsas_otro?: number | null;
   etiquetado_lata_185?: number | null;
   etiquetado_lata_750?: number | null;
   etiquetado_lata_2500?: number | null;
@@ -305,6 +323,12 @@ export interface CrearSubmissionBody {
   movimiento_estiba_kg50?: boolean | null;
   movimiento_estiba_kg25?: boolean | null;
   movimiento_estiba_otro?: string | null;
+  carga_camion_bolsas_50?: number | null;
+  carga_camion_bolsas_25?: number | null;
+  carga_camion_bolsas_otro?: number | null;
+  movimiento_estiba_bolsas_50?: number | null;
+  movimiento_estiba_bolsas_25?: number | null;
+  movimiento_estiba_bolsas_otro?: number | null;
 }
 
 // ─── Endpoints ───────────────────────────────────────────────────────────────

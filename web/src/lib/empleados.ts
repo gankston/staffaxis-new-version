@@ -164,6 +164,12 @@ export interface ColumnasTiposNuevos {
   movimiento_estiba_kg50?: boolean | null;
   movimiento_estiba_kg25?: boolean | null;
   movimiento_estiba_otro?: string | null;
+  carga_camion_bolsas_50?: number | null;
+  carga_camion_bolsas_25?: number | null;
+  carga_camion_bolsas_otro?: number | null;
+  movimiento_estiba_bolsas_50?: number | null;
+  movimiento_estiba_bolsas_25?: number | null;
+  movimiento_estiba_bolsas_otro?: number | null;
   etiquetado_lata_185?: number | null;
   etiquetado_lata_750?: number | null;
   etiquetado_lata_2500?: number | null;
@@ -188,6 +194,12 @@ export function tiposDesdeColumnas(f: ColumnasTiposNuevos): TiposCargaNuevos {
     movimientoEstibaKg50: f.movimiento_estiba_kg50 ?? null,
     movimientoEstibaKg25: f.movimiento_estiba_kg25 ?? null,
     movimientoEstibaOtro: f.movimiento_estiba_otro ?? null,
+    cargaCamionBolsas50: aNumero(f.carga_camion_bolsas_50),
+    cargaCamionBolsas25: aNumero(f.carga_camion_bolsas_25),
+    cargaCamionBolsasOtro: aNumero(f.carga_camion_bolsas_otro),
+    movimientoEstibaBolsas50: aNumero(f.movimiento_estiba_bolsas_50),
+    movimientoEstibaBolsas25: aNumero(f.movimiento_estiba_bolsas_25),
+    movimientoEstibaBolsasOtro: aNumero(f.movimiento_estiba_bolsas_otro),
     etiquetadoLata185: aNumero(f.etiquetado_lata_185),
     etiquetadoLata750: aNumero(f.etiquetado_lata_750),
     etiquetadoLata2500: aNumero(f.etiquetado_lata_2500),

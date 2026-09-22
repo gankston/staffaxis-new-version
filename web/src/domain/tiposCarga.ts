@@ -17,6 +17,13 @@ export interface TiposCargaNuevos {
   movimientoEstibaKg50: boolean | null;
   movimientoEstibaKg25: boolean | null;
   movimientoEstibaOtro: string | null;
+  // Cuantas bolsas de cada peso. El check dice QUE peso, esto CUANTAS.
+  cargaCamionBolsas50: number | null;
+  cargaCamionBolsas25: number | null;
+  cargaCamionBolsasOtro: number | null;
+  movimientoEstibaBolsas50: number | null;
+  movimientoEstibaBolsas25: number | null;
+  movimientoEstibaBolsasOtro: number | null;
   // Etiquetado abierto por tamaño de lata
   etiquetadoLata185: number | null;
   etiquetadoLata750: number | null;
@@ -48,6 +55,12 @@ export const TIPOS_NUEVOS_VACIO: TiposCargaNuevos = {
   movimientoEstibaKg50: null,
   movimientoEstibaKg25: null,
   movimientoEstibaOtro: null,
+  cargaCamionBolsas50: null,
+  cargaCamionBolsas25: null,
+  cargaCamionBolsasOtro: null,
+  movimientoEstibaBolsas50: null,
+  movimientoEstibaBolsas25: null,
+  movimientoEstibaBolsasOtro: null,
   etiquetadoLata185: null,
   etiquetadoLata750: null,
   etiquetadoLata2500: null,
@@ -87,6 +100,12 @@ export function estaVacio(t: TiposCargaNuevos): boolean {
     t.movimientoEstibaKg50 === null &&
     t.movimientoEstibaKg25 === null &&
     t.movimientoEstibaOtro === null &&
+    t.cargaCamionBolsas50 === null &&
+    t.cargaCamionBolsas25 === null &&
+    t.cargaCamionBolsasOtro === null &&
+    t.movimientoEstibaBolsas50 === null &&
+    t.movimientoEstibaBolsas25 === null &&
+    t.movimientoEstibaBolsasOtro === null &&
     t.etiquetadoLata185 === null &&
     t.etiquetadoLata750 === null &&
     t.etiquetadoLata2500 === null &&
@@ -127,6 +146,12 @@ export function sumarTipos(a: TiposCargaNuevos, b: TiposCargaNuevos): TiposCarga
     movimientoEstibaKg50: oCualquiera(a.movimientoEstibaKg50, b.movimientoEstibaKg50),
     movimientoEstibaKg25: oCualquiera(a.movimientoEstibaKg25, b.movimientoEstibaKg25),
     movimientoEstibaOtro: a.movimientoEstibaOtro ?? b.movimientoEstibaOtro,
+    cargaCamionBolsas50: sumarNum(a.cargaCamionBolsas50, b.cargaCamionBolsas50),
+    cargaCamionBolsas25: sumarNum(a.cargaCamionBolsas25, b.cargaCamionBolsas25),
+    cargaCamionBolsasOtro: sumarNum(a.cargaCamionBolsasOtro, b.cargaCamionBolsasOtro),
+    movimientoEstibaBolsas50: sumarNum(a.movimientoEstibaBolsas50, b.movimientoEstibaBolsas50),
+    movimientoEstibaBolsas25: sumarNum(a.movimientoEstibaBolsas25, b.movimientoEstibaBolsas25),
+    movimientoEstibaBolsasOtro: sumarNum(a.movimientoEstibaBolsasOtro, b.movimientoEstibaBolsasOtro),
     etiquetadoLata185: sumarNum(a.etiquetadoLata185, b.etiquetadoLata185),
     etiquetadoLata750: sumarNum(a.etiquetadoLata750, b.etiquetadoLata750),
     etiquetadoLata2500: sumarNum(a.etiquetadoLata2500, b.etiquetadoLata2500),

@@ -140,6 +140,11 @@ interface Subtipo {
   onCheck: (v: boolean) => void;
   valor: string;
   onValor: (v: string) => void;
+  /**
+   * Campo de texto libre que va ARRIBA del numero. Lo usa "Otro", donde primero
+   * hay que decir de que peso es la bolsa y recien despues cuantas.
+   */
+  texto?: { valor: string; onValor: (v: string) => void; etiqueta: string };
 }
 
 /**
@@ -172,6 +177,14 @@ function CargaSubtipos({
               <Check label={sub.label} checked={sub.check} onChange={sub.onCheck} />
               {sub.check && (
                 <div style={{ paddingLeft: 16 }}>
+                  {sub.texto && (
+                    <TextField
+                      value={sub.texto.valor}
+                      onChange={sub.texto.onValor}
+                      label={sub.texto.etiqueta}
+                      error={!sub.texto.valor.trim()}
+                    />
+                  )}
                   <TextField
                     value={sub.valor}
                     onChange={sub.onValor}
@@ -190,58 +203,6 @@ function CargaSubtipos({
   );
 }
 
-function CargaTriple({
-  label,
-  checked,
-  onCheck,
-  check50,
-  onCheck50,
-  check25,
-  onCheck25,
-  checkOtro,
-  onCheckOtro,
-  valorOtro,
-  onValorOtro,
-}: {
-  label: string;
-  checked: boolean;
-  onCheck: (v: boolean) => void;
-  check50: boolean;
-  onCheck50: (v: boolean) => void;
-  check25: boolean;
-  onCheck25: (v: boolean) => void;
-  checkOtro: boolean;
-  onCheckOtro: (v: boolean) => void;
-  valorOtro: string;
-  onValorOtro: (v: string) => void;
-}) {
-  const faltaOpcion = !check50 && !check25 && !(checkOtro && valorOtro.trim());
-  return (
-    <div>
-      <Check label={label} checked={checked} onChange={onCheck} negrita />
-      {checked && (
-        <div style={{ paddingLeft: 16 }}>
-          <Check label="50 kg" checked={check50} onChange={onCheck50} />
-          <Check label="25 kg" checked={check25} onChange={onCheck25} />
-          <Check label="Otro" checked={checkOtro} onChange={onCheckOtro} />
-          {checkOtro && (
-            <div style={{ paddingLeft: 16 }}>
-              <TextField
-                value={valorOtro}
-                onChange={onValorOtro}
-                label="Detalle (obligatorio)"
-                error={!valorOtro.trim()}
-              />
-            </div>
-          )}
-          {faltaOpcion && (
-            <div style={{ fontSize: 12, color: 'var(--error)' }}>Marcá al menos una opción</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function FormularioCarga({
   valores,
@@ -550,7 +511,7 @@ export function FormularioCarga({
         />
       )}
       {tiposCarga.includes('carga_camion') && (
-        <CargaTriple
+        <CargaSubtipos
           label="Carga de Camión"
           checked={valores.porCargaCamion}
           onCheck={(v) =>
@@ -560,20 +521,51 @@ export function FormularioCarga({
               cargaCamion25: false,
               cargaCamionOtroCheck: false,
               cargaCamionOtro: '',
+              cargaCamion50Bolsas: '',
+              cargaCamion25Bolsas: '',
+              cargaCamionOtroBolsas: '',
             })
           }
-          check50={valores.cargaCamion50}
-          onCheck50={(v) => set({ cargaCamion50: v })}
-          check25={valores.cargaCamion25}
-          onCheck25={(v) => set({ cargaCamion25: v })}
-          checkOtro={valores.cargaCamionOtroCheck}
-          onCheckOtro={(v) => set({ cargaCamionOtroCheck: v, cargaCamionOtro: v ? valores.cargaCamionOtro : '' })}
-          valorOtro={valores.cargaCamionOtro}
-          onValorOtro={(v) => set({ cargaCamionOtro: v })}
+          subtipos={[
+            {
+              label: '50 kg',
+              etiquetaCampo: 'Cantidad de bolsas',
+              check: valores.cargaCamion50,
+              onCheck: (v) => set({ cargaCamion50: v, cargaCamion50Bolsas: v ? valores.cargaCamion50Bolsas : '' }),
+              valor: valores.cargaCamion50Bolsas,
+              onValor: (v) => set({ cargaCamion50Bolsas: v }),
+            },
+            {
+              label: '25 kg',
+              etiquetaCampo: 'Cantidad de bolsas',
+              check: valores.cargaCamion25,
+              onCheck: (v) => set({ cargaCamion25: v, cargaCamion25Bolsas: v ? valores.cargaCamion25Bolsas : '' }),
+              valor: valores.cargaCamion25Bolsas,
+              onValor: (v) => set({ cargaCamion25Bolsas: v }),
+            },
+            {
+              label: 'Otro',
+              etiquetaCampo: 'Cantidad de bolsas',
+              check: valores.cargaCamionOtroCheck,
+              onCheck: (v) =>
+                set({
+                  cargaCamionOtroCheck: v,
+                  cargaCamionOtro: v ? valores.cargaCamionOtro : '',
+                  cargaCamionOtroBolsas: v ? valores.cargaCamionOtroBolsas : '',
+                }),
+              valor: valores.cargaCamionOtroBolsas,
+              onValor: (v) => set({ cargaCamionOtroBolsas: v }),
+              texto: {
+                valor: valores.cargaCamionOtro,
+                onValor: (v) => set({ cargaCamionOtro: v }),
+                etiqueta: 'Qué peso (obligatorio)',
+              },
+            },
+          ]}
         />
       )}
       {tiposCarga.includes('movimiento_estiba') && (
-        <CargaTriple
+        <CargaSubtipos
           label="Movimiento de Estiba"
           checked={valores.porMovimientoEstiba}
           onCheck={(v) =>
@@ -583,18 +575,49 @@ export function FormularioCarga({
               movimientoEstiba25: false,
               movimientoEstibaOtroCheck: false,
               movimientoEstibaOtro: '',
+              movimientoEstiba50Bolsas: '',
+              movimientoEstiba25Bolsas: '',
+              movimientoEstibaOtroBolsas: '',
             })
           }
-          check50={valores.movimientoEstiba50}
-          onCheck50={(v) => set({ movimientoEstiba50: v })}
-          check25={valores.movimientoEstiba25}
-          onCheck25={(v) => set({ movimientoEstiba25: v })}
-          checkOtro={valores.movimientoEstibaOtroCheck}
-          onCheckOtro={(v) =>
-            set({ movimientoEstibaOtroCheck: v, movimientoEstibaOtro: v ? valores.movimientoEstibaOtro : '' })
-          }
-          valorOtro={valores.movimientoEstibaOtro}
-          onValorOtro={(v) => set({ movimientoEstibaOtro: v })}
+          subtipos={[
+            {
+              label: '50 kg',
+              etiquetaCampo: 'Cantidad de bolsas',
+              check: valores.movimientoEstiba50,
+              onCheck: (v) =>
+                set({ movimientoEstiba50: v, movimientoEstiba50Bolsas: v ? valores.movimientoEstiba50Bolsas : '' }),
+              valor: valores.movimientoEstiba50Bolsas,
+              onValor: (v) => set({ movimientoEstiba50Bolsas: v }),
+            },
+            {
+              label: '25 kg',
+              etiquetaCampo: 'Cantidad de bolsas',
+              check: valores.movimientoEstiba25,
+              onCheck: (v) =>
+                set({ movimientoEstiba25: v, movimientoEstiba25Bolsas: v ? valores.movimientoEstiba25Bolsas : '' }),
+              valor: valores.movimientoEstiba25Bolsas,
+              onValor: (v) => set({ movimientoEstiba25Bolsas: v }),
+            },
+            {
+              label: 'Otro',
+              etiquetaCampo: 'Cantidad de bolsas',
+              check: valores.movimientoEstibaOtroCheck,
+              onCheck: (v) =>
+                set({
+                  movimientoEstibaOtroCheck: v,
+                  movimientoEstibaOtro: v ? valores.movimientoEstibaOtro : '',
+                  movimientoEstibaOtroBolsas: v ? valores.movimientoEstibaOtroBolsas : '',
+                }),
+              valor: valores.movimientoEstibaOtroBolsas,
+              onValor: (v) => set({ movimientoEstibaOtroBolsas: v }),
+              texto: {
+                valor: valores.movimientoEstibaOtro,
+                onValor: (v) => set({ movimientoEstibaOtro: v }),
+                etiqueta: 'Qué peso (obligatorio)',
+              },
+            },
+          ]}
         />
       )}
     </div>

@@ -120,19 +120,23 @@ export function lineasDeTotales(t: TotalesTarja): string[] {
   ].filter(Boolean) as string[];
   if (carga.length) out.push(`carga ${carga.join(' · ')}`);
 
+  // Las bolsas van pegadas al peso: "50kg: 340" se lee de una.
+  const conBolsas = (peso: string, bolsas: number | null) =>
+    bolsas ? `${peso}: ${fmtNumero(bolsas)}` : peso;
+
   const camion = [
-    n.cargaCamionKg50 === true ? '50kg' : null,
-    n.cargaCamionKg25 === true ? '25kg' : null,
-    n.cargaCamionOtro?.trim() || null,
+    n.cargaCamionKg50 === true ? conBolsas('50kg', n.cargaCamionBolsas50) : null,
+    n.cargaCamionKg25 === true ? conBolsas('25kg', n.cargaCamionBolsas25) : null,
+    n.cargaCamionOtro?.trim() ? conBolsas(n.cargaCamionOtro.trim(), n.cargaCamionBolsasOtro) : null,
   ].filter(Boolean) as string[];
-  if (camion.length) out.push(`camión ${camion.join('/')}`);
+  if (camion.length) out.push(`camión ${camion.join(' · ')}`);
 
   const estiba = [
-    n.movimientoEstibaKg50 === true ? '50kg' : null,
-    n.movimientoEstibaKg25 === true ? '25kg' : null,
-    n.movimientoEstibaOtro?.trim() || null,
+    n.movimientoEstibaKg50 === true ? conBolsas('50kg', n.movimientoEstibaBolsas50) : null,
+    n.movimientoEstibaKg25 === true ? conBolsas('25kg', n.movimientoEstibaBolsas25) : null,
+    n.movimientoEstibaOtro?.trim() ? conBolsas(n.movimientoEstibaOtro.trim(), n.movimientoEstibaBolsasOtro) : null,
   ].filter(Boolean) as string[];
-  if (estiba.length) out.push(`estiba ${estiba.join('/')}`);
+  if (estiba.length) out.push(`estiba ${estiba.join(' · ')}`);
 
   return out;
 }
@@ -159,6 +163,12 @@ export function aTiposNuevos(p: SupervisorPendingItemDto): TiposCargaNuevos {
     movimientoEstibaKg50: p.movimientoEstibaKg50 ?? null,
     movimientoEstibaKg25: p.movimientoEstibaKg25 ?? null,
     movimientoEstibaOtro: p.movimientoEstibaOtro ?? null,
+    cargaCamionBolsas50: aNumero(p.cargaCamionBolsas50),
+    cargaCamionBolsas25: aNumero(p.cargaCamionBolsas25),
+    cargaCamionBolsasOtro: aNumero(p.cargaCamionBolsasOtro),
+    movimientoEstibaBolsas50: aNumero(p.movimientoEstibaBolsas50),
+    movimientoEstibaBolsas25: aNumero(p.movimientoEstibaBolsas25),
+    movimientoEstibaBolsasOtro: aNumero(p.movimientoEstibaBolsasOtro),
     // Ojo: TODAS estas columnas son NUMERIC y llegan como TEXTO ("3", no 3).
     // Sin aNumero, sumarlas las concatena y fmtNumero directamente explota
     // porque un string no tiene .toFixed().
