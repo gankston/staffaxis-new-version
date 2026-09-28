@@ -162,9 +162,18 @@ async function conZxing(img: HTMLImageElement): Promise<string | null> {
   hints.set(z.DecodeHintType.TRY_HARDER, true);
   hints.set(z.DecodeHintType.POSSIBLE_FORMATS, [z.BarcodeFormat.PDF_417]);
 
+  // Tope de tiempo REAL. Sin esto, con una foto sin codigo recorre todos los
+  // intentos: en la PC eran 10 segundos, en un telefono puede ser el triple.
+  const limite = performance.now() + 15_000;
   let intento = 0;
   for (const lienzo of lienzosAProbar(img)) {
     if (!lienzo) continue;
+    if (performance.now() > limite) break;
+    // Se le devuelve el control a la pantalla entre intento e intento. El
+    // decodificador es sincronico: encadenando decenas de intentos sin soltar,
+    // la pantalla quedaba congelada ("Leyendo..." quieto) y Android puede
+    // tirar el cartel de "la app no responde".
+    await new Promise((r) => setTimeout(r, 0));
     marcarPaso(`escaneo: ZXing, pasada ${++intento}`, `${lienzo.width}x${lienzo.height}`);
     for (const Binarizador of [z.GlobalHistogramBinarizer, z.HybridBinarizer]) {
       try {
@@ -177,6 +186,10 @@ async function conZxing(img: HTMLImageElement): Promise<string | null> {
         /* esta combinacion no lo encontro, se prueba la siguiente */
       }
     }
+    // Se suelta la memoria del canvas ya, sin esperar al recolector: son
+    // decenas de intentos y en un telefono chico se acumulan.
+    lienzo.width = 0;
+    lienzo.height = 0;
   }
   return null;
 }
@@ -187,33 +200,79 @@ async function conZxing(img: HTMLImageElement): Promise<string | null> {
  * vivos al mismo tiempo es justo lo que hace que Android mate la pantalla.
  */
 function* lienzosAProbar(img: HTMLImageElement): Generator<HTMLCanvasElement | null> {
-  yield aLienzo(img, 1, false);
+  // 1) La foto entera, derecha. Es lo que alcanza casi siempre.
+  yield aLienzo(img, { escala: 1 });
   // Contraste estirado: levanta los codigos lavados (foto a una pantalla).
-  yield aLienzo(img, 1, true);
-  // Ampliada, para cuando el documento es una parte chica del cuadro y las
-  // barras quedan de menos de un pixel.
-  yield aLienzo(img, 2, false);
+  yield aLienzo(img, { escala: 1, contraste: true });
+  // Ampliada, para cuando las barras quedan de menos de un pixel.
+  yield aLienzo(img, { escala: 2 });
+
+  // 2) Girada. En el campo la foto se saca con el telefono parado y el DNI
+  //    acostado, y el codigo queda VERTICAL: ZXing no lo busca de costado.
+  //    Probado con el DNI de Serrano: derecha no sale, girada 90 si.
+  yield aLienzo(img, { rotacion: 90 });
+  yield aLienzo(img, { rotacion: 270 });
+
+  // 3) Recortes ampliados. Cuando el DNI es una parte chica de la foto (con la
+  //    mano, el fondo, un reflejo encima), el lector no encuentra el codigo en
+  //    el cuadro entero pero si en un pedazo agrandado. Probado con el DNI de
+  //    Cruz: entera no sale en ninguna rotacion, recortada y ampliada si.
+  //    Se recorre una grilla de ventanas que se pisan a la mitad, primero la
+  //    franja del medio y de abajo, que es donde suele caer el codigo.
+  for (const rotacion of [0, 90]) {
+    // Ventanas de medio ancho por un cuarto de alto: alcanza para un DNI
+    // chico en el cuadro. Se probaron tambien ventanas mas altas y no
+    // encontraban nada que estas no, pero hacian el peor caso el doble de lento.
+    for (const [fw, fh] of [[0.5, 0.25]]) {
+      const ys: number[] = [];
+      for (let y = 0; y + fh <= 1.001; y += fh / 2) ys.push(y);
+      ys.sort((a, b) => Math.abs(a + fh / 2 - 0.6) - Math.abs(b + fh / 2 - 0.6));
+      for (const y of ys) {
+        for (let x = 0; x + fw <= 1.001; x += fw / 2) {
+          yield aLienzo(img, { rotacion, recorte: [x, y, fw, fh], escala: 2, contraste: true });
+        }
+      }
+    }
+  }
 }
 
 /** Tope de pixeles del canvas, para no volver a quedarnos sin memoria. */
 const PIXELES_MAXIMOS = 8_000_000;
 
-function aLienzo(img: HTMLImageElement, escala: number, contraste: boolean): HTMLCanvasElement | null {
+interface OpcionesLienzo {
+  escala?: number;
+  contraste?: boolean;
+  /** Grados: 0, 90, 180 o 270. */
+  rotacion?: number;
+  /** Pedazo de la foto a usar, en fracciones: [x, y, ancho, alto]. */
+  recorte?: [number, number, number, number];
+}
+
+function aLienzo(img: HTMLImageElement, o: OpcionesLienzo): HTMLCanvasElement | null {
   try {
-    const w0 = img.naturalWidth || img.width;
-    const h0 = img.naturalHeight || img.height;
-    if (!w0 || !h0) return null;
-    const tope = Math.sqrt(PIXELES_MAXIMOS / (w0 * h0));
-    const e = Math.min(escala, Math.max(0.1, tope));
+    const W = img.naturalWidth || img.width;
+    const H = img.naturalHeight || img.height;
+    if (!W || !H) return null;
+    const [fx, fy, fw, fh] = o.recorte ?? [0, 0, 1, 1];
+    const sx = fx * W, sy = fy * H, sw = fw * W, sh = fh * H;
+    const rot = ((o.rotacion ?? 0) % 360 + 360) % 360;
+    const deCostado = rot === 90 || rot === 270;
+    // Tope de pixeles: tener canvas gigantes es justo lo que hace que Android
+    // mate la pantalla.
+    const tope = Math.sqrt(PIXELES_MAXIMOS / (sw * sh));
+    const e = Math.min(o.escala ?? 1, Math.max(0.1, tope));
     const c = document.createElement('canvas');
-    c.width = Math.round(w0 * e);
-    c.height = Math.round(h0 * e);
+    c.width = Math.round((deCostado ? sh : sw) * e);
+    c.height = Math.round((deCostado ? sw : sh) * e);
     const ctx = c.getContext('2d', { willReadFrequently: true });
     if (!ctx) return null;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, 0, 0, c.width, c.height);
-    if (contraste) estirarContraste(ctx, c.width, c.height);
+    ctx.translate(c.width / 2, c.height / 2);
+    ctx.rotate((rot * Math.PI) / 180);
+    ctx.drawImage(img, sx, sy, sw, sh, (-sw * e) / 2, (-sh * e) / 2, sw * e, sh * e);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (o.contraste) estirarContraste(ctx, c.width, c.height);
     return c;
   } catch {
     return null;
