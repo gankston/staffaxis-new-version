@@ -22,6 +22,8 @@ export async function submissionRoutes(app) {
       // Cosecha abierta por origen y Tantero. Estos NUNCA se escriben en
       // minutes_worked ni se leen de ahi: la columna es el dato.
       cosecha_canadas, cosecha_inv, cosecha_bananas, tantero_invernadero, tantero_campo,
+      // Tipo "Bolsas" (cuantas de 25 y de 50 kg) y "Cambio de Bolsa" (un numero).
+      bolsas_25, bolsas_50, cambio_bolsa,
     } = req.body ?? {};
     if (!employee_id || !date) {
       return reply.status(400).send({ error: 'Faltan campos requeridos' });
@@ -74,9 +76,10 @@ export async function submissionRoutes(app) {
          etiquetado_lata_185, etiquetado_lata_750, etiquetado_lata_2500, etiquetado_lata_8kg, descarga_jaula, descarga_camion, carga_jaula, carga_camion_cantidad,
          cosecha_canadas, cosecha_inv, cosecha_bananas, tantero_invernadero, tantero_campo,
          carga_camion_bolsas_50, carga_camion_bolsas_25, carga_camion_bolsas_otro,
-         movimiento_estiba_bolsas_50, movimiento_estiba_bolsas_25, movimiento_estiba_bolsas_otro
+         movimiento_estiba_bolsas_50, movimiento_estiba_bolsas_25, movimiento_estiba_bolsas_otro,
+         bolsas_25, bolsas_50, cambio_bolsa
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47)
        ON CONFLICT (employee_id, date) WHERE NOT is_deleted
        DO UPDATE SET minutes_worked         = EXCLUDED.minutes_worked,
                      notes                  = EXCLUDED.notes,
@@ -117,6 +120,9 @@ export async function submissionRoutes(app) {
                      movimiento_estiba_bolsas_50 = EXCLUDED.movimiento_estiba_bolsas_50,
                      movimiento_estiba_bolsas_25 = EXCLUDED.movimiento_estiba_bolsas_25,
                      movimiento_estiba_bolsas_otro = EXCLUDED.movimiento_estiba_bolsas_otro,
+                     bolsas_25 = EXCLUDED.bolsas_25,
+                     bolsas_50 = EXCLUDED.bolsas_50,
+                     cambio_bolsa = EXCLUDED.cambio_bolsa,
                      -- Al editar una tarja ya cargada vuelve a quedar como recien enviada:
                      -- si el sector requiere aprobacion pasa de nuevo a 'pending' y se borra
                      -- la aprobacion anterior, porque el supervisor aprobo OTROS valores y
@@ -136,6 +142,7 @@ export async function submissionRoutes(app) {
         cosecha_canadas ?? null, cosecha_inv ?? null, cosecha_bananas ?? null, tantero_invernadero ?? null, tantero_campo ?? null,
         carga_camion_bolsas_50 ?? null, carga_camion_bolsas_25 ?? null, carga_camion_bolsas_otro ?? null,
         movimiento_estiba_bolsas_50 ?? null, movimiento_estiba_bolsas_25 ?? null, movimiento_estiba_bolsas_otro ?? null,
+        bolsas_25 ?? null, bolsas_50 ?? null, cambio_bolsa ?? null,
       ]
     );
 
@@ -177,6 +184,7 @@ export async function submissionRoutes(app) {
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.carga_camion_bolsas_50, s.carga_camion_bolsas_25, s.carga_camion_bolsas_otro,
               s.movimiento_estiba_bolsas_50, s.movimiento_estiba_bolsas_25, s.movimiento_estiba_bolsas_otro,
+              s.bolsas_25, s.bolsas_50, s.cambio_bolsa,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
               s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg,
               s.cosecha_canadas, s.cosecha_inv, s.cosecha_bananas, s.tantero_invernadero, s.tantero_campo, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,

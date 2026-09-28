@@ -201,6 +201,9 @@ export interface AdminReportRowDto {
   movimiento_estiba_bolsas_50?: number | null;
   movimiento_estiba_bolsas_25?: number | null;
   movimiento_estiba_bolsas_otro?: number | null;
+  bolsas_25?: number | null;
+  bolsas_50?: number | null;
+  cambio_bolsa?: number | null;
   etiquetado_lata_185?: number | null;
   etiquetado_lata_750?: number | null;
   etiquetado_lata_2500?: number | null;
@@ -249,6 +252,9 @@ export interface SupervisorPendingItemDto {
   movimientoEstibaBolsas50?: number | null;
   movimientoEstibaBolsas25?: number | null;
   movimientoEstibaBolsasOtro?: number | null;
+  bolsas25?: number | null;
+  bolsas50?: number | null;
+  cambioBolsa?: number | null;
   etiquetadoLata185?: number | null;
   etiquetadoLata750?: number | null;
   etiquetadoLata2500?: number | null;
@@ -285,6 +291,9 @@ export interface SupervisorResumenRowDto {
   movimiento_estiba_bolsas_50?: number | null;
   movimiento_estiba_bolsas_25?: number | null;
   movimiento_estiba_bolsas_otro?: number | null;
+  bolsas_25?: number | null;
+  bolsas_50?: number | null;
+  cambio_bolsa?: number | null;
   etiquetado_lata_185?: number | null;
   etiquetado_lata_750?: number | null;
   etiquetado_lata_2500?: number | null;
@@ -329,6 +338,9 @@ export interface CrearSubmissionBody {
   movimiento_estiba_bolsas_50?: number | null;
   movimiento_estiba_bolsas_25?: number | null;
   movimiento_estiba_bolsas_otro?: number | null;
+  bolsas_25?: number | null;
+  bolsas_50?: number | null;
+  cambio_bolsa?: number | null;
 }
 
 // ─── Endpoints ───────────────────────────────────────────────────────────────

@@ -24,6 +24,11 @@ export interface TiposCargaNuevos {
   movimientoEstibaBolsas50: number | null;
   movimientoEstibaBolsas25: number | null;
   movimientoEstibaBolsasOtro: number | null;
+  // Tipo "Bolsas": cuantas bolsas de 25 y de 50 kg. Y "Cambio de Bolsa", un numero.
+  // Son tipos NUEVOS, distintos de "bolseros", que sigue existiendo en otros sectores.
+  bolsas25: number | null;
+  bolsas50: number | null;
+  cambioBolsa: number | null;
   // Etiquetado abierto por tamaño de lata
   etiquetadoLata185: number | null;
   etiquetadoLata750: number | null;
@@ -61,6 +66,9 @@ export const TIPOS_NUEVOS_VACIO: TiposCargaNuevos = {
   movimientoEstibaBolsas50: null,
   movimientoEstibaBolsas25: null,
   movimientoEstibaBolsasOtro: null,
+  bolsas25: null,
+  bolsas50: null,
+  cambioBolsa: null,
   etiquetadoLata185: null,
   etiquetadoLata750: null,
   etiquetadoLata2500: null,
@@ -106,6 +114,9 @@ export function estaVacio(t: TiposCargaNuevos): boolean {
     t.movimientoEstibaBolsas50 === null &&
     t.movimientoEstibaBolsas25 === null &&
     t.movimientoEstibaBolsasOtro === null &&
+    t.bolsas25 === null &&
+    t.bolsas50 === null &&
+    t.cambioBolsa === null &&
     t.etiquetadoLata185 === null &&
     t.etiquetadoLata750 === null &&
     t.etiquetadoLata2500 === null &&
@@ -152,6 +163,9 @@ export function sumarTipos(a: TiposCargaNuevos, b: TiposCargaNuevos): TiposCarga
     movimientoEstibaBolsas50: sumarNum(a.movimientoEstibaBolsas50, b.movimientoEstibaBolsas50),
     movimientoEstibaBolsas25: sumarNum(a.movimientoEstibaBolsas25, b.movimientoEstibaBolsas25),
     movimientoEstibaBolsasOtro: sumarNum(a.movimientoEstibaBolsasOtro, b.movimientoEstibaBolsasOtro),
+    bolsas25: sumarNum(a.bolsas25, b.bolsas25),
+    bolsas50: sumarNum(a.bolsas50, b.bolsas50),
+    cambioBolsa: sumarNum(a.cambioBolsa, b.cambioBolsa),
     etiquetadoLata185: sumarNum(a.etiquetadoLata185, b.etiquetadoLata185),
     etiquetadoLata750: sumarNum(a.etiquetadoLata750, b.etiquetadoLata750),
     etiquetadoLata2500: sumarNum(a.etiquetadoLata2500, b.etiquetadoLata2500),

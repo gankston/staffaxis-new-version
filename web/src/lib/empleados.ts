@@ -170,6 +170,9 @@ export interface ColumnasTiposNuevos {
   movimiento_estiba_bolsas_50?: number | null;
   movimiento_estiba_bolsas_25?: number | null;
   movimiento_estiba_bolsas_otro?: number | null;
+  bolsas_25?: number | null;
+  bolsas_50?: number | null;
+  cambio_bolsa?: number | null;
   etiquetado_lata_185?: number | null;
   etiquetado_lata_750?: number | null;
   etiquetado_lata_2500?: number | null;
@@ -200,6 +203,9 @@ export function tiposDesdeColumnas(f: ColumnasTiposNuevos): TiposCargaNuevos {
     movimientoEstibaBolsas50: aNumero(f.movimiento_estiba_bolsas_50),
     movimientoEstibaBolsas25: aNumero(f.movimiento_estiba_bolsas_25),
     movimientoEstibaBolsasOtro: aNumero(f.movimiento_estiba_bolsas_otro),
+    bolsas25: aNumero(f.bolsas_25),
+    bolsas50: aNumero(f.bolsas_50),
+    cambioBolsa: aNumero(f.cambio_bolsa),
     etiquetadoLata185: aNumero(f.etiquetado_lata_185),
     etiquetadoLata750: aNumero(f.etiquetado_lata_750),
     etiquetadoLata2500: aNumero(f.etiquetado_lata_2500),

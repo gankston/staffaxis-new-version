@@ -98,6 +98,12 @@ export function lineasDeTotales(t: TotalesTarja): string[] {
   if (n.hasFumigadas !== null && n.hasFumigadas > 0) out.push(`${fmtNumero(n.hasFumigadas)} has fumigadas`);
   if (n.siembraTrilla !== null && n.siembraTrilla > 0) out.push(`${fmtNumero(n.siembraTrilla)} siembra/trilla`);
   if (n.bolseros !== null && n.bolseros > 0) out.push(`${fmtNumero(n.bolseros)} bolseros`);
+  const bolsas = [
+    n.bolsas25 ? `25kg: ${fmtNumero(n.bolsas25)}` : null,
+    n.bolsas50 ? `50kg: ${fmtNumero(n.bolsas50)}` : null,
+  ].filter(Boolean) as string[];
+  if (bolsas.length) out.push(`bolsas ${bolsas.join(' · ')}`);
+  if (n.cambioBolsa) out.push(`${fmtNumero(n.cambioBolsa)} cambio de bolsa`);
   if (n.etiquetado !== null && n.etiquetado > 0) out.push(`${fmtNumero(n.etiquetado)} etiquetado`);
 
   const latas = [
@@ -169,6 +175,9 @@ export function aTiposNuevos(p: SupervisorPendingItemDto): TiposCargaNuevos {
     movimientoEstibaBolsas50: aNumero(p.movimientoEstibaBolsas50),
     movimientoEstibaBolsas25: aNumero(p.movimientoEstibaBolsas25),
     movimientoEstibaBolsasOtro: aNumero(p.movimientoEstibaBolsasOtro),
+    bolsas25: aNumero(p.bolsas25),
+    bolsas50: aNumero(p.bolsas50),
+    cambioBolsa: aNumero(p.cambioBolsa),
     // Ojo: TODAS estas columnas son NUMERIC y llegan como TEXTO ("3", no 3).
     // Sin aNumero, sumarlas las concatena y fmtNumero directamente explota
     // porque un string no tiene .toFixed().
@@ -260,6 +269,8 @@ const TODOS_LOS_FILTROS: TipoCargaFiltro[] = [
   { slug: 'has_fumigadas', etiqueta: 'Has fumigadas' },
   { slug: 'siembra_trilla', etiqueta: 'Siembra / Trilla' },
   { slug: 'bolseros', etiqueta: 'Bolseros' },
+  { slug: 'bolsas', etiqueta: 'Bolsas' },
+  { slug: 'cambio_bolsa', etiqueta: 'Cambio de Bolsa' },
   { slug: 'etiquetado', etiqueta: 'Etiquetado' },
   { slug: 'descarga', etiqueta: 'Descarga' },
   { slug: 'carga', etiqueta: 'Carga' },
@@ -308,6 +319,10 @@ export function tieneDato(filtro: TipoCargaFiltro, item: PendienteConTipos): boo
       return t.siembraTrilla !== null;
     case 'bolseros':
       return t.bolseros !== null;
+    case 'bolsas':
+      return t.bolsas25 !== null || t.bolsas50 !== null;
+    case 'cambio_bolsa':
+      return t.cambioBolsa !== null;
     case 'etiquetado':
       return t.etiquetado !== null;
     case 'carga_camion':

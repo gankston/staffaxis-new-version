@@ -414,6 +414,53 @@ export function FormularioCarga({
           placeholder="Cantidad (obligatorio)"
         />
       )}
+      {/*
+        "Bolsas" es un tipo NUEVO, no un cambio de nombre de "Bolseros": ese
+        sigue existiendo tal cual en los sectores que lo usan.
+      */}
+      {tiposCarga.includes('bolsas') && (
+        <CargaSubtipos
+          label="Bolsas"
+          checked={valores.porBolsas}
+          onCheck={(v) =>
+            set({
+              porBolsas: v,
+              bolsas25Check: false,
+              bolsas25Valor: '',
+              bolsas50Check: false,
+              bolsas50Valor: '',
+            })
+          }
+          subtipos={[
+            {
+              label: '25 kg',
+              etiquetaCampo: 'Cantidad de bolsas',
+              check: valores.bolsas25Check,
+              onCheck: (v) => set({ bolsas25Check: v, bolsas25Valor: v ? valores.bolsas25Valor : '' }),
+              valor: valores.bolsas25Valor,
+              onValor: (v) => set({ bolsas25Valor: v }),
+            },
+            {
+              label: '50 kg',
+              etiquetaCampo: 'Cantidad de bolsas',
+              check: valores.bolsas50Check,
+              onCheck: (v) => set({ bolsas50Check: v, bolsas50Valor: v ? valores.bolsas50Valor : '' }),
+              valor: valores.bolsas50Valor,
+              onValor: (v) => set({ bolsas50Valor: v }),
+            },
+          ]}
+        />
+      )}
+      {tiposCarga.includes('cambio_bolsa') && (
+        <CargaSimple
+          label="Cambio de Bolsa"
+          checked={valores.porCambioBolsa}
+          valor={valores.cambioBolsaValor}
+          onCheck={(v) => set({ porCambioBolsa: v, cambioBolsaValor: v ? valores.cambioBolsaValor : '' })}
+          onValor={(v) => set({ cambioBolsaValor: v })}
+          placeholder="Cantidad (obligatorio)"
+        />
+      )}
       {tiposCarga.includes('etiquetado') && (
         <CargaPorLata
           checked={valores.porEtiquetado}

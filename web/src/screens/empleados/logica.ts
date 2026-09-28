@@ -112,6 +112,15 @@ export interface ValoresCarga {
   movimientoEstiba50Bolsas: string;
   movimientoEstiba25Bolsas: string;
   movimientoEstibaOtroBolsas: string;
+  // Tipo "Bolsas": se tilda y se abren 25 kg y 50 kg, cada uno con su cantidad.
+  porBolsas: boolean;
+  bolsas25Check: boolean;
+  bolsas25Valor: string;
+  bolsas50Check: boolean;
+  bolsas50Valor: string;
+  // "Cambio de Bolsa": un solo numero.
+  porCambioBolsa: boolean;
+  cambioBolsaValor: string;
 }
 
 export const VALORES_CARGA_INICIAL: ValoresCarga = {
@@ -172,6 +181,13 @@ export const VALORES_CARGA_INICIAL: ValoresCarga = {
   movimientoEstiba50Bolsas: '',
   movimientoEstiba25Bolsas: '',
   movimientoEstibaOtroBolsas: '',
+  porBolsas: false,
+  bolsas25Check: false,
+  bolsas25Valor: '',
+  bolsas50Check: false,
+  bolsas50Valor: '',
+  porCambioBolsa: false,
+  cambioBolsaValor: '',
 };
 
 /**
@@ -233,6 +249,13 @@ export function puedeGuardar(v: ValoresCarga): boolean {
     if (v.movimientoEstibaOtroCheck && (!v.movimientoEstibaOtro.trim() || !v.movimientoEstibaOtroBolsas.trim()))
       return false;
   }
+  // Bolsas: al menos un peso tildado, y cada peso tildado con su cantidad.
+  if (v.porBolsas) {
+    if (!v.bolsas25Check && !v.bolsas50Check) return false;
+    if (v.bolsas25Check && !v.bolsas25Valor.trim()) return false;
+    if (v.bolsas50Check && !v.bolsas50Valor.trim()) return false;
+  }
+  if (v.porCambioBolsa && !v.cambioBolsaValor.trim()) return false;
   return true;
 }
 
@@ -291,6 +314,9 @@ export function buildTiposNuevos(v: ValoresCarga): TiposCargaNuevos {
       v.porMovimientoEstiba && v.movimientoEstibaOtroCheck
         ? toFloatOrNull(comaAPunto(v.movimientoEstibaOtroBolsas))
         : null,
+    bolsas25: v.porBolsas && v.bolsas25Check ? toFloatOrNull(comaAPunto(v.bolsas25Valor)) : null,
+    bolsas50: v.porBolsas && v.bolsas50Check ? toFloatOrNull(comaAPunto(v.bolsas50Valor)) : null,
+    cambioBolsa: v.porCambioBolsa ? toFloatOrNull(comaAPunto(v.cambioBolsaValor)) : null,
     movimientoEstibaOtro:
       v.porMovimientoEstiba && v.movimientoEstibaOtroCheck && v.movimientoEstibaOtro.trim()
         ? v.movimientoEstibaOtro.trim()
@@ -325,6 +351,9 @@ export function payloadTiposNuevos(t: TiposCargaNuevos) {
     movimiento_estiba_bolsas_50: t.movimientoEstibaBolsas50,
     movimiento_estiba_bolsas_25: t.movimientoEstibaBolsas25,
     movimiento_estiba_bolsas_otro: t.movimientoEstibaBolsasOtro,
+    bolsas_25: t.bolsas25,
+    bolsas_50: t.bolsas50,
+    cambio_bolsa: t.cambioBolsa,
     etiquetado_lata_185: t.etiquetadoLata185,
     etiquetado_lata_750: t.etiquetadoLata750,
     etiquetado_lata_2500: t.etiquetadoLata2500,
@@ -457,6 +486,13 @@ export function valoresDesdeRegistro(
     movimientoEstiba25Bolsas: t.movimientoEstibaBolsas25 !== null ? fmtValor(t.movimientoEstibaBolsas25) : '',
     movimientoEstibaOtroBolsas:
       t.movimientoEstibaBolsasOtro !== null ? fmtValor(t.movimientoEstibaBolsasOtro) : '',
+    porBolsas: t.bolsas25 !== null || t.bolsas50 !== null,
+    bolsas25Check: t.bolsas25 !== null,
+    bolsas25Valor: t.bolsas25 !== null ? fmtValor(t.bolsas25) : '',
+    bolsas50Check: t.bolsas50 !== null,
+    bolsas50Valor: t.bolsas50 !== null ? fmtValor(t.bolsas50) : '',
+    porCambioBolsa: t.cambioBolsa !== null,
+    cambioBolsaValor: t.cambioBolsa !== null ? fmtValor(t.cambioBolsa) : '',
   };
 }
 
@@ -533,6 +569,13 @@ export function formatTiposNuevosRegistro(
     t.movimientoEstibaOtro != null ? bolsas(t.movimientoEstibaOtro, t.movimientoEstibaBolsasOtro) : null,
   ].filter(Boolean).join(' ');
   if (estiba.trim()) partes.push(`Mov. Estiba ${estiba}`);
+
+  const bolsasTxt = [
+    t.bolsas25 != null ? `25kg: ${fmtValor(t.bolsas25)}` : null,
+    t.bolsas50 != null ? `50kg: ${fmtValor(t.bolsas50)}` : null,
+  ].filter(Boolean).join(' ');
+  if (bolsasTxt) partes.push(`Bolsas ${bolsasTxt}`);
+  if (t.cambioBolsa != null) partes.push(`Cambio de Bolsa ${fmtValor(t.cambioBolsa)}`);
 
   return partes.join(' + ');
 }

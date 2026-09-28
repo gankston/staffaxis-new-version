@@ -355,6 +355,7 @@ export async function adminRoutes(app) {
               s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
               s.carga_camion_bolsas_50, s.carga_camion_bolsas_25, s.carga_camion_bolsas_otro,
               s.movimiento_estiba_bolsas_50, s.movimiento_estiba_bolsas_25, s.movimiento_estiba_bolsas_otro,
+              s.bolsas_25, s.bolsas_50, s.cambio_bolsa,
               s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
               s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg,
               s.cosecha_canadas, s.cosecha_inv, s.cosecha_bananas, s.tantero_invernadero, s.tantero_campo, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,
