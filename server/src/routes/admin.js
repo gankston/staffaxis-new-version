@@ -380,9 +380,15 @@ export async function adminRoutes(app) {
   app.get('/api/admin/absences', { preHandler: verifyAdmin }, async (req, reply) => {
     const { sector_id, start_date, end_date } = req.query;
     if (!sector_id) return reply.status(400).send({ error: 'sector_id requerido' });
+    // employee_id y las fechas como texto 'YYYY-MM-DD': el Excel de StaffAdmin
+    // busca la ausencia por empleado y compara la fecha como texto. Antes no se
+    // mandaba el employee_id y la fecha salia como "2026-09-24T03:00:00.000Z",
+    // asi que ninguna ausencia llegaba nunca a la planilla.
     let query = `
-      SELECT a.id, e.first_name, e.last_name, e.dni,
-             a.start_date, a.end_date, a.is_justified, a.observations
+      SELECT a.id, a.employee_id, e.first_name, e.last_name, e.dni,
+             to_char(a.start_date, 'YYYY-MM-DD') AS start_date,
+             to_char(a.end_date, 'YYYY-MM-DD') AS end_date,
+             a.is_justified, a.observations
       FROM absences a
       JOIN employees e ON e.id = a.employee_id
       WHERE e.sector_id = $1 AND e.is_active = true`;

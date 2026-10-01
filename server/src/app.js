@@ -15,6 +15,7 @@ import { supervisorRoutes } from './routes/supervisor.js';
 import { statsRoutes }      from './routes/stats.js';
 import { photoRoutes }      from './routes/photos.js';
 import { webAppRoutes }     from './routes/webApp.js';
+import { certificadoRoutes } from './routes/certificados.js';
 
 // Espera a que la DB esté lista (la red interna de Railway puede tardar al arrancar).
 // Reintenta con paciencia en vez de crashear al primer timeout.
@@ -45,6 +46,34 @@ async function runMigrations() {
   await db.query(`
     ALTER TABLE employees ADD COLUMN IF NOT EXISTS dni_foto_dorso TEXT DEFAULT NULL;
   `);
+  // Certificados medicos: el archivo va al Volume (como el DNI); en la base
+  // queda el nombre del archivo y UNA FILA POR DIA cubierto. Borrado logico.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS certificados_medicos (
+      id              UUID PRIMARY KEY,
+      employee_id     UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      archivo         TEXT NOT NULL,
+      tipo_archivo    TEXT NOT NULL,
+      nombre_original TEXT,
+      observaciones   TEXT,
+      is_deleted      BOOLEAN NOT NULL DEFAULT false,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS certificado_medico_dias (
+      certificado_id UUID NOT NULL REFERENCES certificados_medicos(id) ON DELETE CASCADE,
+      employee_id    UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      fecha          DATE NOT NULL,
+      is_deleted     BOOLEAN NOT NULL DEFAULT false,
+      PRIMARY KEY (certificado_id, fecha)
+    );
+  `);
+  // Un dia de un empleado no puede quedar con dos certificados vivos.
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS certificado_dia_unico
+      ON certificado_medico_dias (employee_id, fecha) WHERE NOT is_deleted;
+  `);
 }
 
 const start = async () => {
@@ -63,6 +92,7 @@ const start = async () => {
   await app.register(statsRoutes);
   await app.register(photoRoutes);
   await app.register(webAppRoutes);
+  await app.register(certificadoRoutes);
 
   app.get('/health', async () => ({ ok: true }));
 
