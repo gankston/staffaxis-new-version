@@ -25,6 +25,8 @@ const TIPOS = {
 };
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+// Un id que no es UUID hace fallar la consulta en Postgres (500): se frena antes.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fechaReal = (s) => {
   if (!FECHA.test(s)) return false;
   const d = new Date(`${s}T00:00:00Z`);
@@ -47,6 +49,8 @@ export async function certificadoRoutes(app) {
   app.post('/api/admin/certificados', { preHandler: verifyAdmin }, async (req, reply) => {
     const { employee_id, fechas: fechasTxt, observaciones } = req.query ?? {};
     if (!employee_id) return reply.status(400).send({ error: 'Falta el empleado' });
+    if (!UUID.test(employee_id)) return reply.status(404).send({ error: 'Empleado no encontrado' });
+    if (!req.isMultipart()) return reply.status(400).send({ error: 'Falta el archivo del certificado' });
 
     const fechas = [...new Set(String(fechasTxt ?? '').split(',').map((s) => s.trim()).filter(Boolean))].sort();
     if (!fechas.length) return reply.status(400).send({ error: 'Elegí al menos un día' });
@@ -130,6 +134,9 @@ export async function certificadoRoutes(app) {
   app.get('/api/admin/certificados', { preHandler: verifyAdmin }, async (req, reply) => {
     const { sector_id, employee_id, start_date, end_date } = req.query ?? {};
     if (!sector_id && !employee_id) return reply.status(400).send({ error: 'Falta sector_id o employee_id' });
+    if ((sector_id && !UUID.test(sector_id)) || (employee_id && !UUID.test(employee_id))) {
+      return reply.status(400).send({ error: 'sector_id o employee_id inválido' });
+    }
     if ((start_date && !fechaReal(start_date)) || (end_date && !fechaReal(end_date))) {
       return reply.status(400).send({ error: 'Rango de fechas inválido' });
     }
@@ -148,8 +155,10 @@ export async function certificadoRoutes(app) {
 
   // GET /api/admin/certificados/:id/archivo — la foto o el PDF
   app.get('/api/admin/certificados/:id/archivo', { preHandler: verifyAdmin }, async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.status(404).send({ error: 'Certificado no encontrado' });
+    // Uno borrado ya no se muestra en ningun lado: tampoco se baja.
     const r = await db.query(
-      'SELECT archivo, tipo_archivo, nombre_original FROM certificados_medicos WHERE id = $1',
+      'SELECT archivo, tipo_archivo, nombre_original FROM certificados_medicos WHERE id = $1 AND NOT is_deleted',
       [req.params.id]
     );
     const c = r.rows[0];
@@ -163,6 +172,7 @@ export async function certificadoRoutes(app) {
   // dias vuelven a mostrar lo que tenian cargado, y se puede deshacer.
   app.delete('/api/admin/certificados/:id', { preHandler: verifyAdmin }, async (req, reply) => {
     const { id } = req.params;
+    if (!UUID.test(id)) return reply.status(404).send({ error: 'Certificado no encontrado' });
     const r = await db.query(
       'UPDATE certificados_medicos SET is_deleted = true WHERE id = $1 AND NOT is_deleted RETURNING id',
       [id]
