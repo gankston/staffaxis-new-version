@@ -144,38 +144,53 @@ export async function employeeRoutes(app) {
       return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
     }
 
-    // ¿Existe en el mismo sector?
-    if (!force_transfer && dniValue) {
-      const same = await db.query(
-        'SELECT id FROM employees WHERE dni = $1 AND sector_id = $2 AND is_active = true',
-        [dniValue, sector_id]
-      );
-      if (same.rows[0]) return reply.status(409).send({ error: 'Empleado ya existe en este sector' });
-    }
-
-    // ¿Existe en otro sector?
+    // Ya hay una ficha con este DNI? La base garantiza que hay a lo sumo UNA
+    // (employees_dni_unico abarca activos Y ocultos), asi que se busca esa y se
+    // decide sobre ella.
+    //
+    // Antes se miraba solo a los activos. Si el DNI estaba OCULTO en otro
+    // sector, se pasaba de largo, el INSERT reventaba contra el indice y el
+    // encargado veia un error que no decia nada. Para destrabarse cargaban al
+    // empleado a mano con OTRO DNI: paso el 29/09 en ZANJA ALDANA.
     if (dniValue) {
-      const other = await db.query(
-        'SELECT id, sector_id FROM employees WHERE dni = $1 AND sector_id != $2 AND is_active = true',
-        [dniValue, sector_id]
-      );
-      if (other.rows[0] && !force_transfer) {
-        return reply.status(422).send({ error: 'Empleado existe en otro sector', code: 'EXISTS_OTHER_SECTOR' });
-      }
-      if (other.rows[0] && force_transfer) {
-        // Transferencia: mover al nuevo sector
-        const fromSectorId = other.rows[0].sector_id;
+      const existente = (await db.query(
+        'SELECT id, sector_id, is_active FROM employees WHERE dni = $1 LIMIT 1',
+        [dniValue]
+      )).rows[0];
+
+      if (existente) {
+        const mismoSector = existente.sector_id === sector_id;
+
+        if (mismoSector && existente.is_active) {
+          if (!force_transfer) return reply.status(409).send({ error: 'Empleado ya existe en este sector' });
+          // Ya esta donde lo quieren: no hay nada que mover.
+          const ya = await db.query(
+            `SELECT id, sector_id, first_name, last_name, dni, is_active, dni_foto_frente, dni_foto_dorso
+             FROM employees WHERE id = $1`, [existente.id]
+          );
+          return reply.send(toDto(ya.rows[0]));
+        }
+
+        // En otro sector (activo u oculto), u oculto en este: la app ofrece
+        // transferirlo. La app agarra antes el "oculto en este sector" y ofrece
+        // volver a listarlo; si igual llegara aca, transferir = volver a listar.
+        if (!force_transfer) {
+          return reply.status(422).send({ error: 'Empleado existe en otro sector', code: 'EXISTS_OTHER_SECTOR' });
+        }
+
         const updated = await db.query(
-          `UPDATE employees SET sector_id = $1, updated_at = NOW()
+          `UPDATE employees SET sector_id = $1, is_active = true, updated_at = NOW()
            WHERE id = $2 RETURNING id, sector_id, first_name, last_name, dni, is_active, dni_foto_frente, dni_foto_dorso`,
-          [sector_id, other.rows[0].id]
+          [sector_id, existente.id]
         );
-        // Registrar el traslado para que el export muestre "Se fue a X" / "Viene de Y"
-        await db.query(
-          `INSERT INTO transfers (employee_id, from_sector_id, to_sector_id)
-           VALUES ($1, $2, $3)`,
-          [other.rows[0].id, fromSectorId, sector_id]
-        ).catch(() => {}); // no rompe el traslado si falla el log
+        if (!mismoSector) {
+          // Registrar el traslado para que el export muestre "Se fue a X" / "Viene de Y"
+          await db.query(
+            `INSERT INTO transfers (employee_id, from_sector_id, to_sector_id)
+             VALUES ($1, $2, $3)`,
+            [existente.id, existente.sector_id, sector_id]
+          ).catch(() => {}); // no rompe el traslado si falla el log
+        }
         return reply.send(toDto(updated.rows[0]));
       }
     }

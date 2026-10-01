@@ -96,25 +96,85 @@ export async function leerPdf417(dataUrl: string): Promise<string | null> {
   const img = await conTope(cargarImagen(dataUrl), 15_000);
   if (!img) return null;
 
-  // 1) ZXing PRIMERO, y el lector del sistema despues. El orden es al reves de
-  //    lo que parece razonable (el del sistema es nativo y mas rapido) y esta
-  //    asi a proposito:
+  // El orden esta pensado con 60 fotos reales de altas:
   //
-  //    el BarcodeDetector de Android no es javascript, es una llamada a Google
-  //    Play Services. Si esa llamada se cae, no hay try/catch que valga: se
-  //    lleva puesto el proceso del WebView, o sea la app entera, al instante y
-  //    sin dejar ningun error. Y es el UNICO paso de todo el escaneo que no se
-  //    puede probar desde la PC, porque ahi BarcodeDetector no existe.
-  //
-  //    ZXing lee las fotos de verdad en menos de medio segundo (probado con la
-  //    que venia fallando: 53 ms), asi que poniendolo adelante el camino nativo
-  //    directamente no se pisa salvo que ZXing no pueda.
+  // 1) ZXing, pero solo los intentos BARATOS (foto entera, contraste, ampliada,
+  //    girada). Leen el 80% de las fotos en ~0,3 s, y asi el lector del sistema
+  //    ni se toca en la mayoria de los casos.
   marcarPaso('escaneo: leyendo con ZXing');
-  const zxing = await conTope(conZxing(img), 30_000);
-  if (zxing) return zxing;
+  const rapido = await conTope(conZxing(img, lienzosRapidos(img), 8_000), 12_000);
+  if (rapido) return rapido;
 
+  // 2) El lector del sistema de Android. Es el que mejor lee fotos de camara:
+  //    va SEGUNDO y no ultimo. Cuando iba despues de toda la grilla de abajo, el
+  //    encargado esperaba hasta 15 segundos mirando "Leyendo..." antes de que
+  //    llegara a probar el lector que si lo leia.
   marcarPaso('escaneo: lector de codigos de Android');
-  return await conTope(conDetectorDelSistema(img), 15_000);
+  const nativo = await conTope(conDetectorDelSistema(img), 15_000);
+  if (nativo) return nativo;
+
+  // 3) Ultimo recurso: recortes ampliados (DNI chico en el cuadro). Es lo caro.
+  marcarPaso('escaneo: ZXing con recortes');
+  return await conTope(conZxing(img, lienzosRecortes(img), 12_000), 16_000);
+}
+
+/**
+ * Una lectura solo vale si es un DNI de verdad.
+ *
+ * ZXing a veces no falla: DEVUELVE BASURA. Probado con 60 fotos reales de altas,
+ * 4 dieron cosas como "0070437834‹üTORRES—b>ÞOS FABIANG(Q4910)(2=àìý·/1J©". Antes
+ * eso se aceptaba como lectura, el encargado veia "no tiene el formato del DNI",
+ * y el lector de Android -que lo hubiera leido bien- ni llegaba a probar.
+ *
+ * Por eso dos filtros: que no haya ningun caracter raro (el codigo del DNI es
+ * texto comun separado por @), y que se pueda interpretar como DNI. Y como los
+ * datos escaneados quedan BLOQUEADOS en el formulario, no puede pasar nada que
+ * el encargado despues no pueda corregir.
+ */
+const SOLO_TEXTO_DNI = /^[0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ@/ .,'-]+$/;
+
+function lecturaValida(texto: string | null | undefined): string | null {
+  if (!texto) return null;
+  const t = texto.trim();
+  if (!SOLO_TEXTO_DNI.test(t)) return null;
+  if (!parsearDni(t)) return null;
+  return estructuraCoherente(t) ? t : null;
+}
+
+const FECHA = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+const fechaReal = (s: string) => {
+  const m = FECHA.exec(s.trim());
+  if (!m) return false;
+  const [d, mes, a] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  return d >= 1 && d <= 31 && mes >= 1 && mes <= 12 && a >= 1900 && a <= 2100;
+};
+
+/**
+ * Una lectura rota puede quedar con todos los caracteres "limpios" y aun asi
+ * traer cualquier cosa: un DNI con los numeros cambiados, un nombre a medias.
+ * Paso de verdad: el 23/09 se dio de alta "CASTILLO NILDA CQ STINA" con el DNI
+ * 30118275, y la foto guardada es el DNI 29059538 de CASTILLO CRISTINA, que ya
+ * existia. Quedo la misma persona dos veces, una con un DNI ajeno.
+ *
+ * El codigo del DNI tiene una estructura fija, y una lectura corrupta casi
+ * siempre rompe alguno de sus campos:
+ *   tramite(11 digitos)@APELLIDO@NOMBRES@SEXO@DNI@EJEMPLAR@NACIMIENTO@EMISION@...
+ * En los ejemplares viejos el orden cambia, asi que ahi se exige lo minimo que
+ * todos traen: una fecha real y el sexo.
+ */
+function estructuraCoherente(t: string): boolean {
+  const p = t.split('@').map((x) => x.trim());
+  const formatoNuevo = p.length >= 8 && /^\d{11}$/.test(p[0]);
+  if (formatoNuevo) {
+    return (
+      /^[MFX]$/i.test(p[3]) &&
+      /^\d{7,9}$/.test(p[4]) &&
+      /^[A-Z]$/i.test(p[5]) &&
+      fechaReal(p[6]) &&
+      fechaReal(p[7])
+    );
+  }
+  return p.some(fechaReal) && p.some((x) => /^[MFX]$/i.test(x));
 }
 
 async function conDetectorDelSistema(img: HTMLImageElement): Promise<string | null> {
@@ -124,7 +184,11 @@ async function conDetectorDelSistema(img: HTMLImageElement): Promise<string | nu
     const formatos = await Detector.getSupportedFormats?.();
     if (formatos && !formatos.includes('pdf417')) return null;
     const encontrados = await new Detector({ formats: ['pdf417'] }).detect(img);
-    return encontrados[0]?.rawValue ?? null;
+    for (const e of encontrados) {
+      const v = lecturaValida(e.rawValue);
+      if (v) return v;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -150,7 +214,11 @@ async function conDetectorDelSistema(img: HTMLImageElement): Promise<string | nu
  * Igual quedan los dos: Global primero, Hybrid despues, porque en una foto con
  * sombra fuerte de un lado puede ganar Hybrid.
  */
-async function conZxing(img: HTMLImageElement): Promise<string | null> {
+async function conZxing(
+  img: HTMLImageElement,
+  lienzos: Generator<HTMLCanvasElement | null>,
+  topeMs: number,
+): Promise<string | null> {
   let z: typeof import('@zxing/library');
   try {
     marcarPaso('escaneo: bajando el lector ZXing');
@@ -164,9 +232,10 @@ async function conZxing(img: HTMLImageElement): Promise<string | null> {
 
   // Tope de tiempo REAL. Sin esto, con una foto sin codigo recorre todos los
   // intentos: en la PC eran 10 segundos, en un telefono puede ser el triple.
-  const limite = performance.now() + 15_000;
+  const limite = performance.now() + topeMs;
   let intento = 0;
-  for (const lienzo of lienzosAProbar(img)) {
+  void img;
+  for (const lienzo of lienzos) {
     if (!lienzo) continue;
     if (performance.now() > limite) break;
     // Se le devuelve el control a la pantalla entre intento e intento. El
@@ -180,8 +249,12 @@ async function conZxing(img: HTMLImageElement): Promise<string | null> {
         const mapa = new z.BinaryBitmap(
           new Binarizador(new z.HTMLCanvasElementLuminanceSource(lienzo)),
         );
-        const texto = new z.PDF417Reader().decode(mapa, hints).getText();
-        if (texto) return texto;
+        const texto = lecturaValida(new z.PDF417Reader().decode(mapa, hints).getText());
+        if (texto) {
+          lienzo.width = 0;
+          lienzo.height = 0;
+          return texto;
+        }
       } catch {
         /* esta combinacion no lo encontro, se prueba la siguiente */
       }
@@ -199,38 +272,37 @@ async function conZxing(img: HTMLImageElement): Promise<string | null> {
  * cara. Se arman de a una y a medida que se piden: tener tres canvas grandes
  * vivos al mismo tiempo es justo lo que hace que Android mate la pantalla.
  */
-function* lienzosAProbar(img: HTMLImageElement): Generator<HTMLCanvasElement | null> {
-  // 1) La foto entera, derecha. Es lo que alcanza casi siempre.
+function* lienzosRapidos(img: HTMLImageElement): Generator<HTMLCanvasElement | null> {
+  // La foto entera, derecha. Es lo que alcanza casi siempre.
   yield aLienzo(img, { escala: 1 });
   // Contraste estirado: levanta los codigos lavados (foto a una pantalla).
   yield aLienzo(img, { escala: 1, contraste: true });
   // Ampliada, para cuando las barras quedan de menos de un pixel.
   yield aLienzo(img, { escala: 2 });
-
-  // 2) Girada. En el campo la foto se saca con el telefono parado y el DNI
-  //    acostado, y el codigo queda VERTICAL: ZXing no lo busca de costado.
-  //    Probado con el DNI de Serrano: derecha no sale, girada 90 si.
+  // Girada. En el campo la foto se saca con el telefono parado y el DNI
+  // acostado, y el codigo queda VERTICAL: ZXing no lo busca de costado.
+  // Probado con el DNI de Serrano: derecha no sale, girada 90 si.
   yield aLienzo(img, { rotacion: 90 });
   yield aLienzo(img, { rotacion: 270 });
+}
 
-  // 3) Recortes ampliados. Cuando el DNI es una parte chica de la foto (con la
-  //    mano, el fondo, un reflejo encima), el lector no encuentra el codigo en
-  //    el cuadro entero pero si en un pedazo agrandado. Probado con el DNI de
-  //    Cruz: entera no sale en ninguna rotacion, recortada y ampliada si.
-  //    Se recorre una grilla de ventanas que se pisan a la mitad, primero la
-  //    franja del medio y de abajo, que es donde suele caer el codigo.
+/**
+ * Recortes ampliados. Cuando el DNI es una parte chica de la foto (con la mano,
+ * el fondo, un reflejo encima), el lector no encuentra el codigo en el cuadro
+ * entero pero si en un pedazo agrandado. Probado con el DNI de Cruz: entera no
+ * sale en ninguna rotacion, recortada y ampliada si. Es lo mas caro: va al final.
+ */
+function* lienzosRecortes(img: HTMLImageElement): Generator<HTMLCanvasElement | null> {
   for (const rotacion of [0, 90]) {
-    // Ventanas de medio ancho por un cuarto de alto: alcanza para un DNI
-    // chico en el cuadro. Se probaron tambien ventanas mas altas y no
-    // encontraban nada que estas no, pero hacian el peor caso el doble de lento.
-    for (const [fw, fh] of [[0.5, 0.25]]) {
-      const ys: number[] = [];
-      for (let y = 0; y + fh <= 1.001; y += fh / 2) ys.push(y);
-      ys.sort((a, b) => Math.abs(a + fh / 2 - 0.6) - Math.abs(b + fh / 2 - 0.6));
-      for (const y of ys) {
-        for (let x = 0; x + fw <= 1.001; x += fw / 2) {
-          yield aLienzo(img, { rotacion, recorte: [x, y, fw, fh], escala: 2, contraste: true });
-        }
+    // Ventanas de medio ancho por un cuarto de alto, que se pisan a la mitad;
+    // primero la franja del medio y de abajo, que es donde suele caer el codigo.
+    const [fw, fh] = [0.5, 0.25];
+    const ys: number[] = [];
+    for (let y = 0; y + fh <= 1.001; y += fh / 2) ys.push(y);
+    ys.sort((a, b) => Math.abs(a + fh / 2 - 0.6) - Math.abs(b + fh / 2 - 0.6));
+    for (const y of ys) {
+      for (let x = 0; x + fw <= 1.001; x += fw / 2) {
+        yield aLienzo(img, { rotacion, recorte: [x, y, fw, fh], escala: 2, contraste: true });
       }
     }
   }
