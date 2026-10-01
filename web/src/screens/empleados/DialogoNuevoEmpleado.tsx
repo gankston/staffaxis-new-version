@@ -1,9 +1,13 @@
 /**
- * Alta de empleado. Ya no se carga a mano: se escanea el codigo de barras del
- * FRENTE del DNI (al lado de la firma) y de ahi salen el numero, el apellido y
- * el nombre. El dorso NO tiene codigo: tiene la huella y el domicilio. Se lee de
- * una foto sacada con la camara (el PDF417 es denso y necesita foco y
- * resolucion: una foto entera lo lee mejor que un video en vivo).
+ * Alta de empleado. Ya no se carga a mano: se escanea el DNI y de ahi salen el
+ * numero, el apellido y el nombre. Se lee de una foto sacada con la camara (los
+ * codigos son densos y necesitan foco y resolucion: una foto entera lee mejor
+ * que un video en vivo).
+ *
+ * Hay dos DNI dando vueltas:
+ *  - El de siempre: codigo de barras en el FRENTE, al lado de la firma.
+ *  - El NUEVO: el frente no tiene codigo. Se leen las tres lineas con "<<<" de
+ *    la parte de ATRAS, y esa foto se guarda como DORSO.
  */
 import { useState } from 'react';
 import { Modal } from '../../components/Modal';
@@ -22,16 +26,20 @@ import {
 } from '../../components/iconos';
 import { leerPdf417, parsearDni, type DatosDni } from '../../domain/dniBarcode';
 import { leerConstancia as leerHoja } from '../../domain/constanciaOcr';
+import { leerDorsoDni } from '../../domain/dniMrz';
 import { conRastro, rastroCaido } from '../../lib/rastro';
 import { api } from '../../lib/api';
 import { crearEmpleado, reactivarEmpleado, type Empleado } from '../../lib/empleados';
 
 const dataUrlABlob = async (dataUrl: string) => (await fetch(dataUrl)).blob();
 
-type Paso = 'instrucciones' | 'leyendo' | 'leyendoConstancia' | 'datos';
+type Paso = 'instrucciones' | 'leyendo' | 'leyendoDorso' | 'leyendoConstancia' | 'datos';
 
-/** De donde salieron los datos. Define si se pueden editar o no. */
-type Origen = 'escaneo' | 'constancia' | 'manual';
+/**
+ * De donde salieron los datos. Define si se pueden editar o no.
+ * 'dorso' = DNI nuevo, leido de las lineas "<<<" de atras.
+ */
+type Origen = 'escaneo' | 'dorso' | 'constancia' | 'manual';
 
 export function DialogoNuevoEmpleado({
   sectorId,
@@ -95,7 +103,7 @@ export function DialogoNuevoEmpleado({
       setErrorLectura(
         crudo
           ? 'Se leyó el código pero no tiene el formato del DNI. Probá con otro ejemplar.'
-          : 'No se pudo leer el código. Asegurate de enfocar el FRENTE del DNI, con buena luz y que el código entre completo.',
+          : 'No se pudo leer el código. Asegurate de enfocar el FRENTE del DNI, con buena luz y que el código entre completo. Si es un DNI nuevo, el código está atrás: usá "Escanear la parte de atrás".',
       );
       return;
     }
@@ -104,6 +112,50 @@ export function DialogoNuevoEmpleado({
     setFrente(foto);
     setLeido(datos);
     setOrigen('escaneo');
+    setDni(datos.dni);
+    setApellido(datos.apellido);
+    setNombre(datos.nombre);
+    setPaso('datos');
+  };
+
+  /**
+   * DNI nuevo: se lee la parte de ATRAS. El DNI sale verificado (las lineas
+   * "<<<" traen digito verificador) y queda bloqueado; el nombre no tiene
+   * verificador, puede venir cortado o sin Ñ, y queda editable.
+   *
+   * La foto es del dorso, asi que se guarda como DORSO, no como frente.
+   */
+  const escanearDorso = async (obtener: () => Promise<string | null>) => {
+    setErrorLectura(null);
+    const foto = await obtener();
+    if (!foto) return;
+
+    setPaso('leyendoDorso');
+    let datos: Awaited<ReturnType<typeof leerDorsoDni>> = null;
+    try {
+      datos = await conRastro('dorso: leyendo las lineas <<<', undefined, () => leerDorsoDni(foto));
+    } catch {
+      datos = null;
+    }
+
+    if (!datos) {
+      setPaso('instrucciones');
+      setErrorLectura(
+        'No se pudo leer la parte de atrás. Sacá la foto con el DNI entero, derecho, con buena luz y que se vean bien las tres líneas de abajo (las que tienen <<<).',
+      );
+      return;
+    }
+
+    setDorso(foto);
+    setLeido({
+      dni: datos.dni,
+      apellido: datos.apellido,
+      nombre: datos.nombre,
+      sexo: datos.sexo,
+      fechaNacimiento: datos.fechaNacimiento,
+      crudo: '',
+    });
+    setOrigen('dorso');
     setDni(datos.dni);
     setApellido(datos.apellido);
     setNombre(datos.nombre);
@@ -266,6 +318,20 @@ export function DialogoNuevoEmpleado({
     );
   }
 
+  if (paso === 'leyendoDorso') {
+    return (
+      <Modal titulo="Leyendo el DNI">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '24px 0' }}>
+          <Spinner />
+          <div style={{ color: 'var(--texto-tenue)', fontSize: 14, textAlign: 'center' }}>
+            Buscando las líneas con {'<<<'} de la parte de atrás...
+            <div style={{ fontSize: 12, marginTop: 6 }}>La primera vez puede tardar un poco más.</div>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   if (paso === 'leyendo') {
     return (
       <Modal titulo="Leyendo el código">
@@ -290,8 +356,8 @@ export function DialogoNuevoEmpleado({
           <IlustracionDni />
 
           <div style={{ fontSize: 14, color: '#b0b0b0', textAlign: 'center', lineHeight: 1.5 }}>
-            Es el código cuadrado que está <strong style={{ color: 'white' }}>en el frente</strong> del DNI, al lado
-            de la firma. El dorso no tiene código: tiene la huella y el domicilio.
+            En el DNI de siempre, el código está <strong style={{ color: 'white' }}>en el frente</strong>, al lado de
+            la firma.
           </div>
 
           <ul
@@ -404,6 +470,65 @@ export function DialogoNuevoEmpleado({
             Usar una foto de la galería
           </button>
 
+          {/* DNI nuevo: el frente no tiene codigo. Se lee la parte de atras. */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              alignSelf: 'stretch',
+              background: 'rgba(38,198,218,0.10)',
+              border: '1px solid var(--teal)',
+              borderRadius: 12,
+              padding: 14,
+            }}
+          >
+            <div style={{ fontSize: 14, color: '#a7e6ee', textAlign: 'center', lineHeight: 1.45 }}>
+              <strong style={{ color: 'white' }}>¿Es un DNI nuevo?</strong> El código está en la{' '}
+              <strong style={{ color: 'white' }}>parte de atrás</strong>.
+            </div>
+            <button
+              onClick={() => escanearDorso(tomarFoto)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                width: '100%',
+                padding: 14,
+                borderRadius: 12,
+                border: 'none',
+                background: 'var(--teal)',
+                color: '#06262b',
+                fontWeight: 700,
+                fontSize: 15,
+              }}
+            >
+              <IconoCamara size={22} />
+              Escanear la parte de atrás
+            </button>
+            <button
+              onClick={() => escanearDorso(elegirDeGaleria)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                width: '100%',
+                padding: 8,
+                borderRadius: 12,
+                border: 'none',
+                background: 'none',
+                color: 'var(--teal)',
+                fontWeight: 600,
+                fontSize: 13,
+              }}
+            >
+              <IconoGaleria size={18} />
+              Usar una foto de la galería
+            </button>
+          </div>
+
           <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: '4px 0', alignSelf: 'stretch' }} />
 
           {/* Para el que todavia no tiene la tarjeta: se le saca la foto a la
@@ -472,7 +597,9 @@ export function DialogoNuevoEmpleado({
 
   // Lo que sale del codigo del DNI no se toca: es el dato del documento y
   // viene exacto. Lo leido de la constancia y lo cargado a mano si se edita.
-  const bloqueado = origen === 'escaneo';
+  // Del dorso del DNI nuevo solo el numero viene verificado: el nombre se edita.
+  const dniBloqueado = origen === 'escaneo' || origen === 'dorso';
+  const nombresBloqueados = origen === 'escaneo';
   const habilitado = !!dni.trim() && !!nombre.trim() && !!apellido.trim() && !cargando;
 
   return (
@@ -497,6 +624,22 @@ export function DialogoNuevoEmpleado({
             }}
           >
             Código leído correctamente. Los datos salen del DNI, no se editan.
+          </div>
+        ) : origen === 'dorso' ? (
+          <div
+            style={{
+              background: 'rgba(76,175,80,0.12)',
+              border: '1px solid #4caf50',
+              borderRadius: 12,
+              padding: '12px 14px',
+              fontSize: 13,
+              color: '#a5d6a7',
+              lineHeight: 1.45,
+            }}
+          >
+            <strong>DNI nuevo leído de la parte de atrás.</strong> El número está verificado y no se edita.{' '}
+            <strong style={{ color: 'white' }}>Revisá el apellido y el nombre</strong> contra el DNI: pueden venir
+            cortados o sin la Ñ.
           </div>
         ) : origen === 'constancia' ? (
           <div
@@ -536,7 +679,7 @@ export function DialogoNuevoEmpleado({
           }}
           label="DNI *"
           soloNumeros
-          disabled={bloqueado}
+          disabled={dniBloqueado}
           error={!dni.trim() || !!errorDni}
         />
 
@@ -566,14 +709,14 @@ export function DialogoNuevoEmpleado({
           value={apellido}
           onChange={(v) => setApellido(v.replace(/\n/g, ''))}
           label="Apellido *"
-          disabled={bloqueado}
+          disabled={nombresBloqueados}
           error={!apellido.trim()}
         />
         <TextField
           value={nombre}
           onChange={(v) => setNombre(v.replace(/\n/g, ''))}
           label="Nombre *"
-          disabled={bloqueado}
+          disabled={nombresBloqueados}
           error={!nombre.trim()}
         />
 
@@ -608,6 +751,28 @@ export function DialogoNuevoEmpleado({
             <div style={{ fontSize: 13, color: '#a7e6ee', lineHeight: 1.45 }}>
               <strong style={{ color: 'white' }}>No te olvides del dorso.</strong> Ya que tenés el DNI en la mano,
               dalo vuelta y sacale la foto ahora.
+            </div>
+          </div>
+        )}
+        {/* DNI nuevo: lo que se escaneo fue la parte de atras, asi que falta el frente. */}
+        {origen === 'dorso' && !frente && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              background: 'rgba(38,198,218,0.12)',
+              border: '1px solid var(--teal)',
+              borderRadius: 12,
+              padding: '12px 14px',
+            }}
+          >
+            <span style={{ color: 'var(--teal)', display: 'flex', flexShrink: 0 }}>
+              <IconoCambiarSector size={24} />
+            </span>
+            <div style={{ fontSize: 13, color: '#a7e6ee', lineHeight: 1.45 }}>
+              <strong style={{ color: 'white' }}>No te olvides del frente.</strong> La foto que escaneaste quedó como
+              dorso: dalo vuelta y sacale la foto al frente ahora.
             </div>
           </div>
         )}
