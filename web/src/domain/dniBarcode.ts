@@ -113,7 +113,12 @@ export async function leerPdf417(dataUrl: string): Promise<string | null> {
   const nativo = await conTope(conDetectorDelSistema(img), 15_000);
   if (nativo) return nativo;
 
-  // 3) Ultimo recurso: recortes ampliados (DNI chico en el cuadro). Es lo caro.
+  // 3) La foto enfocada, para fotos movidas o fuera de foco (ver lienzosEnfocados).
+  marcarPaso('escaneo: ZXing con la foto enfocada');
+  const enfocado = await conTope(conZxing(img, lienzosEnfocados(img), 10_000), 14_000);
+  if (enfocado) return enfocado;
+
+  // 4) Ultimo recurso: recortes ampliados (DNI chico en el cuadro). Es lo caro.
   marcarPaso('escaneo: ZXing con recortes');
   return await conTope(conZxing(img, lienzosRecortes(img), 12_000), 16_000);
 }
@@ -287,6 +292,26 @@ function* lienzosRapidos(img: HTMLImageElement): Generator<HTMLCanvasElement | n
 }
 
 /**
+ * La foto con nitidez agregada, para cuando esta movida o fuera de foco.
+ *
+ * Probado con 4 DNI escaneados con CamScanner que no entraban: en 3 el lector
+ * ENCONTRABA el codigo, pero los puntitos estaban tan borroneados que leia mas
+ * errores de los que el codigo deja corregir. Enfocados, se leyeron los 4, con
+ * los mismos datos que tienen impresos.
+ *
+ * Los tamaños son lado largo final en pixeles, no escala: asi una foto de la
+ * camara (1600) y una de la galeria (hasta 2400) se enfocan igual. 1600 y 2400
+ * son los dos tamaños con los que se probo.
+ */
+function* lienzosEnfocados(img: HTMLImageElement): Generator<HTMLCanvasElement | null> {
+  for (const [lado, cantidad] of [[1600, 2], [2400, 1.5]]) {
+    for (const rotacion of [0, 90]) {
+      yield aLienzo(img, { lado, rotacion, enfoque: [3, cantidad] });
+    }
+  }
+}
+
+/**
  * Recortes ampliados. Cuando el DNI es una parte chica de la foto (con la mano,
  * el fondo, un reflejo encima), el lector no encuentra el codigo en el cuadro
  * entero pero si en un pedazo agrandado. Probado con el DNI de Cruz: entera no
@@ -313,7 +338,11 @@ const PIXELES_MAXIMOS = 8_000_000;
 
 interface OpcionesLienzo {
   escala?: number;
+  /** Lado largo final en pixeles. Si esta, manda sobre `escala`. */
+  lado?: number;
   contraste?: boolean;
+  /** Nitidez: [radio del desenfoque en px, cuanto se refuerza]. Ver enfocar(). */
+  enfoque?: [number, number];
   /** Grados: 0, 90, 180 o 270. */
   rotacion?: number;
   /** Pedazo de la foto a usar, en fracciones: [x, y, ancho, alto]. */
@@ -332,7 +361,8 @@ function aLienzo(img: HTMLImageElement, o: OpcionesLienzo): HTMLCanvasElement | 
     // Tope de pixeles: tener canvas gigantes es justo lo que hace que Android
     // mate la pantalla.
     const tope = Math.sqrt(PIXELES_MAXIMOS / (sw * sh));
-    const e = Math.min(o.escala ?? 1, Math.max(0.1, tope));
+    const pedida = o.lado ? o.lado / Math.max(sw, sh) : o.escala ?? 1;
+    const e = Math.min(pedida, Math.max(0.1, tope));
     const c = document.createElement('canvas');
     c.width = Math.round((deCostado ? sh : sw) * e);
     c.height = Math.round((deCostado ? sw : sh) * e);
@@ -344,11 +374,43 @@ function aLienzo(img: HTMLImageElement, o: OpcionesLienzo): HTMLCanvasElement | 
     ctx.rotate((rot * Math.PI) / 180);
     ctx.drawImage(img, sx, sy, sw, sh, (-sw * e) / 2, (-sh * e) / 2, sw * e, sh * e);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (o.enfoque) enfocar(c, ctx, o.enfoque[0], o.enfoque[1]);
     if (o.contraste) estirarContraste(ctx, c.width, c.height);
     return c;
   } catch {
     return null;
   }
+}
+
+/**
+ * El "enfocar" de cualquier editor de fotos (mascara de desenfoque): a cada
+ * pixel se le suma su diferencia con una copia borrosa de la foto. Lo que
+ * cambia de golpe -el borde de una barra- se refuerza, y las barras que el
+ * desenfoque habia pegado entre si se vuelven a separar.
+ *
+ * Si el navegador no supiera desenfocar (ctx.filter), la copia sale igual a la
+ * original y esto no cambia nada: no rompe, solo no ayuda.
+ */
+function enfocar(c: HTMLCanvasElement, ctx: CanvasRenderingContext2D, radio: number, cantidad: number): void {
+  const borrosa = document.createElement('canvas');
+  borrosa.width = c.width;
+  borrosa.height = c.height;
+  const bctx = borrosa.getContext('2d', { willReadFrequently: true });
+  if (!bctx) return;
+  bctx.filter = `blur(${radio}px)`;
+  bctx.drawImage(c, 0, 0);
+  const b = bctx.getImageData(0, 0, c.width, c.height).data;
+  borrosa.width = 0;
+  borrosa.height = 0;
+  const datos = ctx.getImageData(0, 0, c.width, c.height);
+  const p = datos.data;
+  for (let i = 0; i < p.length; i += 4) {
+    // Uint8ClampedArray: lo que se pasa de 0..255 queda en el borde solo.
+    p[i] += cantidad * (p[i] - b[i]);
+    p[i + 1] += cantidad * (p[i + 1] - b[i + 1]);
+    p[i + 2] += cantidad * (p[i + 2] - b[i + 2]);
+  }
+  ctx.putImageData(datos, 0, 0);
 }
 
 /** Blanco y negro con el contraste abierto de punta a punta. */
