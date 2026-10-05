@@ -24,7 +24,7 @@ import {
   IconoLista,
   IconoPersonaMas,
 } from '../../components/iconos';
-import { leerPdf417, parsearDni, type DatosDni } from '../../domain/dniBarcode';
+import { bloquearLectorAndroid, leerPdf417, parsearDni, type DatosDni } from '../../domain/dniBarcode';
 import { leerConstancia as leerHoja } from '../../domain/constanciaOcr';
 import { leerDorsoDni } from '../../domain/dniMrz';
 import { conRastro, rastroCaido } from '../../lib/rastro';
@@ -78,7 +78,13 @@ export function DialogoNuevoEmpleado({
    * que paso fue. Es la unica forma de saberlo: cuando Android mata el proceso
    * no queda ningun error en ningun lado.
    */
-  const [seCayoEn] = useState(() => rastroCaido());
+  const [seCayoEn] = useState(() => {
+    const r = rastroCaido();
+    // Si se murio adentro del lector de Android, ese telefono no lo usa mas por un
+    // tiempo: el proximo escaneo sigue con nuestros lectores y no se vuelve a cerrar.
+    if (r?.paso.includes('lector de codigos de Android')) bloquearLectorAndroid();
+    return r;
+  });
 
   /** Saca (o elige) la foto del frente, la decodifica y completa los datos. */
   const escanear = async (obtener: () => Promise<string | null>) => {

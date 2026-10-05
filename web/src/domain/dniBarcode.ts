@@ -105,18 +105,23 @@ export async function leerPdf417(dataUrl: string): Promise<string | null> {
   const rapido = await conTope(conZxing(img, lienzosRapidos(img), 8_000), 12_000);
   if (rapido) return rapido;
 
-  // 2) El lector del sistema de Android. Es el que mejor lee fotos de camara:
-  //    va SEGUNDO y no ultimo. Cuando iba despues de toda la grilla de abajo, el
-  //    encargado esperaba hasta 15 segundos mirando "Leyendo..." antes de que
-  //    llegara a probar el lector que si lo leia.
-  marcarPaso('escaneo: lector de codigos de Android');
-  const nativo = await conTope(conDetectorDelSistema(img), 15_000);
-  if (nativo) return nativo;
-
-  // 3) La foto enfocada, para fotos movidas o fuera de foco (ver lienzosEnfocados).
+  // 2) La foto enfocada, para fotos movidas, fuera de foco o de lejos (ver
+  //    lienzosEnfocados). Va ANTES del lector de Android: el 05/10 una foto de un
+  //    DNI de lejos (SALAS) cerro la app entera dentro del lector de Android, y
+  //    esta pasada la leia en 1 segundo.
   marcarPaso('escaneo: ZXing con la foto enfocada');
   const enfocado = await conTope(conZxing(img, lienzosEnfocados(img), 10_000), 14_000);
   if (enfocado) return enfocado;
+
+  // 3) El lector del sistema de Android. Lee bien fotos de camara, pero es codigo
+  //    del telefono, no nuestro, y con algunas fotos tumba la app entera (no tira
+  //    un error: Android mata el proceso). Por eso: va despues de lo nuestro, se le
+  //    pasa la foto achicada, y si un telefono ya se cerro aca, no se usa mas ahi.
+  if (!lectorAndroidBloqueado()) {
+    marcarPaso('escaneo: lector de codigos de Android');
+    const nativo = await conTope(conDetectorDelSistema(img), 15_000);
+    if (nativo) return nativo;
+  }
 
   // 4) Ultimo recurso: recortes ampliados (DNI chico en el cuadro). Es lo caro.
   marcarPaso('escaneo: ZXing con recortes');
@@ -182,13 +187,44 @@ function estructuraCoherente(t: string): boolean {
   return p.some(fechaReal) && p.some((x) => /^[MFX]$/i.test(x));
 }
 
+/**
+ * Si la app se cerro adentro del lector de Android, ese telefono no lo vuelve a
+ * usar por un tiempo. Sin esto el encargado queda en un circulo: escanea, se
+ * cierra, vuelve a abrir, escanea la misma foto, se cierra de nuevo.
+ */
+const CLAVE_SIN_LECTOR_ANDROID = 'staffaxis_sin_lector_android';
+const DIAS_SIN_LECTOR_ANDROID = 14;
+
+/** Lo llama el alta cuando el rastro dice que la ultima vez se murio en ese paso. */
+export function bloquearLectorAndroid(): void {
+  try {
+    localStorage.setItem(CLAVE_SIN_LECTOR_ANDROID, String(Date.now()));
+  } catch {
+    /* sin storage no se puede recordar; la app sigue igual */
+  }
+}
+
+function lectorAndroidBloqueado(): boolean {
+  try {
+    const desde = Number(localStorage.getItem(CLAVE_SIN_LECTOR_ANDROID));
+    return !!desde && Date.now() - desde < DIAS_SIN_LECTOR_ANDROID * 86_400_000;
+  } catch {
+    return false;
+  }
+}
+
 async function conDetectorDelSistema(img: HTMLImageElement): Promise<string | null> {
   const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
   if (!Detector) return null;
+  // Se le pasa una copia de no mas de 1600 px: menos memoria para un lector que
+  // corre afuera de la app y que, si se queda sin memoria, se la lleva puesta.
+  const W = img.naturalWidth || img.width;
+  const H = img.naturalHeight || img.height;
+  const chica = W && H ? aLienzo(img, { escala: Math.min(1, 1600 / Math.max(W, H)) }) : null;
   try {
     const formatos = await Detector.getSupportedFormats?.();
     if (formatos && !formatos.includes('pdf417')) return null;
-    const encontrados = await new Detector({ formats: ['pdf417'] }).detect(img);
+    const encontrados = await new Detector({ formats: ['pdf417'] }).detect(chica ?? img);
     for (const e of encontrados) {
       const v = lecturaValida(e.rawValue);
       if (v) return v;
@@ -196,6 +232,11 @@ async function conDetectorDelSistema(img: HTMLImageElement): Promise<string | nu
     return null;
   } catch {
     return null;
+  } finally {
+    if (chica) {
+      chica.width = 0;
+      chica.height = 0;
+    }
   }
 }
 
