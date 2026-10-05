@@ -26,7 +26,7 @@ import {
 } from '../../components/iconos';
 import { bloquearLectorAndroid, leerPdf417, parsearDni, type DatosDni } from '../../domain/dniBarcode';
 import { leerConstancia as leerHoja } from '../../domain/constanciaOcr';
-import { leerDorsoDni } from '../../domain/dniMrz';
+import { leerDorsoDni, ultimoFalloDorso } from '../../domain/dniMrz';
 import { conRastro, rastroCaido } from '../../lib/rastro';
 import { api } from '../../lib/api';
 import { crearEmpleado, reactivarEmpleado, type Empleado } from '../../lib/empleados';
@@ -104,13 +104,27 @@ export function DialogoNuevoEmpleado({
     }
     const datos = crudo ? parsearDni(crudo) : null;
 
-    if (!datos) {
+    if (!datos && !crudo) {
+      // Sin codigo de barras: puede ser la parte de ATRAS de un DNI nuevo, sacada
+      // con este boton (es el grande, el que todos tocan). Se prueban las lineas
+      // <<< antes de dar error: el encargado no tiene por que saber que boton era.
+      setPaso('leyendoDorso');
+      const dorso = await leerLineasDorso(foto);
+      if (dorso) {
+        aplicarDorso(foto, dorso);
+        return;
+      }
       setPaso('instrucciones');
       setErrorLectura(
-        crudo
-          ? 'Se leyó el código pero no tiene el formato del DNI. Probá con otro ejemplar.'
-          : 'No se pudo leer el código. Asegurate de enfocar el FRENTE del DNI, con buena luz y que el código entre completo. Si es un DNI nuevo, el código está atrás: usá "Escanear la parte de atrás".',
+        ultimoFalloDorso() === 'lector'
+          ? 'No se pudo leer el código del frente, y para leer la parte de atrás no se pudo cargar el lector de texto. Revisá la conexión a internet y probá de nuevo (la primera vez baja unos MB).'
+          : 'No se pudo leer el DNI. DNI de siempre: sacale la foto al FRENTE, con el código completo y enfocado. DNI nuevo (sin código adelante): sacale la foto a la parte de ATRÁS, que se vean bien las tres líneas con <<<.',
       );
+      return;
+    }
+    if (!datos) {
+      setPaso('instrucciones');
+      setErrorLectura('Se leyó el código pero no tiene el formato del DNI. Probá con otro ejemplar.');
       return;
     }
 
@@ -137,21 +151,34 @@ export function DialogoNuevoEmpleado({
     if (!foto) return;
 
     setPaso('leyendoDorso');
-    let datos: Awaited<ReturnType<typeof leerDorsoDni>> = null;
-    try {
-      datos = await conRastro('dorso: leyendo las lineas <<<', undefined, () => leerDorsoDni(foto));
-    } catch {
-      datos = null;
-    }
+    const datos = await leerLineasDorso(foto);
 
     if (!datos) {
       setPaso('instrucciones');
+      // El motivo importa: si el lector de texto no cargo, la foto no tiene la culpa.
+      const motivo = ultimoFalloDorso();
       setErrorLectura(
-        'No se pudo leer la parte de atrás. Sacá la foto con el DNI entero, derecho, con buena luz y que se vean bien las tres líneas de abajo (las que tienen <<<).',
+        motivo === 'lector'
+          ? 'No se pudo cargar el lector de texto. Revisá la conexión a internet y probá de nuevo (la primera vez baja unos MB).'
+          : motivo === 'foto'
+            ? 'No se pudo abrir la foto. Probá sacarla de nuevo.'
+            : 'No se encontraron las líneas con <<< en la foto. Sacala con el DNI entero, derecho, de cerca, con buena luz y sin reflejo sobre esas tres líneas.',
       );
       return;
     }
+    aplicarDorso(foto, datos);
+  };
 
+  const leerLineasDorso = async (foto: string) => {
+    try {
+      return await conRastro('dorso: leyendo las lineas <<<', undefined, () => leerDorsoDni(foto));
+    } catch {
+      return null;
+    }
+  };
+
+  /** La foto escaneada es la parte de atras: va como DORSO, y el DNI queda bloqueado. */
+  const aplicarDorso = (foto: string, datos: NonNullable<Awaited<ReturnType<typeof leerDorsoDni>>>) => {
     setDorso(foto);
     setLeido({
       dni: datos.dni,

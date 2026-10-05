@@ -391,19 +391,34 @@ function prepararGirada(bitmap: ImageBitmap, rotacion: number): HTMLCanvasElemen
  * giros mas probables: una foto parada de un DNI acostado tiene las lineas de
  * costado.
  */
+/**
+ * Por que fallo la ultima lectura del dorso, para que el mensaje lo diga: no es
+ * lo mismo una foto sin las lineas <<< que un lector de texto que no se pudo
+ * bajar (en el campo la señal es mala y la primera vez baja unos MB).
+ */
+let fallo: 'foto' | 'lector' | 'lineas' | null = null;
+export const ultimoFalloDorso = () => fallo;
+
 export async function leerDorsoDni(dataUrl: string): Promise<DatosDorso | null> {
   let bitmap: ImageBitmap | null = null;
   let lector: Lector | null = null;
+  fallo = null;
   try {
     marcarPaso('dorso: abriendo la foto');
     // createImageBitmap y no <img>.decode(): decode() no resuelve nunca si la
     // pantalla no se esta dibujando.
     bitmap = await conTope(createImageBitmap(await (await fetch(dataUrl)).blob()), 15_000);
-    if (!bitmap) return null;
+    if (!bitmap) {
+      fallo = 'foto';
+      return null;
+    }
 
     marcarPaso('dorso: cargando el lector de texto');
     lector = await conTope(crearLector(), 90_000);
-    if (!lector) return null;
+    if (!lector) {
+      fallo = 'lector';
+      return null;
+    }
 
     // En las fotos reales probadas, las paradas venian casi siempre con las
     // lineas sobre el costado izquierdo (giro 270).
@@ -425,8 +440,10 @@ export async function leerDorsoDni(dataUrl: string): Promise<DatosDorso | null> 
       const n = (linea ? leerLinea3(linea) : null) ?? { apellido: datos.apellido, nombre: datos.nombre };
       return { ...datos, apellido: nombreConfiable(n.apellido), nombre: nombreConfiable(n.nombre) };
     }
+    fallo = 'lineas';
     return null;
   } catch {
+    fallo = fallo ?? 'lineas';
     return null;
   } finally {
     bitmap?.close();
