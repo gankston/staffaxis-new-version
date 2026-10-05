@@ -93,15 +93,73 @@ function leerLinea1(linea: string): string | null {
 function leerLinea2(linea: string): { nacimiento: string; sexo: string | null } | null {
   const i = linea.indexOf('ARG', 13);
   if (i < 15) return null;
-  const ini = i - 15;
-  const nac = aDigitos(linea.slice(ini, ini + 6));
-  const dNac = aDigitos(linea.charAt(ini + 6));
-  const sexo = linea.charAt(ini + 7);
-  const venc = aDigitos(linea.slice(ini + 8, ini + 14));
-  const dVenc = aDigitos(linea.charAt(ini + 14));
+  // Antes de "ARG" van exactamente 15 caracteres. El lector a veces mete uno o
+  // dos de mas: el 05/10, con el DNI de SALAS, leyo "<801T1185F4101271ARG" en vez
+  // de "8011185F4101271ARG" (un "<" adelante y una T inventada en la fecha), y
+  // todo quedaba corrido. Se prueba sacando los sobrantes. Es seguro porque esta
+  // linea tiene DOS digitos verificadores y dos fechas que tienen que cerrar.
+  const antes = linea.slice(Math.max(0, i - 17), i);
+  for (const c of quitandoSobrantes(antes, 15)) {
+    const r = interpretarLinea2(c);
+    if (r) return r;
+  }
+  return null;
+}
+
+function interpretarLinea2(s: string): { nacimiento: string; sexo: string | null } | null {
+  const nac = aDigitos(s.slice(0, 6));
+  const dNac = aDigitos(s.charAt(6));
+  const sexo = s.charAt(7);
+  const venc = aDigitos(s.slice(8, 14));
+  const dVenc = aDigitos(s.charAt(14));
+  if (!/^[MFX<]$/.test(sexo)) return null;
   if (!fechaValida(nac) || !fechaValida(venc)) return null;
   if (digitoVerificador(nac) !== dNac || digitoVerificador(venc) !== dVenc) return null;
   return { nacimiento: nac, sexo: /^[MF]$/.test(sexo) ? sexo : null };
+}
+
+/**
+ * Todas las formas de dejar `largo` caracteres sacando lo que sobra (hasta 2),
+ * primero las que no sacan nada del medio (el sobrante suele estar adelante).
+ */
+function* quitandoSobrantes(s: string, largo: number): Generator<string> {
+  if (s.length < largo) return;
+  yield s.slice(s.length - largo);
+  const vistos = new Set<string>();
+  for (const base of [s.slice(-(largo + 1)), s.slice(-(largo + 2))]) {
+    if (base.length === largo + 1) {
+      for (let a = 0; a < base.length; a++) {
+        const c = base.slice(0, a) + base.slice(a + 1);
+        if (!vistos.has(c)) { vistos.add(c); yield c; }
+      }
+    } else if (base.length === largo + 2) {
+      for (let a = 0; a < base.length; a++) {
+        for (let b = a + 1; b < base.length; b++) {
+          const c = base.slice(0, a) + base.slice(a + 1, b) + base.slice(b + 1);
+          if (!vistos.has(c)) { vistos.add(c); yield c; }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * El DNI tiene que cerrar con el año de nacimiento. El digito verificador de la
+ * linea del DNI no ve todos los errores: si el lector se equivoca en dos numeros
+ * que se compensan, la cuenta da igual. Paso en el informe del 01/10: TEVES,
+ * DNI 44566024, se leyo "11566024" ("44" -> "11") y el verificador lo dejo pasar.
+ * Un DNI de 11 millones no puede ser de alguien nacido en 2002.
+ *
+ * Los DNI argentinos van mas o menos por año de nacimiento (1980 -> ~28
+ * millones, 2000 -> ~42 millones). Los de extranjeros empiezan en 90 millones y
+ * no siguen esa regla: se aceptan siempre.
+ */
+function dniCierraConNacimiento(dni: string, aammdd: string): boolean {
+  const n = Number(dni);
+  if (n >= 90_000_000) return true;
+  const anio = Number(fechaNacimiento(aammdd).slice(-4));
+  const esperado = 0.7 * (anio - 1940);
+  return Math.abs(n / 1_000_000 - esperado) <= 8;
 }
 
 /**
@@ -138,6 +196,9 @@ export function parsearDorso(texto: string): DatosDorso | null {
   const lineas = texto
     .toUpperCase()
     .split('\n')
+    // Las lineas <<< no tienen espacios: una letra suelta adelante, separada por
+    // un espacio, es una mancha del borde de la foto ("N SALAS<<NORMA" -> "NSALAS").
+    .map((l) => l.trim().replace(/^\S{1,2}\s+(?=\S{10,})/, ''))
     .map((l) => l.replace(/[^A-Z0-9<]/g, ''))
     .filter((l) => l.length >= 20);
 
@@ -153,6 +214,9 @@ export function parsearDorso(texto: string): DatosDorso | null {
     }
   }
   if (!dni || !datos2) return null;
+  // Un DNI que no cierra con el año de nacimiento es una lectura rota: no se
+  // devuelve, porque en el alta el DNI leido del dorso queda BLOQUEADO.
+  if (!dniCierraConNacimiento(dni, datos2.nacimiento)) return null;
   return {
     dni,
     apellido: datos3?.apellido ?? '',
