@@ -16,6 +16,7 @@ export interface Sector {
   tipoCarga: string;
   encargado: string | null;
   tiposCarga: string[];
+  vinculados: string[];
 }
 
 function aSector(d: SectorDto): Sector {
@@ -25,6 +26,7 @@ function aSector(d: SectorDto): Sector {
     tipoCarga: d.tipoCarga ?? 'importe',
     encargado: d.encargado ?? null,
     tiposCarga: d.tiposCarga ?? [],
+    vinculados: d.vinculados ?? [],
   };
 }
 
@@ -46,14 +48,21 @@ export async function getSectoresPermitidos(): Promise<Sector[]> {
   if (sesion.esMaestro()) return [...todos].sort(porNombre);
 
   const actual = todos.find((s) => s.id === sectorActual.id);
-  const encargado = actual?.encargado?.trim();
+  if (!actual) return [];
+  const encargado = actual.encargado?.trim().toLowerCase();
 
-  if (encargado) {
-    return todos
-      .filter((s) => (s.encargado ?? '').trim().toLowerCase() === encargado.toLowerCase())
-      .sort(porNombre);
-  }
-  return actual ? [actual] : [];
+  // Los del mismo encargado, mas los vinculados a mano (sector_vinculos) en las
+  // dos direcciones: MOSCONI <-> RUTA 5 tienen encargados distintos y igual se
+  // pueden cambiar entre si.
+  return todos
+    .filter(
+      (s) =>
+        s.id === actual.id ||
+        (!!encargado && (s.encargado ?? '').trim().toLowerCase() === encargado) ||
+        actual.vinculados.includes(s.id) ||
+        s.vinculados.includes(actual.id),
+    )
+    .sort(porNombre);
 }
 
 export type ResultadoAcceso =

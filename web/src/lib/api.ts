@@ -125,6 +125,8 @@ export interface SectorDto {
   encargado?: string | null;
   tipoCarga?: string | null;
   tiposCarga?: string[] | null;
+  /** Sectores vinculados a mano: se puede cambiar a ellos aunque el encargado sea otro. */
+  vinculados?: string[] | null;
 }
 
 export interface EmployeeDto {

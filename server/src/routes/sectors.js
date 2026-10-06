@@ -10,7 +10,13 @@ export async function sectorRoutes(app) {
               COALESCE(
                 (SELECT ARRAY_AGG(stc.tipo ORDER BY stc.tipo) FROM sector_tipos_carga stc WHERE stc.sector_id = s.id),
                 '{}'
-              ) AS tipos_carga
+              ) AS tipos_carga,
+              -- Sectores a los que el encargado de este se puede cambiar aunque el
+              -- encargado del otro sea otra persona (ver sector_vinculos).
+              COALESCE(
+                (SELECT ARRAY_AGG(sv.vinculado_id) FROM sector_vinculos sv WHERE sv.sector_id = s.id),
+                '{}'
+              ) AS vinculados
        FROM sectors s
        LEFT JOIN employees e ON e.sector_id = s.id
        GROUP BY s.id
@@ -23,6 +29,7 @@ export async function sectorRoutes(app) {
         tipoCarga: s.tipo_carga,
         tiposCarga: s.tipos_carga,
         encargado: s.encargado ?? null,
+        vinculados: s.vinculados,
         employee_count: parseInt(s.employee_count ?? '0', 10),
       })),
     });

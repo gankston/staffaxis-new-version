@@ -69,6 +69,16 @@ async function runMigrations() {
       PRIMARY KEY (certificado_id, fecha)
     );
   `);
+  // Sectores vinculados a mano: el encargado de uno puede cambiarse al otro (y al
+  // reves) aunque los dos sectores tengan encargados distintos. Una fila por cada
+  // direccion. Pedido: MOSCONI <-> RUTA 5 (06/10/2026).
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS sector_vinculos (
+      sector_id    UUID NOT NULL REFERENCES sectors(id) ON DELETE CASCADE,
+      vinculado_id UUID NOT NULL REFERENCES sectors(id) ON DELETE CASCADE,
+      PRIMARY KEY (sector_id, vinculado_id)
+    );
+  `);
   // Un dia de un empleado no puede quedar con dos certificados vivos.
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS certificado_dia_unico
