@@ -3,6 +3,48 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuid } from 'uuid';
 import { verifyAdmin } from '../middleware/auth.js';
 import { normalizarDni, formatoDniValido } from '../lib/dniUtils.js';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+
+// Mismas carpetas que photos.js y certificados.js (Railway Volume en /data).
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+
+// ── Limite de intentos de ingreso ───────────────────────────────────────────
+// 10 intentos fallidos por IP cada 15 minutos (login por contraseña y Google).
+// Solo cuentan los fallidos: entrar bien no gasta intentos y limpia el contador.
+const INTENTOS_MAX = 10;
+const VENTANA_MS = 15 * 60_000;
+const intentosFallidos = new Map(); // ip -> { n, desde }
+
+let cacheCambios = null; // { en, firma } de GET /api/admin/cambios
+
+// Railway agrega la IP real al final de X-Forwarded-For: la ultima no la puede
+// inventar el cliente (lo que mande el viene antes).
+function ipCliente(req) {
+  const xff = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return xff[xff.length - 1] || req.ip;
+}
+
+/** Minutos que faltan si la IP esta bloqueada; 0 si puede intentar. */
+function minutosBloqueado(req) {
+  const ahora = Date.now();
+  for (const [ip, r] of intentosFallidos) if (ahora - r.desde > VENTANA_MS) intentosFallidos.delete(ip);
+  const r = intentosFallidos.get(ipCliente(req));
+  if (!r || r.n < INTENTOS_MAX) return 0;
+  return Math.max(1, Math.ceil((r.desde + VENTANA_MS - ahora) / 60_000));
+}
+
+function registrarFallo(req) {
+  const ip = ipCliente(req);
+  const r = intentosFallidos.get(ip);
+  if (r) r.n++;
+  else intentosFallidos.set(ip, { n: 1, desde: Date.now() });
+  req.log.warn({ ip, intentos: intentosFallidos.get(ip).n }, 'ingreso admin fallido');
+}
+
+const respuestaBloqueado = (reply, minutos) => reply.status(429).send({
+  error: `Demasiados intentos fallidos. Probá de nuevo en ${minutos} minuto${minutos === 1 ? '' : 's'}.`,
+});
 
 // Quien puede entrar a StaffAdmin con Google: el correo personal de Gaston y
 // cualquier cuenta de la empresa.
@@ -76,10 +118,14 @@ export async function adminRoutes(app) {
 
   // POST /api/admin/login — valida el ADMIN_TOKEN y devuelve ok (legacy)
   app.post('/api/admin/login', async (req, reply) => {
+    const minutos = minutosBloqueado(req);
+    if (minutos) return respuestaBloqueado(reply, minutos);
     const { password } = req.body ?? {};
     if (!password || password !== process.env.ADMIN_TOKEN) {
+      registrarFallo(req);
       return reply.status(401).send({ success: false, error: 'Credenciales incorrectas' });
     }
+    intentosFallidos.delete(ipCliente(req));
     return reply.send({ success: true, token: process.env.ADMIN_TOKEN, user: { username: 'Admin' } });
   });
 
@@ -87,6 +133,8 @@ export async function adminRoutes(app) {
   // El id_token lo consigue StaffAdmin de escritorio (Desktop app flow) o la
   // version web (/admin, flujo de redireccion con el cliente "Web").
   app.post('/api/admin/google-auth', async (req, reply) => {
+    const minutos = minutosBloqueado(req);
+    if (minutos) return respuestaBloqueado(reply, minutos);
     const { id_token } = req.body ?? {};
     if (!id_token) {
       return reply.status(400).send({ error: 'id_token requerido' });
@@ -97,20 +145,24 @@ export async function adminRoutes(app) {
         { signal: AbortSignal.timeout(10_000) });
       const payload = await verifyRes.json();
       if (payload.error || !payload.email) {
+        registrarFallo(req);
         return reply.status(401).send({ error: 'Token de Google inválido', detail: payload.error });
       }
       // Antes entraba cualquier cuenta de Google, y con cualquier id_token (aunque
       // fuera de otra app). Ahora el token tiene que ser de StaffAdmin y la cuenta
       // tiene que estar habilitada.
       if (!GOOGLE_CLIENTES_STAFFADMIN.includes(payload.aud)) {
+        registrarFallo(req);
         return reply.status(401).send({ error: 'Token de Google inválido', detail: 'aud' });
       }
       if (!correoAdminHabilitado(payload.email, payload.email_verified, payload.hd)) {
         req.log.warn({ email: payload.email }, 'google-auth: cuenta sin permiso');
+        registrarFallo(req);
         return reply.status(403).send({
           error: `La cuenta ${payload.email} no tiene permiso para entrar a StaffAdmin`,
         });
       }
+      intentosFallidos.delete(ipCliente(req));
       return reply.send({
         success: true,
         token: process.env.ADMIN_TOKEN,
@@ -370,13 +422,49 @@ export async function adminRoutes(app) {
   // DELETE /api/admin/employees/:id — elimina permanentemente el empleado y sus registros
   app.delete('/api/admin/employees/:id', { preHandler: verifyAdmin }, async (req, reply) => {
     const { id } = req.params;
-    const emp = await db.query('SELECT id FROM employees WHERE id = $1', [id]);
+    const emp = await db.query('SELECT id, dni_foto_frente, dni_foto_dorso FROM employees WHERE id = $1', [id]);
     if (!emp.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
+    // Los certificados se van con el empleado (ON DELETE CASCADE) pero sus
+    // archivos, y las fotos del DNI, quedaban sueltos en el volume para siempre.
+    const certs = await db.query('SELECT archivo FROM certificados_medicos WHERE employee_id = $1', [id]);
+    const archivos = [
+      ...certs.rows.map((c) => path.join(UPLOAD_DIR, 'certificados', path.basename(c.archivo))),
+      ...[emp.rows[0].dni_foto_frente, emp.rows[0].dni_foto_dorso].filter(Boolean)
+        .map((f) => path.join(UPLOAD_DIR, 'dni', path.basename(f))),
+    ];
     await db.query('DELETE FROM submissions WHERE employee_id = $1', [id]);
     await db.query('DELETE FROM absences WHERE employee_id = $1', [id]);
     await db.query('DELETE FROM transfers WHERE employee_id = $1', [id]).catch(() => {});
     await db.query('DELETE FROM employees WHERE id = $1', [id]);
+    // Recien con el empleado borrado: si algo fallaba antes, los archivos quedan.
+    await Promise.all(archivos.map((a) => fsp.unlink(a).catch(() => {})));
     return reply.send({ ok: true });
+  });
+
+  // GET /api/admin/cambios — "firma" de lo que se ve en el panel de StaffAdmin.
+  // El panel la consulta cada pocos segundos y, solo si cambio, vuelve a cargar
+  // sectores y estadisticas: asi una tarja nueva pone el sector en verde sola,
+  // sin el boton de Actualizar y sin bajar los 63 sectores cada vez.
+  // Se cachea 5 s: varias PCs abiertas no multiplican las consultas a la base.
+  app.get('/api/admin/cambios', { preHandler: verifyAdmin }, async (_req, reply) => {
+    const ahora = Date.now();
+    if (!cacheCambios || ahora - cacheCambios.en > 5000) {
+      const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+      const r = await db.query(
+        `SELECT concat_ws('|',
+           (SELECT count(*) || ':' || count(*) FILTER (WHERE is_deleted) || ':' || coalesce(max(updated_at)::text, '') || ':' || coalesce(max(created_at)::text, '')
+              FROM submissions WHERE date = $1::date),
+           (SELECT count(*) || ':' || count(*) FILTER (WHERE is_active) || ':' || coalesce(max(updated_at)::text, '') FROM employees),
+           (SELECT count(*) || ':' || md5(coalesce(string_agg(id::text || name || coalesce(encargado, ''), ',' ORDER BY id), '')) FROM sectors),
+           (SELECT count(*) FROM absences WHERE $1::date BETWEEN start_date AND end_date),
+           (SELECT count(*) || ':' || coalesce(max(created_at)::text, '') FROM certificados_medicos WHERE NOT is_deleted),
+           (SELECT count(*) FROM access_requests WHERE status = 'pending')
+         ) AS firma`,
+        [hoy]
+      );
+      cacheCambios = { en: ahora, firma: `${hoy}|${r.rows[0].firma}` };
+    }
+    return reply.header('Cache-Control', 'no-store').send({ firma: cacheCambios.firma });
   });
 
   // ──────────────────────────────────────────────────────────────────────────

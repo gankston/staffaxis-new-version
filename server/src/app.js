@@ -15,7 +15,7 @@ import { supervisorRoutes } from './routes/supervisor.js';
 import { statsRoutes }      from './routes/stats.js';
 import { photoRoutes }      from './routes/photos.js';
 import { webAppRoutes, adminWebRoutes } from './routes/webApp.js';
-import { certificadoRoutes } from './routes/certificados.js';
+import { certificadoRoutes, limpiarCertificadosHuerfanos } from './routes/certificados.js';
 
 // Espera a que la DB esté lista (la red interna de Railway puede tardar al arrancar).
 // Reintenta con paciencia en vez de crashear al primer timeout.
@@ -120,6 +120,8 @@ const start = async () => {
     } catch (err) {
       console.error('Migraciones fallaron (server sigue arriba):', err.message);
     }
+    // Con la base lista; si falla, el server sigue igual.
+    await limpiarCertificadosHuerfanos(app.log).catch((e) => app.log.error(e, 'limpiar certificados huerfanos'));
   } else {
     console.error('DB no respondió tras los reintentos; el server queda arriba igual');
   }

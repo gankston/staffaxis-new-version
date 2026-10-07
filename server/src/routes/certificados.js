@@ -41,6 +41,36 @@ const SELECT_CERTIFICADOS = `
   JOIN employees e ON e.id = c.employee_id
   WHERE NOT c.is_deleted`;
 
+/**
+ * Borra los archivos de certificados que ya no tienen fila en la base (por
+ * ejemplo, de un empleado borrado antes de que DELETE empleado limpiara sus
+ * archivos). Corre una vez al arrancar el server.
+ *
+ * Solo toca nombres con la forma exacta `<uuid>.<pdf|jpg|jpeg|png>` y con mas
+ * de 10 minutos: nada que no sea un certificado ni una subida en curso.
+ */
+export async function limpiarCertificadosHuerfanos(log) {
+  let nombres;
+  try {
+    nombres = await fsp.readdir(CERT_DIR);
+  } catch {
+    return; // todavia no hay carpeta
+  }
+  const candidatos = nombres.filter((n) => /^[0-9a-f-]{36}\.(pdf|jpe?g|png)$/i.test(n));
+  if (!candidatos.length) return;
+  const { rows } = await db.query('SELECT archivo FROM certificados_medicos WHERE archivo = ANY($1)', [candidatos]);
+  const conFila = new Set(rows.map((r) => r.archivo));
+  let borrados = 0;
+  for (const n of candidatos) {
+    if (conFila.has(n)) continue;
+    const ruta = path.join(CERT_DIR, n);
+    const st = await fsp.stat(ruta).catch(() => null);
+    if (!st || Date.now() - st.mtimeMs < 10 * 60_000) continue;
+    await fsp.unlink(ruta).then(() => borrados++).catch(() => {});
+  }
+  if (borrados) log.info(`certificados: ${borrados} archivo(s) sin certificado en la base, borrados`);
+}
+
 export async function certificadoRoutes(app) {
 
   // POST /api/admin/certificados?employee_id=X&fechas=2026-10-01,2026-10-02&observaciones=...
