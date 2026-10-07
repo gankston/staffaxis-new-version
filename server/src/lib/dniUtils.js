@@ -12,6 +12,14 @@ export function normalizarDni(raw) {
 // iguales ("999999999") y secuencias obvias ascendentes/descendentes
 // ("1234567", "987654321") — son los "numeros de orden" que cada sector se
 // inventaba en vez de dejar el campo vacio.
+// Por que un DNI no es valido, para decirlo bien en pantalla (antes siempre
+// decia "7 a 9 digitos", aunque el problema fuera una secuencia).
+export function motivoDniInvalido(dniDigits) {
+  if (!/^\d{7,9}$/.test(dniDigits ?? '')) return 'El DNI tiene que tener de 7 a 9 dígitos';
+  if (!formatoDniValido(dniDigits)) return 'El DNI no parece real: tiene todos los dígitos iguales o es una secuencia (ej. 12345678)';
+  return null;
+}
+
 export function formatoDniValido(dniDigits) {
   if (!/^\d{7,9}$/.test(dniDigits)) return false;
   if (/^(\d)\1+$/.test(dniDigits)) return false;

@@ -79,6 +79,14 @@ async function runMigrations() {
       PRIMARY KEY (sector_id, vinculado_id)
     );
   `);
+  // Sectores archivados (07/10/2026). Un sector con historia (empleados, tarjas)
+  // no se puede borrar sin perder la liquidacion: archivado deja de aparecer en
+  // StaffAdmin y en la lista de los telefonos, pero todo queda guardado y se
+  // puede desarchivar.
+  await db.query(`
+    ALTER TABLE sectors ADD COLUMN IF NOT EXISTS archivado BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE sectors ADD COLUMN IF NOT EXISTS archivado_en TIMESTAMPTZ;
+  `);
   // Un dia de un empleado no puede quedar con dos certificados vivos.
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS certificado_dia_unico

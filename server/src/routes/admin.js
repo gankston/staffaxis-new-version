@@ -2,7 +2,7 @@ import { db } from '../db.js';
 import jwt from 'jsonwebtoken';
 import { v4 as uuid } from 'uuid';
 import { verifyAdmin } from '../middleware/auth.js';
-import { normalizarDni, formatoDniValido } from '../lib/dniUtils.js';
+import { normalizarDni, formatoDniValido, motivoDniInvalido } from '../lib/dniUtils.js';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
@@ -258,6 +258,53 @@ export async function adminRoutes(app) {
     return reply.send({ ok: true });
   });
 
+  // Que tiene cargado un sector: StaffAdmin lo pregunta antes de ofrecer
+  // "Eliminar" (solo si esta vacio) o "Archivar" (si tiene historia).
+  app.get('/api/admin/sectors/:id/uso', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { rows: [s] } = await db.query(
+      `SELECT s.name, s.archivado,
+              (SELECT count(*) FROM employees   WHERE sector_id = s.id)::int AS empleados,
+              (SELECT count(*) FROM employees   WHERE sector_id = s.id AND is_active)::int AS empleados_activos,
+              (SELECT count(*) FROM submissions WHERE sector_id = s.id)::int AS tarjas,
+              (SELECT count(*) FROM devices     WHERE sector_id = s.id AND approved AND NOT revoked)::int AS telefonos,
+              (SELECT count(*) FROM transfers   WHERE to_sector_id = s.id OR from_sector_id = s.id)::int AS traslados
+         FROM sectors s WHERE s.id = $1`,
+      [req.params.id]
+    ).catch(() => ({ rows: [] }));
+    if (!s) return reply.status(404).send({ error: 'El sector no existe' });
+    return reply.send(s);
+  });
+
+  // Archivar: el sector deja de verse (StaffAdmin, telefonos) y nada se borra.
+  // Con telefonos autorizados no: seguirian cargando tarjas en un sector oculto.
+  app.post('/api/admin/sectors/:id/archivar', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { rows: [s] } = await db.query(
+      `SELECT s.name, s.archivado,
+              (SELECT count(*) FROM devices WHERE sector_id = s.id AND approved AND NOT revoked)::int AS telefonos
+         FROM sectors s WHERE s.id = $1`,
+      [req.params.id]
+    ).catch(() => ({ rows: [] }));
+    if (!s) return reply.status(404).send({ error: 'El sector no existe' });
+    if (s.archivado) return reply.send({ ok: true });
+    if (s.telefonos > 0) {
+      return reply.status(409).send({
+        error: `No se puede archivar "${s.name}": tiene ${s.telefonos} teléfono${s.telefonos > 1 ? 's' : ''} autorizado${s.telefonos > 1 ? 's' : ''}. ` +
+               'Revocalos o pasalos a otro sector primero (si no, seguirían cargando tarjas en un sector que no se ve).',
+      });
+    }
+    await db.query('UPDATE sectors SET archivado = true, archivado_en = now() WHERE id = $1', [req.params.id]);
+    req.log.info({ sector: s.name }, 'sector archivado');
+    return reply.send({ ok: true });
+  });
+
+  app.post('/api/admin/sectors/:id/desarchivar', { preHandler: verifyAdmin }, async (req, reply) => {
+    const r = await db.query('UPDATE sectors SET archivado = false, archivado_en = NULL WHERE id = $1 RETURNING name', [req.params.id])
+      .catch(() => ({ rows: [] }));
+    if (!r.rows[0]) return reply.status(404).send({ error: 'El sector no existe' });
+    req.log.info({ sector: r.rows[0].name }, 'sector desarchivado');
+    return reply.send({ ok: true });
+  });
+
   app.put('/api/admin/sectors/:id', { preHandler: verifyAdmin }, async (req, reply) => {
     const { name, tipo_carga, encargado, sector_group } = req.body ?? {};
     const result = await db.query(
@@ -321,7 +368,7 @@ export async function adminRoutes(app) {
       return reply.status(400).send({ error: 'El DNI es obligatorio' });
     }
     if (!formatoDniValido(dniValue)) {
-      return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
+      return reply.status(400).send({ error: motivoDniInvalido(dniValue) });
     }
 
     // Mismo chequeo que ya tiene /api/employees (la app) desde siempre. Esta ruta
@@ -382,7 +429,7 @@ export async function adminRoutes(app) {
       }
       {
         if (!formatoDniValido(dniValue)) {
-          return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
+          return reply.status(400).send({ error: motivoDniInvalido(dniValue) });
         }
         const current = await db.query('SELECT sector_id FROM employees WHERE id = $1', [req.params.id]);
         if (!current.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
@@ -459,7 +506,7 @@ export async function adminRoutes(app) {
            (SELECT count(*) || ':' || count(*) FILTER (WHERE is_deleted) || ':' || coalesce(max(updated_at)::text, '') || ':' || coalesce(max(created_at)::text, '')
               FROM submissions WHERE date = $1::date),
            (SELECT count(*) || ':' || count(*) FILTER (WHERE is_active) || ':' || coalesce(max(updated_at)::text, '') FROM employees),
-           (SELECT count(*) || ':' || md5(coalesce(string_agg(id::text || name || coalesce(encargado, ''), ',' ORDER BY id), '')) FROM sectors),
+           (SELECT count(*) || ':' || md5(coalesce(string_agg(id::text || name || coalesce(encargado, '') || archivado::text, ',' ORDER BY id), '')) FROM sectors),
            (SELECT count(*) FROM absences WHERE $1::date BETWEEN start_date AND end_date),
            (SELECT count(*) || ':' || coalesce(max(created_at)::text, '') FROM certificados_medicos WHERE NOT is_deleted),
            (SELECT count(*) FROM access_requests WHERE status = 'pending')
