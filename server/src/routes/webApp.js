@@ -54,6 +54,15 @@ export async function webAppRoutes(app) {
 
 const ADMIN_DIR = path.join(__dirname, '..', '..', 'public-admin');
 
+// El panel no se puede meter en un iframe de otra pagina (clickjacking: hacerle
+// tocar "Borrar" a un admin logueado sin que se de cuenta).
+const HEADERS_SEGURIDAD_ADMIN = {
+  'X-Frame-Options': 'DENY',
+  'Content-Security-Policy': "frame-ancestors 'none'",
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+};
+
 /**
  * Version web de StaffAdmin bajo /admin, desde server/public-admin (lo genera
  * `npm run build:web` en el repo de StaffAdmin). Va en otra carpeta porque el
@@ -72,9 +81,10 @@ export async function adminWebRoutes(app) {
     root: ADMIN_DIR,
     prefix: '/admin/',
     index: false,
-    // Ya lo decoro el registro de /app; registrarlo dos veces tira error.
+    // El sendFile ya lo agrega el registro de /app; no hace falta otra vez.
     decorateReply: false,
     setHeaders(res, ruta) {
+      for (const [k, v] of Object.entries(HEADERS_SEGURIDAD_ADMIN)) res.setHeader(k, v);
       if (ruta.includes(`${path.sep}assets${path.sep}`)) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       } else {
@@ -87,6 +97,7 @@ export async function adminWebRoutes(app) {
   app.get('/admin', (_req, reply) => reply.redirect('/admin/'));
   app.get('/admin/', (_req, reply) =>
     reply
+      .headers(HEADERS_SEGURIDAD_ADMIN)
       .header('Cache-Control', 'no-cache, must-revalidate')
       .type('text/html; charset=utf-8')
       .send(fs.createReadStream(path.join(ADMIN_DIR, 'index.html'))));

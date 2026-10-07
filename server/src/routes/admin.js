@@ -17,12 +17,17 @@ const GOOGLE_CLIENTES_STAFFADMIN = [
   '123351582964-cd9lkie8tkjp7fc1flen122o8gqjn9vg.apps.googleusercontent.com', // web (/admin)
 ];
 
-export function correoAdminHabilitado(email, verificado) {
+// `hd` es el dominio de Google Workspace que firma Google en el token: para las
+// cuentas de la empresa se exige ademas del mail, asi una cuenta comun creada con
+// una direccion @salvitaalimentos.com no alcanza.
+export function correoAdminHabilitado(email, verificado, hd) {
   if (verificado !== true && verificado !== 'true') return false;
   const correo = String(email ?? '').trim().toLowerCase();
   if (CORREOS_ADMIN.includes(correo)) return true;
-  const dominio = correo.split('@')[1] ?? '';
-  return DOMINIOS_ADMIN.includes(dominio);
+  const partes = correo.split('@');
+  if (partes.length !== 2 || !partes[0]) return false;
+  const dominio = partes[1];
+  return DOMINIOS_ADMIN.includes(dominio) && String(hd ?? '').toLowerCase() === dominio;
 }
 
 export async function adminRoutes(app) {
@@ -88,7 +93,8 @@ export async function adminRoutes(app) {
     }
     try {
       // Verificar el id_token con Google
-      const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`);
+      const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`,
+        { signal: AbortSignal.timeout(10_000) });
       const payload = await verifyRes.json();
       if (payload.error || !payload.email) {
         return reply.status(401).send({ error: 'Token de Google inválido', detail: payload.error });
@@ -99,7 +105,7 @@ export async function adminRoutes(app) {
       if (!GOOGLE_CLIENTES_STAFFADMIN.includes(payload.aud)) {
         return reply.status(401).send({ error: 'Token de Google inválido', detail: 'aud' });
       }
-      if (!correoAdminHabilitado(payload.email, payload.email_verified)) {
+      if (!correoAdminHabilitado(payload.email, payload.email_verified, payload.hd)) {
         req.log.warn({ email: payload.email }, 'google-auth: cuenta sin permiso');
         return reply.status(403).send({
           error: `La cuenta ${payload.email} no tiene permiso para entrar a StaffAdmin`,
@@ -111,7 +117,8 @@ export async function adminRoutes(app) {
         user: { email: payload.email, name: payload.name, picture: payload.picture },
       });
     } catch (err) {
-      return reply.status(500).send({ error: 'Error interno', detail: String(err) });
+      req.log.error(err, 'google-auth');
+      return reply.status(500).send({ error: 'No se pudo verificar la cuenta de Google. Probá de nuevo.' });
     }
   });
 
@@ -312,7 +319,12 @@ export async function adminRoutes(app) {
     let dniValue;
     if (dni !== undefined) {
       dniValue = normalizarDni(dni);
-      if (dniValue) {
+      // Vacio o con letras ("abc") ya no borra el DNI: es obligatorio, igual que
+      // en el alta (pedido de IT Salvita para cruzar con el padron de RRHH).
+      if (!dniValue) {
+        return reply.status(400).send({ error: 'El DNI es obligatorio' });
+      }
+      {
         if (!formatoDniValido(dniValue)) {
           return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
         }

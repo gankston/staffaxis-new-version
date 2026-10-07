@@ -47,6 +47,22 @@ async function verifyDeviceOrAdmin(req, reply) {
   return true;
 }
 
+// Mira los primeros bytes, no la extension ni el Content-Type (que manda el
+// cliente): JPEG, PNG o WebP. La app y StaffAdmin mandan JPEG.
+async function esImagen(ruta) {
+  const fh = await fsp.open(ruta, 'r');
+  try {
+    const { buffer, bytesRead } = await fh.read(Buffer.alloc(12), 0, 12, 0);
+    if (bytesRead < 12) return false;
+    const jpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const png = buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const webp = buffer.toString('latin1', 0, 4) === 'RIFF' && buffer.toString('latin1', 8, 12) === 'WEBP';
+    return jpeg || png || webp;
+  } finally {
+    await fh.close();
+  }
+}
+
 export async function photoRoutes(app) {
 
   // POST /api/employees/:id/foto/:lado — sube o reemplaza una cara del DNI (multipart)
@@ -65,16 +81,31 @@ export async function photoRoutes(app) {
     await fsp.mkdir(DNI_DIR, { recursive: true });
     const fileName = `${id}_${lado}.jpg`;
     const dest = path.join(DNI_DIR, fileName);
+    // Se escribe aparte y recien al final reemplaza a la foto anterior: antes se
+    // escribia directo encima, y si la nueva venia muy grande o no era una foto,
+    // la ficha se quedaba sin ninguna de las dos.
+    const tmp = `${dest}.${process.pid}-${Date.now()}.tmp`;
 
     try {
-      await pipeline(data.file, fs.createWriteStream(dest));
+      await pipeline(data.file, fs.createWriteStream(tmp));
     } catch (err) {
+      await fsp.unlink(tmp).catch(() => {});
       return reply.status(500).send({ error: 'Error al guardar la imagen' });
     }
     // Si el cliente excedió el límite de tamaño, multipart lo trunca y marca truncated
     if (data.file.truncated) {
-      await fsp.unlink(dest).catch(() => {});
+      await fsp.unlink(tmp).catch(() => {});
       return reply.status(413).send({ error: 'La imagen es demasiado grande' });
+    }
+    if (!(await esImagen(tmp))) {
+      await fsp.unlink(tmp).catch(() => {});
+      return reply.status(415).send({ error: 'El archivo no es una foto (tiene que ser JPG o PNG)' });
+    }
+    try {
+      await fsp.rename(tmp, dest);
+    } catch (err) {
+      await fsp.unlink(tmp).catch(() => {});
+      return reply.status(500).send({ error: 'Error al guardar la imagen' });
     }
 
     await db.query(`UPDATE employees SET ${col} = $1 WHERE id = $2`, [fileName, id]);
