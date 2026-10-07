@@ -39,7 +39,7 @@ function registrarFallo(req) {
   const r = intentosFallidos.get(ip);
   if (r) r.n++;
   else intentosFallidos.set(ip, { n: 1, desde: Date.now() });
-  req.log.warn({ ip, intentos: intentosFallidos.get(ip).n }, 'ingreso admin fallido');
+  req.log.warn({ ip, intentos: intentosFallidos.get(ip).n, xff: req.headers['x-forwarded-for'], xri: req.headers['x-real-ip'], remota: req.ip }, 'ingreso admin fallido');
 }
 
 const respuestaBloqueado = (reply, minutos) => reply.status(429).send({
