@@ -4,6 +4,27 @@ import { v4 as uuid } from 'uuid';
 import { verifyAdmin } from '../middleware/auth.js';
 import { normalizarDni, formatoDniValido } from '../lib/dniUtils.js';
 
+// Quien puede entrar a StaffAdmin con Google: el correo personal de Gaston y
+// cualquier cuenta de la empresa.
+const CORREOS_ADMIN = ['pgastonor@gmail.com'];
+const DOMINIOS_ADMIN = ['salvitaalimentos.com'];
+
+// Los clientes OAuth de StaffAdmin: el de escritorio (Electron) y el de la web.
+// El id_token tiene que venir de uno de estos; si no, cualquier token de Google
+// emitido para otra app servia para pedir el ADMIN_TOKEN.
+const GOOGLE_CLIENTES_STAFFADMIN = [
+  '123351582964-3o87ns87o1opd15jgl8gke0m8etdh4ko.apps.googleusercontent.com', // escritorio
+  '123351582964-cd9lkie8tkjp7fc1flen122o8gqjn9vg.apps.googleusercontent.com', // web (/admin)
+];
+
+export function correoAdminHabilitado(email, verificado) {
+  if (verificado !== true && verificado !== 'true') return false;
+  const correo = String(email ?? '').trim().toLowerCase();
+  if (CORREOS_ADMIN.includes(correo)) return true;
+  const dominio = correo.split('@')[1] ?? '';
+  return DOMINIOS_ADMIN.includes(dominio);
+}
+
 export async function adminRoutes(app) {
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -58,7 +79,8 @@ export async function adminRoutes(app) {
   });
 
   // POST /api/admin/google-auth — verifica id_token de Google y devuelve ADMIN_TOKEN
-  // El intercambio code→token se hace en el cliente Electron (Desktop app flow)
+  // El id_token lo consigue StaffAdmin de escritorio (Desktop app flow) o la
+  // version web (/admin, flujo de redireccion con el cliente "Web").
   app.post('/api/admin/google-auth', async (req, reply) => {
     const { id_token } = req.body ?? {};
     if (!id_token) {
@@ -66,12 +88,23 @@ export async function adminRoutes(app) {
     }
     try {
       // Verificar el id_token con Google
-      const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${id_token}`);
+      const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`);
       const payload = await verifyRes.json();
       if (payload.error || !payload.email) {
         return reply.status(401).send({ error: 'Token de Google inválido', detail: payload.error });
       }
-      // Todos los usuarios de Google tienen acceso — devolvemos ADMIN_TOKEN
+      // Antes entraba cualquier cuenta de Google, y con cualquier id_token (aunque
+      // fuera de otra app). Ahora el token tiene que ser de StaffAdmin y la cuenta
+      // tiene que estar habilitada.
+      if (!GOOGLE_CLIENTES_STAFFADMIN.includes(payload.aud)) {
+        return reply.status(401).send({ error: 'Token de Google inválido', detail: 'aud' });
+      }
+      if (!correoAdminHabilitado(payload.email, payload.email_verified)) {
+        req.log.warn({ email: payload.email }, 'google-auth: cuenta sin permiso');
+        return reply.status(403).send({
+          error: `La cuenta ${payload.email} no tiene permiso para entrar a StaffAdmin`,
+        });
+      }
       return reply.send({
         success: true,
         token: process.env.ADMIN_TOKEN,

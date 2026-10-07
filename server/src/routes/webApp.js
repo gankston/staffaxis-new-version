@@ -51,3 +51,43 @@ export async function webAppRoutes(app) {
   app.get('/app', enviarIndex);
   app.get('/app/', enviarIndex);
 }
+
+const ADMIN_DIR = path.join(__dirname, '..', '..', 'public-admin');
+
+/**
+ * Version web de StaffAdmin bajo /admin, desde server/public-admin (lo genera
+ * `npm run build:web` en el repo de StaffAdmin). Va en otra carpeta porque el
+ * build de web/ vacia server/public entero.
+ *
+ * Mismo esquema de cache que /app: assets con hash eternos, index.html siempre
+ * revalidado, asi cada deploy le llega a todos sin instalar nada.
+ */
+export async function adminWebRoutes(app) {
+  if (!fs.existsSync(ADMIN_DIR)) {
+    app.log.warn(`adminWeb: no existe ${ADMIN_DIR}, no se sirve /admin`);
+    return;
+  }
+
+  await app.register(fastifyStatic, {
+    root: ADMIN_DIR,
+    prefix: '/admin/',
+    index: false,
+    // Ya lo decoro el registro de /app; registrarlo dos veces tira error.
+    decorateReply: false,
+    setHeaders(res, ruta) {
+      if (ruta.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      }
+    },
+  });
+
+  // Sin la barra final, las imagenes "./logo.png" del panel se pedirian a la raiz.
+  app.get('/admin', (_req, reply) => reply.redirect('/admin/'));
+  app.get('/admin/', (_req, reply) =>
+    reply
+      .header('Cache-Control', 'no-cache, must-revalidate')
+      .type('text/html; charset=utf-8')
+      .send(fs.createReadStream(path.join(ADMIN_DIR, 'index.html'))));
+}
