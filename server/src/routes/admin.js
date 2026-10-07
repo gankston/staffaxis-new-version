@@ -18,11 +18,15 @@ const intentosFallidos = new Map(); // ip -> { n, desde }
 
 let cacheCambios = null; // { en, firma } de GET /api/admin/cambios
 
-// Railway agrega la IP real al final de X-Forwarded-For: la ultima no la puede
-// inventar el cliente (lo que mande el viene antes).
+// La IP del cliente la pone Railway en X-Real-IP, pisando lo que mande el
+// navegador (comprobado el 07/10/2026: un X-Real-IP / X-Forwarded-For inventado
+// no llega). En X-Forwarded-For la ultima es el proxy de Railway, no el cliente,
+// y req.ip es la red interna: con esas, todos compartirian el mismo contador.
 function ipCliente(req) {
+  const real = String(req.headers['x-real-ip'] ?? '').trim();
+  if (real) return real;
   const xff = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  return xff[xff.length - 1] || req.ip;
+  return xff[0] || req.ip;
 }
 
 /** Minutos que faltan si la IP esta bloqueada; 0 si puede intentar. */
@@ -39,7 +43,7 @@ function registrarFallo(req) {
   const r = intentosFallidos.get(ip);
   if (r) r.n++;
   else intentosFallidos.set(ip, { n: 1, desde: Date.now() });
-  req.log.warn({ ip, intentos: intentosFallidos.get(ip).n, xff: req.headers['x-forwarded-for'], xri: req.headers['x-real-ip'], remota: req.ip }, 'ingreso admin fallido');
+  req.log.warn({ ip, intentos: intentosFallidos.get(ip).n }, 'ingreso admin fallido');
 }
 
 const respuestaBloqueado = (reply, minutos) => reply.status(429).send({
