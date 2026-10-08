@@ -187,13 +187,20 @@ export async function adminRoutes(app) {
     return reply.send({ sectors: result.rows });
   });
 
+  // Sectores y encargados van en mayusculas y sin espacios de mas (pedido de
+  // Gaston, 08/10/2026): asi la lista sale pareja y ordenada.
+  const normalizarNombre = (v) =>
+    v == null ? null : String(v).trim().replace(/\s+/g, ' ').toLocaleUpperCase('es') || null;
+
   app.post('/api/admin/sectors', { preHandler: verifyAdmin }, async (req, reply) => {
-    const { name, tipo_carga, encargado } = req.body ?? {};
+    const { tipo_carga } = req.body ?? {};
+    const name = normalizarNombre(req.body?.name);
+    const encargado = normalizarNombre(req.body?.encargado);
     if (!name) return reply.status(400).send({ error: 'Nombre requerido' });
     const result = await db.query(
       `INSERT INTO sectors (id, name, tipo_carga, encargado)
        VALUES ($1, $2, $3, $4) RETURNING *`,
-      [uuid(), name, tipo_carga ?? 'importe', encargado ?? null]
+      [uuid(), name, tipo_carga ?? 'importe', encargado]
     );
     return reply.status(201).send(result.rows[0]);
   });
@@ -306,7 +313,9 @@ export async function adminRoutes(app) {
   });
 
   app.put('/api/admin/sectors/:id', { preHandler: verifyAdmin }, async (req, reply) => {
-    const { name, tipo_carga, encargado, sector_group } = req.body ?? {};
+    const { tipo_carga, sector_group } = req.body ?? {};
+    const name = normalizarNombre(req.body?.name);
+    const encargado = normalizarNombre(req.body?.encargado);
     const result = await db.query(
       `UPDATE sectors SET name = COALESCE($1, name),
                           tipo_carga = COALESCE($2, tipo_carga),

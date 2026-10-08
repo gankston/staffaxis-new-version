@@ -16,7 +16,8 @@ import {
 import { sesion } from '../lib/session';
 import logoUrl from '../assets/logo_staffaxis.png';
 
-const etiquetaConEncargado = (s: Sector) => (s.encargado?.trim() ? `${s.encargado} — ${s.name}` : s.name);
+// El sector primero: la lista va por orden alfabetico de sector y asi se ve.
+const etiquetaConEncargado = (s: Sector) => (s.encargado?.trim() ? `${s.name} — ${s.encargado}` : s.name);
 
 const IconoSector = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--teal)" aria-hidden>

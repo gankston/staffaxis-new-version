@@ -30,11 +30,12 @@ function aSector(d: SectorDto): Sector {
   };
 }
 
-const porNombre = (a: Sector, b: Sector) => a.name.localeCompare(b.name);
+// Alfabetico en español (la Ñ va despues de la N), sin importar mayusculas.
+const porNombre = (a: Sector, b: Sector) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
 
 export async function fetchSectoresPublicos(): Promise<Sector[]> {
   const r = await api.getSectores();
-  return (r.sectors ?? []).map(aSector);
+  return (r.sectors ?? []).map(aSector).sort(porNombre);
 }
 
 export async function getSectoresPermitidos(): Promise<Sector[]> {
