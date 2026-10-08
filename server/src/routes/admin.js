@@ -18,6 +18,28 @@ const intentosFallidos = new Map(); // ip -> { n, desde }
 
 let cacheCambios = null; // { en, firma } de GET /api/admin/cambios
 
+// Columnas de los reportes de tarjas (/api/admin/report y /api/admin/report-dia).
+const SELECT_REPORTE = `SELECT s.id AS submission_id, s.employee_id,
+              e.first_name, e.last_name, e.dni,
+              e.sector_id AS current_sector_id, e.is_active,
+              cs.name     AS current_sector_name,
+              s.date, s.minutes_worked, s.notes, s.status,
+              s.horas, s.cosecha, s.cajas, s.cajones, s.importe, s.importe AS abonada,
+              s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
+              s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
+              s.carga_camion_bolsas_50, s.carga_camion_bolsas_25, s.carga_camion_bolsas_otro,
+              s.movimiento_estiba_bolsas_50, s.movimiento_estiba_bolsas_25, s.movimiento_estiba_bolsas_otro,
+              s.bolsas_25, s.bolsas_50, s.cambio_bolsa,
+              s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
+              s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg,
+              s.cosecha_canadas, s.cosecha_inv, s.cosecha_bananas, s.tantero_invernadero, s.tantero_campo, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,
+              s.aprobada_en, sup.full_name AS aprobada_por_nombre, s.motivo_rechazo,
+              s.latitude, s.longitude, s.created_at AS submitted_at
+       FROM submissions s
+       JOIN employees e  ON e.id  = s.employee_id
+       LEFT JOIN sectors cs ON cs.id = e.sector_id
+       LEFT JOIN supervisors sup ON sup.id = s.aprobada_por`;
+
 // La IP del cliente la pone Railway en X-Real-IP, pisando lo que mande el
 // navegador (comprobado el 07/10/2026: un X-Real-IP / X-Forwarded-For inventado
 // no llega). En X-Forwarded-For la ultima es el proxy de Railway, no el cliente,
@@ -531,6 +553,26 @@ export async function adminRoutes(app) {
   // Reportes (resumen por sector y fecha para StaffAdmin)
   // ──────────────────────────────────────────────────────────────────────────
 
+  // GET /api/admin/report-dia?fecha=YYYY-MM-DD — las tarjas de un dia de TODOS los
+  // sectores no archivados, con las mismas columnas que /api/admin/report. Las
+  // "Estadisticas de Hoy" de StaffAdmin hacian un /report por sector (63 pedidos);
+  // con esto es uno solo.
+  app.get('/api/admin/report-dia', { preHandler: verifyAdmin }, async (req, reply) => {
+    const { fecha } = req.query;
+    if (typeof fecha !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      return reply.status(400).send({ error: 'fecha (YYYY-MM-DD) es requerida' });
+    }
+    const result = await db.query(
+      `${SELECT_REPORTE}
+       WHERE s.date = $1::date
+         AND NOT s.is_deleted
+         AND s.sector_id IN (SELECT id FROM sectors WHERE NOT archivado)
+       ORDER BY e.last_name, e.first_name`,
+      [fecha]
+    );
+    return reply.send({ rows: result.rows });
+  });
+
   // GET /api/admin/report?sector_id=X&start_date=Y&end_date=Z
   app.get('/api/admin/report', { preHandler: verifyAdmin }, async (req, reply) => {
     const { sector_id, start_date, end_date } = req.query;
@@ -538,26 +580,7 @@ export async function adminRoutes(app) {
       return reply.status(400).send({ error: 'sector_id, start_date y end_date son requeridos' });
     }
     const result = await db.query(
-      `SELECT s.id AS submission_id, s.employee_id,
-              e.first_name, e.last_name, e.dni,
-              e.sector_id AS current_sector_id, e.is_active,
-              cs.name     AS current_sector_name,
-              s.date, s.minutes_worked, s.notes, s.status,
-              s.horas, s.cosecha, s.cajas, s.cajones, s.importe, s.importe AS abonada,
-              s.km_viajes, s.has_fumigadas, s.siembra_trilla, s.bolseros, s.etiquetado,
-              s.carga_camion_kg50, s.carga_camion_kg25, s.carga_camion_otro,
-              s.carga_camion_bolsas_50, s.carga_camion_bolsas_25, s.carga_camion_bolsas_otro,
-              s.movimiento_estiba_bolsas_50, s.movimiento_estiba_bolsas_25, s.movimiento_estiba_bolsas_otro,
-              s.bolsas_25, s.bolsas_50, s.cambio_bolsa,
-              s.movimiento_estiba_kg50, s.movimiento_estiba_kg25, s.movimiento_estiba_otro,
-              s.etiquetado_lata_185, s.etiquetado_lata_750, s.etiquetado_lata_2500, s.etiquetado_lata_8kg,
-              s.cosecha_canadas, s.cosecha_inv, s.cosecha_bananas, s.tantero_invernadero, s.tantero_campo, s.descarga_jaula, s.descarga_camion, s.carga_jaula, s.carga_camion_cantidad,
-              s.aprobada_en, sup.full_name AS aprobada_por_nombre, s.motivo_rechazo,
-              s.latitude, s.longitude, s.created_at AS submitted_at
-       FROM submissions s
-       JOIN employees e  ON e.id  = s.employee_id
-       LEFT JOIN sectors cs ON cs.id = e.sector_id
-       LEFT JOIN supervisors sup ON sup.id = s.aprobada_por
+      `${SELECT_REPORTE}
        WHERE s.sector_id = $1
          AND s.date BETWEEN $2 AND $3
          AND NOT s.is_deleted

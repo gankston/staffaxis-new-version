@@ -27,8 +27,25 @@ export async function sectorRoutes(app) {
        ORDER BY s.name`,
       [incluirArchivados]
     );
+    // StaffAdmin pide ?tarjas_del=YYYY-MM-DD (con su token) para pintar cada sector
+    // en verde/rojo con un solo pedido; antes hacia un /api/admin/report por sector.
+    // Misma cuenta que ese reporte: tarjas no borradas del sector en ese dia.
+    let tarjasDia = null;
+    const dia = req.query?.tarjas_del;
+    if (typeof dia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dia) &&
+        req.headers['x-admin-token'] && req.headers['x-admin-token'] === process.env.ADMIN_TOKEN) {
+      const t = await db.query(
+        `SELECT s.sector_id, count(*)::int AS n
+         FROM submissions s JOIN employees e ON e.id = s.employee_id
+         WHERE s.date = $1::date AND NOT s.is_deleted
+         GROUP BY s.sector_id`,
+        [dia]
+      );
+      tarjasDia = new Map(t.rows.map((x) => [x.sector_id, x.n]));
+    }
     return reply.send({
       sectors: result.rows.map(s => ({
+        ...(tarjasDia ? { tarjas_dia: tarjasDia.get(s.id) ?? 0 } : {}),
         id: s.id,
         name: s.name,
         tipoCarga: s.tipo_carga,
