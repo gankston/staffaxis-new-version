@@ -1,22 +1,33 @@
 /** Diálogo "cargar horas" — HorasDialog de EmpleadosScreen.kt. */
+import { useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { TextField } from '../../components/ui';
-import { IconoAlerta, IconoCalendario, IconoGuardar } from '../../components/iconos';
+import { IconoAlerta, IconoCalendario, IconoCheck, IconoDesplegar, IconoGuardar } from '../../components/iconos';
 import { FormularioCarga } from './FormularioCarga';
 import { puedeGuardar, type ValoresCarga } from './logica';
-import { diasAtras, esFechaCargable, hoyISO, sumarDias } from '../../domain/fechaCarga';
+import { desdeISO, esFechaCargable, fechasCargables, hoyISO, sumarDias } from '../../domain/fechaCarga';
 import type { Empleado } from '../../lib/empleados';
 
 const MESES = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
 ];
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 function etiquetaFecha(fecha: string, hoy: string): string {
   if (fecha === hoy) return 'Hoy';
   if (fecha === sumarDias(hoy, -1)) return 'Ayer';
   const [, m, d] = fecha.split('-').map(Number);
   return `${d} de ${MESES[m - 1]}`;
+}
+
+/** "Hoy · lunes 13/10", "Ayer · domingo 12/10", "sábado 11/10". */
+function etiquetaOpcion(fecha: string, hoy: string): string {
+  const [, m, d] = fecha.split('-').map(Number);
+  const dia = `${DIAS[desdeISO(fecha).getDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+  if (fecha === hoy) return `Hoy · ${dia}`;
+  if (fecha === sumarDias(hoy, -1)) return `Ayer · ${dia}`;
+  return dia;
 }
 
 export function DialogoHoras({
@@ -49,8 +60,10 @@ export function DialogoHoras({
   onGuardar: () => void;
 }) {
   const hoy = hoyISO();
-  // Desde que fecha puede cargar este sector (OTITO tres dias, el resto ayer).
-  const masViejo = sumarDias(hoy, -diasAtras(sectorId));
+  // Las fechas que puede elegir este sector (OTITO tres dias para atras, el resto
+  // hasta ayer), de hoy para atras.
+  const opciones = fechasCargables(hoy, sectorId).reverse();
+  const [eligiendoFecha, setEligiendoFecha] = useState(false);
   const faltaDni = !empleado.dni?.trim();
   const habilitado = !faltaDni && puedeGuardar(valores) && !guardando;
 
@@ -128,52 +141,77 @@ export function DialogoHoras({
       )}
 
       {/*
-        Calendario nativo, igual que el DatePickerDialog de la app. Antes era una
-        fila de botones: con dos fechas entraba, pero apenas el sector permitio
-        tres los botones se salian de la pantalla y quedaban cortados.
-
-        El <input type="date"> va transparente ENCIMA del boton en vez de oculto:
-        asi el toque le llega a el y abre el calendario del telefono. Con el input
-        escondido hay WebViews donde no abre nada.
+        Selector de fecha propio de la app, sin el calendario del telefono. Antes
+        habia un <input type="date"> transparente encima del boton: en algunos
+        telefonos (12/10/2026, CAÑADAS ESTRUCTURA y otros) el toque no abria nada,
+        porque depende del WebView de cada aparato. Como solo se puede elegir entre
+        2 fechas (4 en OTITO), alcanza con una lista que se despliega debajo y anda
+        igual en todos.
       */}
-      <div style={{ position: 'relative', width: '100%', height: 48, marginBottom: 12 }}>
-        <div
+      <div style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          onClick={() => setEligiendoFecha((v) => !v)}
+          aria-expanded={eligiendoFecha}
+          aria-label={`Fecha: ${etiquetaOpcion(fecha, hoy)}. Tocá para cambiarla`}
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: 8,
             width: '100%',
-            height: '100%',
+            height: 48,
             borderRadius: 20,
             border: '1px solid var(--purple80)',
+            background: eligiendoFecha ? 'rgba(206,147,216,0.12)' : 'transparent',
             color: 'var(--purple80)',
             fontSize: 14,
+            cursor: 'pointer',
           }}
         >
           <IconoCalendario size={18} /> {etiquetaFecha(fecha, hoy)}
-        </div>
-        <input
-          type="date"
-          value={fecha}
-          min={masViejo}
-          max={hoy}
-          onChange={(e) => {
-            const f = e.target.value;
-            // El min/max del navegador ya lo limita, pero se revalida por las dudas:
-            // en un teclado se puede escribir cualquier cosa.
-            if (f && esFechaCargable(f, hoy, sectorId)) onFecha(f);
-          }}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            opacity: 0,
-            border: 'none',
-            background: 'transparent',
-          }}
-        />
+          <span style={{ display: 'flex', transform: eligiendoFecha ? 'rotate(180deg)' : 'none' }}>
+            <IconoDesplegar size={20} />
+          </span>
+        </button>
+        {eligiendoFecha && (
+          <div role="listbox" aria-label="Elegí la fecha" style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+            {opciones.map((f) => {
+              const elegida = f === fecha;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  role="option"
+                  aria-selected={elegida}
+                  onClick={() => {
+                    if (esFechaCargable(f, hoy, sectorId)) onFecha(f);
+                    setEligiendoFecha(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    minHeight: 46,
+                    padding: '0 16px',
+                    borderRadius: 14,
+                    border: elegida ? '1px solid var(--purple80)' : '1px solid rgba(255,255,255,0.12)',
+                    background: elegida ? 'rgba(156,39,176,0.35)' : 'rgba(255,255,255,0.06)',
+                    color: 'white',
+                    fontSize: 15,
+                    fontWeight: elegida ? 700 : 500,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ textTransform: 'capitalize' }}>{etiquetaOpcion(f, hoy)}</span>
+                  {elegida && <IconoCheck size={20} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <FormularioCarga valores={valores} set={set} tiposCarga={tiposCarga} sectorId={sectorId} />
