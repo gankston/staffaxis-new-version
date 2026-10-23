@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { v4 as uuid } from 'uuid';
 import { verifyDevice } from '../middleware/auth.js';
 import { normalizarDni, formatoDniValido } from '../lib/dniUtils.js';
+import { enListaNegra, rechazoListaNegra } from '../lib/listaNegra.js';
 
 function toDto(row) {
   return {
@@ -101,8 +102,10 @@ export async function employeeRoutes(app) {
     const destino = req.device.sectorId;
     if (!destino) return reply.status(400).send({ error: 'El equipo no tiene sector asignado' });
 
-    const actual = await db.query('SELECT id, sector_id, is_active FROM employees WHERE id = $1', [req.params.id]);
+    const actual = await db.query('SELECT id, sector_id, is_active, dni FROM employees WHERE id = $1', [req.params.id]);
     if (!actual.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
+    // Traer a alguien de la lista negra es darlo de alta en este sector.
+    if (await enListaNegra(actual.rows[0].dni)) return rechazoListaNegra(reply);
 
     const origen = actual.rows[0].sector_id;
     if (origen === destino && actual.rows[0].is_active) {
@@ -143,6 +146,8 @@ export async function employeeRoutes(app) {
     if (!formatoDniValido(dniValue)) {
       return reply.status(400).send({ error: 'El DNI no tiene un formato válido (7 a 9 dígitos)' });
     }
+    // Antes que nada: si esta en la lista negra no se da de alta ni se transfiere.
+    if (await enListaNegra(dniValue)) return rechazoListaNegra(reply);
 
     // Ya hay una ficha con este DNI? La base garantiza que hay a lo sumo UNA
     // (employees_dni_unico abarca activos Y ocultos), asi que se busca esa y se
@@ -240,6 +245,16 @@ export async function employeeRoutes(app) {
         if (otroSector.rows[0]) {
           return reply.status(422).send({ error: 'Ese DNI ya pertenece a un empleado activo en otro sector', code: 'EXISTS_OTHER_SECTOR' });
         }
+      }
+    }
+
+    // Lista negra: no se le puede poner un DNI de la lista a una ficha, ni
+    // reactivar (volver a listar) a alguien que esta en ella.
+    if (dniValue && await enListaNegra(dniValue)) return rechazoListaNegra(reply);
+    if (is_active === true) {
+      const actual = await db.query('SELECT dni, is_active FROM employees WHERE id = $1', [id]);
+      if (actual.rows[0] && !actual.rows[0].is_active && await enListaNegra(actual.rows[0].dni)) {
+        return rechazoListaNegra(reply);
       }
     }
 

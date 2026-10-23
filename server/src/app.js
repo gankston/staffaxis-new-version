@@ -79,6 +79,15 @@ async function runMigrations() {
       PRIMARY KEY (sector_id, vinculado_id)
     );
   `);
+  // Lista negra de RRHH (23/10/2026): DNIs que no se pueden dar de alta desde la
+  // app de los encargados (ver lib/listaNegra.js). Solo el DNI y el nombre.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS lista_negra (
+      dni        TEXT PRIMARY KEY,
+      nombre     TEXT,
+      cargado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
   // Sectores archivados (07/10/2026). Un sector con historia (empleados, tarjas)
   // no se puede borrar sin perder la liquidacion: archivado deja de aparecer en
   // StaffAdmin y en la lista de los telefonos, pero todo queda guardado y se
