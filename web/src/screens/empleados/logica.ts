@@ -196,15 +196,27 @@ export type OrigenCosecha = 'canadas' | 'inv' | 'bananas';
  * De donde puede salir la cosecha segun el sector (pedido de Gastón, 30/10/2026):
  * invernadero solo Raigón / Inv, cañadas solo Cañadas, y bananas (SOLAZUTY,
  * COLONIA, AGUADO, SAN AGUSTIN, PESCADO) solo Bananas. Va por el nombre, asi un
- * sector nuevo del mismo grupo sale bien solo. El resto (RAIGON, OFICINA, los de
- * prueba) sigue con los tres.
+ * sector nuevo del mismo grupo sale bien solo. RAIGON tambien queda solo con
+ * Raigón / Inv, que es lo unico que cargo desde septiembre. El resto (OFICINA,
+ * los de prueba) sigue con los tres.
  */
 export function origenesCosecha(sectorName: string): OrigenCosecha[] {
   const n = sectorName.trim().toUpperCase();
-  if (n.startsWith('INVERNADERO')) return ['inv'];
+  if (n.startsWith('INVERNADERO') || n.startsWith('RAIGON')) return ['inv'];
   if (n.startsWith('CAÑADAS')) return ['canadas'];
   if (/^(SOLAZUTY|COLONIA|AGUADO|SAN AGUSTIN|PESCADO)\b/.test(n)) return ['bananas'];
   return ['canadas', 'inv', 'bananas'];
+}
+
+/**
+ * La abonada es solo de banana (pedido de Gastón, 30/10/2026). Va por el nombre y
+ * no toca los tipos de carga de la base: el sector la sigue teniendo habilitada,
+ * pero la pantalla no la muestra. Los sectores de prueba la siguen viendo.
+ */
+export function abonadaEnSector(sectorName: string): boolean {
+  const n = sectorName.trim().toUpperCase();
+  return /^(SOLAZUTY|COLONIA|AGUADO|SAN AGUSTIN|PESCADO)\b/.test(n)
+    || ['PRUEBAS', 'PRUEBAS 2', 'SECTOR DE PRUEBA'].includes(n);
 }
 
 /**

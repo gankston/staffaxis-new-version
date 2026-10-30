@@ -5,7 +5,7 @@
  */
 import type { ReactNode } from 'react';
 import { TextField } from '../../components/ui';
-import { origenesCosecha, type ValoresCarga } from './logica';
+import { abonadaEnSector, origenesCosecha, type ValoresCarga } from './logica';
 
 // Sectores donde el slider va de a media hora (SECTORES_MEDIAS_HORAS).
 const SECTORES_MEDIAS_HORAS = new Set([
@@ -223,6 +223,9 @@ export function FormularioCarga({
   // mostrando: una tarja vieja cargada con otro origen tiene que poder corregirse.
   const origenes = origenesCosecha(sectorName);
   const verOrigen = (origen: (typeof origenes)[number], tildado: boolean) => tildado || origenes.includes(origen);
+  // La abonada, lo mismo: solo banana, salvo que la tarja ya la traiga tildada.
+  const verAbonada = tiposCarga.includes('abonada') && (valores.porAbonada || abonadaEnSector(sectorName));
+  const hayTipos = tiposCarga.some((t) => t !== 'abonada') || verAbonada;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -356,7 +359,7 @@ export function FormularioCarga({
         />
       )}
 
-      {tiposCarga.includes('abonada') && (
+      {verAbonada && (
         <CargaSimple
           label="Abonada"
           checked={valores.porAbonada}
@@ -388,7 +391,7 @@ export function FormularioCarga({
         </>
       )}
 
-      {tiposCarga.length > 0 && <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: 0 }} />}
+      {hayTipos && <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.12)', margin: 0 }} />}
 
       {tiposCarga.includes('has_fumigadas') && (
         <CargaSimple
