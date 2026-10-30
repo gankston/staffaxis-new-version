@@ -13,8 +13,9 @@
  * pedido-con-id + callback: la web llama al nativo con un id, el nativo resuelve
  * y responde llamando a window.__staffaxisCallback(id, json).
  *
- * Si no hay shell nativo (desarrollo en el navegador de escritorio) cae en un
- * stub para poder trabajar sin compilar un APK en cada cambio.
+ * Si no hay shell nativo cae en lo que da el navegador. Eso es el desarrollo en
+ * la compu, y desde el 27/10/2026 tambien los iPhone, que usan la web desde el
+ * icono de la pantalla de inicio (sin cuenta de Apple no hay app de iPhone).
  */
 import { marcarPaso, pasoTerminado } from './rastro';
 
@@ -82,17 +83,43 @@ function pedirAlNativo<T>(accion: (id: string) => void, timeoutMs: number): Prom
 
 export const hayShellNativo = (): boolean => typeof window.StaffAxisNative !== 'undefined';
 
+/** iPhone o iPad. El iPad con iOS 13+ se presenta como Mac; lo delata la pantalla tactil. */
+function aparatoDeApple(): 'iPhone' | 'iPad' | null {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPod/.test(ua)) return 'iPhone';
+  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'iPad';
+  return null;
+}
+
+/** Abierta desde el icono de la pantalla de inicio, sin la barra de Safari. */
+function desdePantallaDeInicio(): boolean {
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
 /**
- * device_id. En el shell nativo es el ANDROID_ID del telefono. En el navegador
- * de escritorio (solo desarrollo) se genera uno y se guarda en localStorage.
+ * device_id. En el shell nativo es el ANDROID_ID del telefono. Sin shell (el
+ * iPhone, o el desarrollo en la compu) se genera uno y se guarda en localStorage.
+ *
+ * Ojo en el iPhone: el icono de la pantalla de inicio tiene su propio
+ * almacenamiento, aparte del de Safari. Si se autoriza desde Safari y despues se
+ * agrega el icono, el icono es un telefono nuevo. Y si borran el icono, se pierde.
+ *
+ * Con el id alcanza para recuperar la sesion de un telefono autorizado
+ * (/api/auth/sesion-existente), asi que va al azar de verdad.
  */
 export function getDeviceId(): string {
   if (window.StaffAxisNative) return window.StaffAxisNative.getDeviceId();
   const CLAVE = 'staffaxis_dev_device_id';
   let id = localStorage.getItem(CLAVE);
   if (!id) {
-    id = `dev_${Math.random().toString(16).slice(2, 18)}`;
+    const azar = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+    id = `${aparatoDeApple() ? 'ios_web' : 'dev'}_${azar}`;
     localStorage.setItem(CLAVE, id);
+    // Que el navegador no lo borre por su cuenta cuando necesita lugar.
+    navigator.storage?.persist?.().catch(() => {});
   }
   return id;
 }
@@ -100,6 +127,8 @@ export function getDeviceId(): string {
 /** Equivale a "${Build.MANUFACTURER} ${Build.MODEL}".trim() */
 export function getPhoneModel(): string {
   if (window.StaffAxisNative) return window.StaffAxisNative.getPhoneModel();
+  const apple = aparatoDeApple();
+  if (apple) return `${apple} (${desdePantallaDeInicio() ? 'pantalla de inicio' : 'Safari'})`;
   return 'navegador (desarrollo)';
 }
 
@@ -336,19 +365,29 @@ export async function tomarFoto(): Promise<string | null> {
     const r = await pedirAlNativo<{ dataUrl?: string }>((id) => nativo.takePhoto(id), 120000);
     return r?.dataUrl ?? null;
   }
-  // Desarrollo en navegador: selector de archivo con la camara como preferencia.
-  // Tambien se achica, por las mismas razones que la galeria.
+  // Sin shell (iPhone, o desarrollo en la compu): selector de archivo con la
+  // camara como preferencia; en el iPhone abre la camara directo. Tambien se
+  // achica, por las mismas razones que la galeria. Va pegado a la pagina, como
+  // el de la galeria: hay versiones de Safari que ignoran el click en un
+  // <input> suelto.
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
     input.setAttribute('capture', 'environment');
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    const limpiar = () => input.remove();
     input.onchange = async () => {
       const file = input.files?.[0];
+      limpiar();
       if (!file) return resolve(null);
       resolve((await achicarImagen(file)) ?? (await leerCrudo(file)));
     };
-    input.oncancel = () => resolve(null);
+    input.oncancel = () => {
+      limpiar();
+      resolve(null);
+    };
     input.click();
   });
 }
