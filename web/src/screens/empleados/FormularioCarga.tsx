@@ -5,7 +5,7 @@
  */
 import type { ReactNode } from 'react';
 import { TextField } from '../../components/ui';
-import type { ValoresCarga } from './logica';
+import { origenesCosecha, type ValoresCarga } from './logica';
 
 // Sectores donde el slider va de a media hora (SECTORES_MEDIAS_HORAS).
 const SECTORES_MEDIAS_HORAS = new Set([
@@ -209,14 +209,20 @@ export function FormularioCarga({
   set,
   tiposCarga,
   sectorId,
+  sectorName,
 }: {
   valores: ValoresCarga;
   set: (parcial: Partial<ValoresCarga>) => void;
   tiposCarga: string[];
   sectorId: string;
+  sectorName: string;
 }) {
   const usarMediasHoras = SECTORES_MEDIAS_HORAS.has(sectorId);
   const paso = usarMediasHoras ? 0.5 : 1;
+  // Cada sector ve solo su origen de cosecha. Uno que ya venga tildado se sigue
+  // mostrando: una tarja vieja cargada con otro origen tiene que poder corregirse.
+  const origenes = origenesCosecha(sectorName);
+  const verOrigen = (origen: (typeof origenes)[number], tildado: boolean) => tildado || origenes.includes(origen);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -284,31 +290,31 @@ export function FormularioCarga({
             ) : undefined
           }
           subtipos={[
-            {
+            verOrigen('canadas', valores.cosechaCanadasCheck) && {
               label: 'Cañadas',
               etiquetaCampo: 'Cantidad',
               check: valores.cosechaCanadasCheck,
-              onCheck: (v) => set({ cosechaCanadasCheck: v, cosechaCanadasValor: v ? valores.cosechaCanadasValor : '' }),
+              onCheck: (v: boolean) => set({ cosechaCanadasCheck: v, cosechaCanadasValor: v ? valores.cosechaCanadasValor : '' }),
               valor: valores.cosechaCanadasValor,
-              onValor: (v) => set({ cosechaCanadasValor: v }),
+              onValor: (v: string) => set({ cosechaCanadasValor: v }),
             },
-            {
+            verOrigen('inv', valores.cosechaInvCheck) && {
               label: 'Raigón / Inv',
               etiquetaCampo: 'Cantidad',
               check: valores.cosechaInvCheck,
-              onCheck: (v) => set({ cosechaInvCheck: v, cosechaInvValor: v ? valores.cosechaInvValor : '' }),
+              onCheck: (v: boolean) => set({ cosechaInvCheck: v, cosechaInvValor: v ? valores.cosechaInvValor : '' }),
               valor: valores.cosechaInvValor,
-              onValor: (v) => set({ cosechaInvValor: v }),
+              onValor: (v: string) => set({ cosechaInvValor: v }),
             },
-            {
+            verOrigen('bananas', valores.cosechaBananasCheck) && {
               label: 'Bananas',
               etiquetaCampo: 'Cantidad',
               check: valores.cosechaBananasCheck,
-              onCheck: (v) => set({ cosechaBananasCheck: v, cosechaBananasValor: v ? valores.cosechaBananasValor : '' }),
+              onCheck: (v: boolean) => set({ cosechaBananasCheck: v, cosechaBananasValor: v ? valores.cosechaBananasValor : '' }),
               valor: valores.cosechaBananasValor,
-              onValor: (v) => set({ cosechaBananasValor: v }),
+              onValor: (v: string) => set({ cosechaBananasValor: v }),
             },
-          ]}
+          ].filter((s): s is Subtipo => !!s)}
         />
       )}
 

@@ -40,6 +40,7 @@ export function DialogoHoras({
   onObservaciones,
   tiposCarga,
   sectorId,
+  sectorName,
   guardando,
   error,
   onCerrar,
@@ -54,6 +55,7 @@ export function DialogoHoras({
   onObservaciones: (v: string) => void;
   tiposCarga: string[];
   sectorId: string;
+  sectorName: string;
   guardando: boolean;
   error?: string | null;
   onCerrar: () => void;
@@ -214,7 +216,7 @@ export function DialogoHoras({
         )}
       </div>
 
-      <FormularioCarga valores={valores} set={set} tiposCarga={tiposCarga} sectorId={sectorId} />
+      <FormularioCarga valores={valores} set={set} tiposCarga={tiposCarga} sectorId={sectorId} sectorName={sectorName} />
 
       <div style={{ marginTop: 12 }}>
         <TextField value={observaciones} onChange={onObservaciones} label="Observaciones (opcional)" multilinea />

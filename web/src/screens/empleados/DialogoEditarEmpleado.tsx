@@ -116,6 +116,7 @@ export function DialogoEditarEmpleado({
   empleado,
   tiposCarga,
   sectorId,
+  sectorName,
   onCerrar,
   onGuardado,
   onMensaje,
@@ -123,6 +124,7 @@ export function DialogoEditarEmpleado({
   empleado: Empleado;
   tiposCarga: string[];
   sectorId: string;
+  sectorName: string;
   onCerrar: () => void;
   onGuardado: (accion: 'editado' | 'oculto') => void;
   onMensaje: (texto: string, esError: boolean) => void;
@@ -263,6 +265,7 @@ export function DialogoEditarEmpleado({
           set={(p) => setValores((v) => (v ? { ...v, ...p } : v))}
           tiposCarga={tiposCarga}
           sectorId={sectorId}
+          sectorName={sectorName}
         />
       </Modal>
     );

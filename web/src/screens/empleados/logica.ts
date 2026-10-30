@@ -190,6 +190,23 @@ export const VALORES_CARGA_INICIAL: ValoresCarga = {
   cambioBolsaValor: '',
 };
 
+export type OrigenCosecha = 'canadas' | 'inv' | 'bananas';
+
+/**
+ * De donde puede salir la cosecha segun el sector (pedido de Gastón, 30/10/2026):
+ * invernadero solo Raigón / Inv, cañadas solo Cañadas, y bananas (SOLAZUTY,
+ * COLONIA, AGUADO, SAN AGUSTIN, PESCADO) solo Bananas. Va por el nombre, asi un
+ * sector nuevo del mismo grupo sale bien solo. El resto (RAIGON, OFICINA, los de
+ * prueba) sigue con los tres.
+ */
+export function origenesCosecha(sectorName: string): OrigenCosecha[] {
+  const n = sectorName.trim().toUpperCase();
+  if (n.startsWith('INVERNADERO')) return ['inv'];
+  if (n.startsWith('CAÑADAS')) return ['canadas'];
+  if (/^(SOLAZUTY|COLONIA|AGUADO|SAN AGUSTIN|PESCADO)\b/.test(n)) return ['bananas'];
+  return ['canadas', 'inv', 'bananas'];
+}
+
 /**
  * Misma condicion que el `enabled` del boton Guardar y que los `return` de
  * guardarHoras()/guardarEdicionRegistro(): cada tipo tildado exige su valor.

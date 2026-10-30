@@ -349,6 +349,7 @@ export function Empleados({
           onObservaciones={setObservaciones}
           tiposCarga={tiposCarga}
           sectorId={sector.id}
+          sectorName={sector.name}
           guardando={guardandoHoras}
           error={errorHoras}
           onCerrar={() => {
@@ -364,6 +365,7 @@ export function Empleados({
           empleado={paraEditar}
           tiposCarga={tiposCarga}
           sectorId={sector.id}
+          sectorName={sector.name}
           onCerrar={() => setParaEditar(null)}
           onGuardado={() => {
             setParaEditar(null);
