@@ -6,8 +6,12 @@
  *
  * Hay dos DNI dando vueltas:
  *  - El de siempre: codigo de barras en el FRENTE, al lado de la firma.
- *  - El NUEVO: el frente no tiene codigo. Se leen las tres lineas con "<<<" de
- *    la parte de ATRAS, y esa foto se guarda como DORSO.
+ *  - El NUEVO: el frente no tiene codigo. Tiene un QR en la parte de ATRAS con
+ *    los mismos datos, y esa foto se guarda como DORSO. Si el QR no se deja
+ *    leer, queda el rescate de leer las tres lineas con "<<<" como texto.
+ *
+ * Cualquiera de los dos botones de escanear lee los dos codigos: el encargado no
+ * tiene por que saber que DNI tiene en la mano.
  */
 import { useState } from 'react';
 import { Modal } from '../../components/Modal';
@@ -24,7 +28,7 @@ import {
   IconoLista,
   IconoPersonaMas,
 } from '../../components/iconos';
-import { bloquearLectorAndroid, leerPdf417, parsearDni, type DatosDni } from '../../domain/dniBarcode';
+import { bloquearLectorAndroid, leerCodigoDni, parsearDni, type DatosDni } from '../../domain/dniBarcode';
 import { leerConstancia as leerHoja } from '../../domain/constanciaOcr';
 import { leerDorsoDni, ultimoFalloDorso } from '../../domain/dniMrz';
 import { conRastro, rastroCaido } from '../../lib/rastro';
@@ -86,22 +90,40 @@ export function DialogoNuevoEmpleado({
     return r;
   });
 
-  /** Saca (o elige) la foto del frente, la decodifica y completa los datos. */
+  /**
+   * Lee el codigo del DNI de una foto: el de barras del frente o el QR de atras.
+   * El try/catch no es de adorno: si el lector tiraba una excepcion, la
+   * pantalla se quedaba en "Leyendo..." para siempre y no habia forma de salir
+   * mas que cerrando la app.
+   */
+  const leerCodigo = async (foto: string) => {
+    try {
+      return await conRastro('escaneo: leyendo el codigo del DNI', undefined, () => leerCodigoDni(foto));
+    } catch {
+      return null;
+    }
+  };
+
+  /** Codigo leido: la foto va como frente o como dorso segun de que lado era. */
+  const aplicarCodigo = (foto: string, datos: DatosDni) => {
+    if (datos.lado === 'dorso') setDorso(foto);
+    else setFrente(foto);
+    setLeido(datos);
+    setOrigen('escaneo');
+    setDni(datos.dni);
+    setApellido(datos.apellido);
+    setNombre(datos.nombre);
+    setPaso('datos');
+  };
+
+  /** Saca (o elige) la foto, la decodifica y completa los datos. */
   const escanear = async (obtener: () => Promise<string | null>) => {
     setErrorLectura(null);
     const foto = await obtener();
     if (!foto) return;
 
     setPaso('leyendo');
-    // El try/catch no es de adorno: si el lector tiraba una excepcion, la
-    // pantalla se quedaba en "Leyendo..." para siempre y no habia forma de
-    // salir mas que cerrando la app.
-    let crudo: string | null = null;
-    try {
-      crudo = await conRastro('escaneo: leyendo el codigo de barras', undefined, () => leerPdf417(foto));
-    } catch {
-      crudo = null;
-    }
+    const crudo = await leerCodigo(foto);
     const datos = crudo ? parsearDni(crudo) : null;
 
     if (!datos && !crudo) {
@@ -118,7 +140,7 @@ export function DialogoNuevoEmpleado({
       setErrorLectura(
         ultimoFalloDorso() === 'lector'
           ? 'No se pudo leer el código del frente, y para leer la parte de atrás no se pudo cargar el lector de texto. Revisá la conexión a internet y probá de nuevo (la primera vez baja unos MB).'
-          : 'No se pudo leer el DNI. DNI de siempre: sacale la foto al FRENTE, con el código completo y enfocado. DNI nuevo (sin código adelante): sacale la foto a la parte de ATRÁS, que se vean bien las tres líneas con <<<.',
+          : 'No se pudo leer el DNI. DNI de siempre: sacale la foto al FRENTE, con el código completo y enfocado. DNI nuevo (sin código adelante): sacale la foto a la parte de ATRÁS, con el QR entero, enfocado y sin reflejos.',
       );
       return;
     }
@@ -128,20 +150,16 @@ export function DialogoNuevoEmpleado({
       return;
     }
 
-    // La foto del frente ya la sacamos: se aprovecha para la ficha.
-    setFrente(foto);
-    setLeido(datos);
-    setOrigen('escaneo');
-    setDni(datos.dni);
-    setApellido(datos.apellido);
-    setNombre(datos.nombre);
-    setPaso('datos');
+    // La foto ya la sacamos: se aprovecha para la ficha, del lado que corresponda.
+    aplicarCodigo(foto, datos);
   };
 
   /**
-   * DNI nuevo: se lee la parte de ATRAS. El DNI sale verificado (las lineas
-   * "<<<" traen digito verificador) y queda bloqueado; el nombre no tiene
-   * verificador, puede venir cortado o sin Ñ, y queda editable.
+   * DNI nuevo: se lee la parte de ATRAS. Primero el QR, que trae los datos
+   * exactos y se lee en un momento. Si el QR no sale (foto movida, reflejo), se
+   * leen las lineas "<<<" como texto: ahi el DNI sale verificado (traen digito
+   * verificador) y queda bloqueado, pero el nombre no tiene verificador, puede
+   * venir cortado o sin Ñ, y queda editable.
    *
    * La foto es del dorso, asi que se guarda como DORSO, no como frente.
    */
@@ -149,6 +167,14 @@ export function DialogoNuevoEmpleado({
     setErrorLectura(null);
     const foto = await obtener();
     if (!foto) return;
+
+    setPaso('leyendo');
+    const crudo = await leerCodigo(foto);
+    const leidoDelCodigo = crudo ? parsearDni(crudo) : null;
+    if (leidoDelCodigo) {
+      aplicarCodigo(foto, leidoDelCodigo);
+      return;
+    }
 
     setPaso('leyendoDorso');
     const datos = await leerLineasDorso(foto);
@@ -162,7 +188,7 @@ export function DialogoNuevoEmpleado({
           ? 'No se pudo cargar el lector de texto. Revisá la conexión a internet y probá de nuevo (la primera vez baja unos MB).'
           : motivo === 'foto'
             ? 'No se pudo abrir la foto. Probá sacarla de nuevo.'
-            : 'No se encontraron las líneas con <<< en la foto. Sacala con el DNI entero, derecho, de cerca, con buena luz y sin reflejo sobre esas tres líneas.',
+            : 'No se pudo leer la parte de atrás. Sacale la foto con el DNI entero, derecho y de cerca, con buena luz, y que el QR salga enfocado y sin reflejos.',
       );
       return;
     }
@@ -186,6 +212,7 @@ export function DialogoNuevoEmpleado({
       nombre: datos.nombre,
       sexo: datos.sexo,
       fechaNacimiento: datos.fechaNacimiento,
+      lado: 'dorso',
       crudo: '',
     });
     setOrigen('dorso');
@@ -517,8 +544,8 @@ export function DialogoNuevoEmpleado({
             }}
           >
             <div style={{ fontSize: 14, color: '#a7e6ee', textAlign: 'center', lineHeight: 1.45 }}>
-              <strong style={{ color: 'white' }}>¿Es un DNI nuevo?</strong> El código está en la{' '}
-              <strong style={{ color: 'white' }}>parte de atrás</strong>.
+              <strong style={{ color: 'white' }}>¿Es un DNI nuevo?</strong> No tiene código adelante: tiene un{' '}
+              <strong style={{ color: 'white' }}>QR en la parte de atrás</strong>. Sacale la foto a ese lado.
             </div>
             <button
               onClick={() => escanearDorso(tomarFoto)}

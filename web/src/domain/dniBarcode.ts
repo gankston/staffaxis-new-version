@@ -1,17 +1,19 @@
 /**
- * Lectura del codigo de barras PDF417 del FRENTE del DNI argentino (esta al
- * lado de la firma; el dorso solo tiene la huella y el domicilio).
+ * Lectura del codigo del DNI argentino. Hay dos:
  *
- * Ojo: no es un QR. Es el codigo ancho de barras finas que esta abajo del todo
- * en el reverso de la tarjeta. Adentro viene el mismo dato que esta impreso,
- * separado por "@".
+ * 1) DNI de siempre (desde ~2012): codigo de barras PDF417 en el FRENTE, al lado
+ *    de la firma. Adentro viene el dato impreso separado por "@":
+ *      00123456789@APELLIDO@NOMBRES@M@12345678@A@01/01/1980@01/01/2016@123
+ *         tramite  apellido nombres  sexo  dni  ejemplar  nacimiento  emision
+ *    Conviven ejemplares mas viejos con el orden cambiado, asi que ademas del
+ *    caso normal hay una pasada de rescate que busca el DNI por forma.
  *
- * Formato de la tarjeta actual (desde ~2012):
- *   00123456789@APELLIDO@NOMBRES@M@12345678@A@01/01/1980@01/01/2016@123
- *      tramite  apellido nombres  sexo  dni  ejemplar  nacimiento  emision
- *
- * Conviven ejemplares mas viejos con el orden cambiado, asi que ademas del
- * caso normal hay una pasada de rescate que busca el DNI por forma.
+ * 2) DNI NUEVO (2026): el frente no tiene codigo; hay un QR comun en la parte de
+ *    ATRAS. Trae casi lo mismo, en otro orden, sin el sexo, con el año en dos
+ *    cifras, y al final una firma digital (un JWT) con el numero de tramite:
+ *      00712345678@APELLIDO@NOMBRES@12345678@C@05/07/87@24/09/26@eyJ0eXAi...
+ *         tramite  apellido nombres  dni  ejemplar nacimiento emision firma
+ *    Comprobado con dos DNI nuevos reales que el encargado no pudo escanear.
  */
 
 import { marcarPaso } from '../lib/rastro';
@@ -22,6 +24,11 @@ export interface DatosDni {
   nombre: string;
   sexo: string | null;
   fechaNacimiento: string | null;
+  /**
+   * De que lado del DNI es la foto: el codigo de barras esta en el frente, el
+   * QR del DNI nuevo en la parte de atras. Define donde se guarda la foto.
+   */
+  lado: 'frente' | 'dorso';
   /** El contenido crudo, por si hay que revisar un ejemplar raro. */
   crudo: string;
 }
@@ -39,9 +46,56 @@ const limpiarNombre = (s: string) =>
     .replace(/\s+/g, ' ')
     .toUpperCase();
 
+/** Fecha del QR del DNI nuevo: dd/mm/aa. */
+const FECHA_CORTA = /^(\d{2})\/(\d{2})\/(\d{2})$/;
+
+/**
+ * El QR del DNI nuevo trae el año en dos cifras. Para el nacimiento: si las dos
+ * cifras son mayores que el año en curso es del 1900 (87 -> 1987), si no del
+ * 2000 (04 -> 2004). Nadie que se da de alta tiene mas de 100 años.
+ */
+function fechaDeQr(s: string): string | null {
+  const m = FECHA_CORTA.exec(s.trim());
+  if (!m) return null;
+  const aa = Number(m[3]);
+  const siglo = aa > new Date().getFullYear() % 100 ? 1900 : 2000;
+  return `${m[1]}/${m[2]}/${siglo + aa}`;
+}
+
+/** Firma digital del final del QR: un JWT (tres pedazos base64url con puntos). */
+const FIRMA_QR = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+/** Es el QR del DNI nuevo: tramite@APELLIDO@NOMBRES@DNI@EJEMPLAR@nac@emision@firma */
+function esQrDniNuevo(p: string[]): boolean {
+  return (
+    p.length >= 7 &&
+    /^\d{11}$/.test(p[0]) &&
+    pareceTexto(p[1]) &&
+    pareceTexto(p[2]) &&
+    /^\d{7,9}$/.test(p[3]) &&
+    /^[A-Z]$/i.test(p[4]) &&
+    fechaDeQr(p[5]) !== null &&
+    fechaDeQr(p[6]) !== null &&
+    (p.length === 7 || FIRMA_QR.test(p[7]))
+  );
+}
+
 export function parsearDni(crudo: string): DatosDni | null {
   if (!crudo || !crudo.trim()) return null;
   const partes = crudo.split('@').map((p) => p.trim());
+
+  // DNI nuevo: QR de la parte de atras.
+  if (esQrDniNuevo(partes)) {
+    return {
+      dni: partes[3],
+      apellido: limpiarNombre(partes[1]),
+      nombre: limpiarNombre(partes[2]),
+      sexo: null,
+      fechaNacimiento: fechaDeQr(partes[5]),
+      lado: 'dorso',
+      crudo,
+    };
+  }
 
   // Caso normal: tramite, apellido, nombres, sexo, dni, ...
   if (partes.length >= 5 && pareceDni(partes[4]) && pareceTexto(partes[1]) && pareceTexto(partes[2])) {
@@ -51,6 +105,7 @@ export function parsearDni(crudo: string): DatosDni | null {
       nombre: limpiarNombre(partes[2]),
       sexo: partes[3] || null,
       fechaNacimiento: partes[6] || null,
+      lado: 'frente',
       crudo,
     };
   }
@@ -69,6 +124,7 @@ export function parsearDni(crudo: string): DatosDni | null {
     nombre: limpiarNombre(textos[1]),
     sexo: partes.find((p) => /^[MF]$/i.test(p)) ?? null,
     fechaNacimiento: partes.find((p) => /^\d{2}\/\d{2}\/\d{4}$/.test(p)) ?? null,
+    lado: 'frente',
     crudo,
   };
 }
@@ -82,16 +138,16 @@ function conTope<T>(p: Promise<T>, ms: number): Promise<T | null> {
 }
 
 /**
- * Decodifica el PDF417 de una foto. Se prueba primero el BarcodeDetector del
- * sistema (lo trae el WebView de Android y es mucho mas rapido); si no esta,
- * cae a ZXing, que se carga solo en ese momento para no engordar el bundle.
+ * Decodifica el codigo del DNI de una foto: el PDF417 del frente del DNI de
+ * siempre o el QR de atras del DNI nuevo, el que este. ZXing se carga solo en
+ * ese momento para no engordar el bundle.
  *
  * ESTA FUNCION NO TIRA NUNCA Y NO SE CUELGA NUNCA. Antes, si la imagen no
  * cargaba, la promesa de cargarImagen se quedaba sin resolver ni rechazar y la
  * pantalla quedaba en "Leyendo..." para siempre; y si rechazaba, la excepcion
  * salia para arriba y dejaba la pantalla trabada igual.
  */
-export async function leerPdf417(dataUrl: string): Promise<string | null> {
+export async function leerCodigoDni(dataUrl: string): Promise<string | null> {
   marcarPaso('escaneo: abriendo la foto');
   const img = await conTope(cargarImagen(dataUrl), 15_000);
   if (!img) return null;
@@ -143,10 +199,17 @@ export async function leerPdf417(dataUrl: string): Promise<string | null> {
  */
 const SOLO_TEXTO_DNI = /^[0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ@/ .,'-]+$/;
 
-function lecturaValida(texto: string | null | undefined): string | null {
+/**
+ * Exportada para los tests. En el QR del DNI nuevo la firma del final trae "_"
+ * (es base64url): se controla aparte, con su propia forma, y el filtro de
+ * caracteres se aplica solo a los datos de la persona.
+ */
+export function lecturaValida(texto: string | null | undefined): string | null {
   if (!texto) return null;
   const t = texto.trim();
-  if (!SOLO_TEXTO_DNI.test(t)) return null;
+  const partes = t.split('@');
+  const datos = partes.length >= 8 && FIRMA_QR.test(partes[7].trim()) ? partes.slice(0, 7).join('@') : t;
+  if (!SOLO_TEXTO_DNI.test(datos)) return null;
   if (!parsearDni(t)) return null;
   return estructuraCoherente(t) ? t : null;
 }
@@ -174,6 +237,9 @@ const fechaReal = (s: string) => {
  */
 function estructuraCoherente(t: string): boolean {
   const p = t.split('@').map((x) => x.trim());
+  // El QR del DNI nuevo tiene su propio orden (ver esQrDniNuevo). Un QR, ademas,
+  // corrige sus errores o no lee: no devuelve basura como el PDF417.
+  if (esQrDniNuevo(p)) return true;
   const formatoNuevo = p.length >= 8 && /^\d{11}$/.test(p[0]);
   if (formatoNuevo) {
     return (
@@ -222,9 +288,10 @@ async function conDetectorDelSistema(img: HTMLImageElement): Promise<string | nu
   const H = img.naturalHeight || img.height;
   const chica = W && H ? aLienzo(img, { escala: Math.min(1, 1600 / Math.max(W, H)) }) : null;
   try {
-    const formatos = await Detector.getSupportedFormats?.();
-    if (formatos && !formatos.includes('pdf417')) return null;
-    const encontrados = await new Detector({ formats: ['pdf417'] }).detect(chica ?? img);
+    const soportados = await Detector.getSupportedFormats?.();
+    const formatos = ['pdf417', 'qr_code'].filter((f) => !soportados || soportados.includes(f));
+    if (!formatos.length) return null;
+    const encontrados = await new Detector({ formats: formatos }).detect(chica ?? img);
     for (const e of encontrados) {
       const v = lecturaValida(e.rawValue);
       if (v) return v;
@@ -274,7 +341,11 @@ async function conZxing(
   }
   const hints = new Map();
   hints.set(z.DecodeHintType.TRY_HARDER, true);
-  hints.set(z.DecodeHintType.POSSIBLE_FORMATS, [z.BarcodeFormat.PDF_417]);
+  hints.set(z.DecodeHintType.POSSIBLE_FORMATS, [z.BarcodeFormat.PDF_417, z.BarcodeFormat.QR_CODE]);
+  // Los dos lectores en cada version de la foto: el PDF417 del frente del DNI de
+  // siempre y el QR de atras del DNI nuevo. Cuando no hay QR, el lector de QR
+  // falla en milisegundos (no encuentra las tres esquinas), asi que casi no suma.
+  const lectores = [() => new z.PDF417Reader(), () => new z.QRCodeReader()];
 
   // Tope de tiempo REAL. Sin esto, con una foto sin codigo recorre todos los
   // intentos: en la PC eran 10 segundos, en un telefono puede ser el triple.
@@ -291,18 +362,20 @@ async function conZxing(
     await new Promise((r) => setTimeout(r, 0));
     marcarPaso(`escaneo: ZXing, pasada ${++intento}`, `${lienzo.width}x${lienzo.height}`);
     for (const Binarizador of [z.GlobalHistogramBinarizer, z.HybridBinarizer]) {
-      try {
-        const mapa = new z.BinaryBitmap(
-          new Binarizador(new z.HTMLCanvasElementLuminanceSource(lienzo)),
-        );
-        const texto = lecturaValida(new z.PDF417Reader().decode(mapa, hints).getText());
-        if (texto) {
-          lienzo.width = 0;
-          lienzo.height = 0;
-          return texto;
+      for (const lector of lectores) {
+        try {
+          const mapa = new z.BinaryBitmap(
+            new Binarizador(new z.HTMLCanvasElementLuminanceSource(lienzo)),
+          );
+          const texto = lecturaValida(lector().decode(mapa, hints).getText());
+          if (texto) {
+            lienzo.width = 0;
+            lienzo.height = 0;
+            return texto;
+          }
+        } catch {
+          /* esta combinacion no lo encontro, se prueba la siguiente */
         }
-      } catch {
-        /* esta combinacion no lo encontro, se prueba la siguiente */
       }
     }
     // Se suelta la memoria del canvas ya, sin esperar al recolector: son
