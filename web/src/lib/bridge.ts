@@ -26,6 +26,8 @@ interface AndroidNativeInterface {
   getShellVersion(): string;
   requestLocation(requestId: string): void;
   takePhoto(requestId: string): void;
+  /** Desde el shell 5.1.0: token de Firebase para las notificaciones ('' si todavia no hay). */
+  getPushToken?(): string;
 }
 
 declare global {
@@ -130,6 +132,19 @@ export function getPhoneModel(): string {
   const apple = aparatoDeApple();
   if (apple) return `${apple} (${desdePantallaDeInicio() ? 'pantalla de inicio' : 'Safari'})`;
   return 'navegador (desarrollo)';
+}
+
+/**
+ * Token de Firebase del telefono para mandarle notificaciones. Solo existe en el
+ * shell 5.1.0 en adelante; en los viejos, el iPhone y la compu devuelve null.
+ */
+export function getPushToken(): string | null {
+  try {
+    const t = window.StaffAxisNative?.getPushToken?.();
+    return t ? t : null;
+  } catch {
+    return null;
+  }
 }
 
 export function getShellVersion(): string {

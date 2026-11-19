@@ -378,6 +378,12 @@ export const api = {
 
   estadoDispositivo: () => pedir<{ ok: boolean; is_master: boolean | null }>('/api/auth/device/status'),
 
+  // Notificaciones: le dice al servidor a donde le llegan a este telefono.
+  registrarPushToken: (token: string, modelo: string) =>
+    pedir<{ ok: boolean }>('/api/push/token', { method: 'POST', body: { token, modelo } }),
+  registrarPushTokenSupervisor: (token: string, modelo: string) =>
+    pedir<{ ok: boolean }>('/api/supervisor/push-token', { method: 'POST', body: { token, modelo } }),
+
   // Empleados
   getEmpleados: (sectorId: string) =>
     pedir<{ employees: EmployeeDto[] }>('/api/employees', { query: { sector_id: sectorId } }),

@@ -83,6 +83,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Android 13+: las notificaciones necesitan permiso. Si dice que no, la app
+    // anda igual, solo que no le van a sonar los avisos.
+    private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     private val permisoUbicacion = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { resolverUbicacion() }
@@ -163,6 +167,18 @@ class MainActivity : AppCompatActivity() {
         web.loadUrl(BuildConfig.WEB_URL)
 
         buscarActualizacion()
+        prepararNotificaciones()
+    }
+
+    private fun prepararNotificaciones() {
+        Avisos.crearCanal(this)
+        Avisos.refrescarToken(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            permisoNotificaciones.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     /**
@@ -310,6 +326,10 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getShellVersion(): String = BuildConfig.VERSION_NAME
+
+        /** Token de Firebase para las notificaciones ("" si todavia no llego). */
+        @JavascriptInterface
+        fun getPushToken(): String = Avisos.token(this@MainActivity)
 
         @JavascriptInterface
         fun requestLocation(requestId: String) {

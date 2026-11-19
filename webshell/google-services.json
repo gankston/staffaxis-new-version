@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "48147887299",
+    "project_id": "staffaxis-bfd61",
+    "storage_bucket": "staffaxis-bfd61.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:48147887299:android:46ed6381cfdcde4a00de76",
+        "android_client_info": {
+          "package_name": "com.registro.empleados"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmMyZQjILZv0_t7kAcg3_6wfYHaoHeF0Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

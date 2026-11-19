@@ -1,6 +1,9 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    // Notificaciones (Firebase Cloud Messaging, proyecto staffaxis-bfd61).
+    // Lee webshell/google-services.json.
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -13,10 +16,10 @@ android {
         applicationId = "com.registro.empleados"
         minSdk = 26
         targetSdk = 35
-        // Tiene que ser mayor que el de la app nativa instalada (la publicada es 64,
-        // la compilada 65), si no Android lo rechaza como si fuera una version vieja.
-        versionCode = 66
-        versionName = "5.0.0"
+        // Siempre mayor que el publicado (5.0.0 = 66), si no Android lo rechaza
+        // como si fuera una version vieja. 5.1.0: notificaciones.
+        versionCode = 67
+        versionName = "5.1.0"
 
         buildConfigField("String", "WEB_URL", "\"https://staffaxis-new-version-production.up.railway.app/app\"")
     }
@@ -25,7 +28,7 @@ android {
     // cuando se le saque el sufijo del applicationId.
     signingConfigs {
         create("release") {
-            storeFile = file("${System.getenv("USERPROFILE")}\\Desktop\\Versions Staffaxis\\staffaxis-release.keystore")
+            storeFile = file("${System.getenv("USERPROFILE")}\\Desktop\\Proyectos\\Versions Staffaxis\\staffaxis-release.keystore")
             storePassword = "staffaxis123"
             keyAlias = "staffaxis"
             keyPassword = "staffaxis123"
@@ -59,4 +62,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
 }

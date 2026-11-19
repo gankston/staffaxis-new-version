@@ -16,6 +16,7 @@ import { statsRoutes }      from './routes/stats.js';
 import { photoRoutes }      from './routes/photos.js';
 import { webAppRoutes, adminWebRoutes } from './routes/webApp.js';
 import { certificadoRoutes, limpiarCertificadosHuerfanos } from './routes/certificados.js';
+import { pushRoutes }       from './routes/push.js';
 
 // Espera a que la DB esté lista (la red interna de Railway puede tardar al arrancar).
 // Reintenta con paciencia en vez de crashear al primer timeout.
@@ -96,6 +97,20 @@ async function runMigrations() {
     ALTER TABLE sectors ADD COLUMN IF NOT EXISTS archivado BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE sectors ADD COLUMN IF NOT EXISTS archivado_en TIMESTAMPTZ;
   `);
+  // Notificaciones al telefono (19/11/2026): a donde le llegan a cada telefono.
+  // Un token de Firebase por telefono; sector_id es el sector actual del encargado.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      token          TEXT PRIMARY KEY,
+      device_id      TEXT NOT NULL,
+      sector_id      UUID,
+      supervisor_id  UUID,
+      modelo         TEXT,
+      actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS push_tokens_device ON push_tokens (device_id);
+    CREATE INDEX IF NOT EXISTS push_tokens_sector ON push_tokens (sector_id);
+  `);
   // Un dia de un empleado no puede quedar con dos certificados vivos.
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS certificado_dia_unico
@@ -121,6 +136,7 @@ const start = async () => {
   await app.register(webAppRoutes);
   await app.register(adminWebRoutes);
   await app.register(certificadoRoutes);
+  await app.register(pushRoutes);
 
   app.get('/health', async () => ({ ok: true }));
 

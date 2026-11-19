@@ -3,7 +3,7 @@ import { alRevocarse, api } from './lib/api';
 import { recuperarSesion } from './lib/auth';
 import { Spinner } from './components/ui';
 import { sesion } from './lib/session';
-import { getDeviceId } from './lib/bridge';
+import { getDeviceId, getPhoneModel, getPushToken } from './lib/bridge';
 import { SinConexion } from './screens/SinConexion';
 import { Bienvenida } from './screens/Bienvenida';
 import { Main } from './screens/Main';
@@ -16,6 +16,36 @@ export type Ruta = 'bienvenida' | 'main' | 'supervisor_entry' | 'supervisor_main
 // El boton para saltar entre modo tarja y modo supervisor existe SOLO en el
 // telefono de Gaston (mismo device_id fijo que en SessionViewModel.kt).
 const MI_TELEFONO_DEVICE_ID = 'fbb9b66cbf60a6e7';
+
+/**
+ * Le pasa al servidor el token de notificaciones del telefono (shell 5.1.0+).
+ * Se manda si cambio o una vez por dia: el servidor saca los tokens muertos y
+ * asi un telefono que estuvo apagado vuelve a quedar anotado solo.
+ */
+const CLAVE_PUSH = 'staffaxis_push_enviado';
+let enviandoPush = false;
+async function registrarNotificaciones() {
+  const token = getPushToken();
+  if (!token || enviandoPush) return;
+  const deviceToken = sesion.getDeviceToken();
+  const supervisorToken = sesion.getSupervisorToken();
+  if (!deviceToken && !supervisorToken) return;
+  let previo: { token?: string; en?: number; quien?: string } = {};
+  try { previo = JSON.parse(localStorage.getItem(CLAVE_PUSH) ?? '{}'); } catch { /* vacio */ }
+  const quien = deviceToken ? 'dispositivo' : 'supervisor';
+  const unDia = 24 * 60 * 60 * 1000;
+  if (previo.token === token && previo.quien === quien && Date.now() - (previo.en ?? 0) < unDia) return;
+  enviandoPush = true;
+  try {
+    if (deviceToken) await api.registrarPushToken(token, getPhoneModel());
+    else await api.registrarPushTokenSupervisor(token, getPhoneModel());
+    try { localStorage.setItem(CLAVE_PUSH, JSON.stringify({ token, en: Date.now(), quien })); } catch { /* sin storage */ }
+  } catch {
+    /* sin conexion: se reintenta en el proximo latido */
+  } finally {
+    enviandoPush = false;
+  }
+}
 
 function destinoInicial(): Ruta {
   const token = sesion.getDeviceToken();
@@ -59,7 +89,10 @@ export function App() {
   // Heartbeat: cada 25s, mientras haya sesion, para detectar la revocacion aunque
   // el usuario no toque nada. Tambien refresca is_master.
   useEffect(() => {
+    // Al abrir no se espera al primer latido: el token suele estar a los pocos segundos.
+    const primero = setTimeout(registrarNotificaciones, 4000);
     const id = setInterval(async () => {
+      registrarNotificaciones();
       if (!sesion.getDeviceToken()) return;
       try {
         const r = await api.estadoDispositivo();
@@ -68,7 +101,10 @@ export function App() {
         /* sin conexion: el interceptor ya maneja la revocacion real */
       }
     }, 25_000);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(primero);
+      clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
