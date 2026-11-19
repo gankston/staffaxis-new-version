@@ -35,6 +35,7 @@ const fechaReal = (s) => {
 
 const SELECT_CERTIFICADOS = `
   SELECT c.id, c.employee_id, c.tipo_archivo, c.nombre_original, c.observaciones, c.created_at,
+         (c.archivo_dorso IS NOT NULL) AS tiene_dorso, c.tipo_archivo_dorso,
          array_agg(to_char(d.fecha, 'YYYY-MM-DD') ORDER BY d.fecha) AS fechas
   FROM certificados_medicos c
   JOIN certificado_medico_dias d ON d.certificado_id = c.id AND NOT d.is_deleted
@@ -56,10 +57,13 @@ export async function limpiarCertificadosHuerfanos(log) {
   } catch {
     return; // todavia no hay carpeta
   }
-  const candidatos = nombres.filter((n) => /^[0-9a-f-]{36}\.(pdf|jpe?g|png)$/i.test(n));
+  const candidatos = nombres.filter((n) => /^[0-9a-f-]{36}(_dorso)?\.(pdf|jpe?g|png)$/i.test(n));
   if (!candidatos.length) return;
-  const { rows } = await db.query('SELECT archivo FROM certificados_medicos WHERE archivo = ANY($1)', [candidatos]);
-  const conFila = new Set(rows.map((r) => r.archivo));
+  const { rows } = await db.query(
+    'SELECT archivo, archivo_dorso FROM certificados_medicos WHERE archivo = ANY($1) OR archivo_dorso = ANY($1)',
+    [candidatos]
+  );
+  const conFila = new Set(rows.flatMap((r) => [r.archivo, r.archivo_dorso]).filter(Boolean));
   let borrados = 0;
   for (const n of candidatos) {
     if (conFila.has(n)) continue;
@@ -105,36 +109,50 @@ export async function certificadoRoutes(app) {
       });
     }
 
-    const data = await req.file({ limits: { fileSize: TOPE_BYTES } });
-    if (!data) return reply.status(400).send({ error: 'Falta el archivo del certificado' });
-    const ext = TIPOS[data.mimetype];
-    if (!ext) {
-      data.file.resume();
-      return reply.status(400).send({ error: 'El certificado tiene que ser una foto (JPG o PNG) o un PDF' });
-    }
-
+    // Frente y dorso (19/11/2026): el campo "archivo" es el frente (asi lo
+    // mandaban las versiones anteriores, que siguen andando) y "dorso" el de
+    // atras. Se van guardando a medida que llegan; si algo falla se borra todo.
     const id = uuid();
-    const archivo = `${id}.${ext}`;
-    const destino = path.join(CERT_DIR, archivo);
     await fsp.mkdir(CERT_DIR, { recursive: true });
+    const guardados = {};
+    const limpiar = () => Promise.all(Object.values(guardados).map((g) => fsp.unlink(g.destino).catch(() => {})));
+    let falla = null;
     try {
-      await pipeline(data.file, fs.createWriteStream(destino));
+      for await (const parte of req.parts({ limits: { fileSize: TOPE_BYTES } })) {
+        if (parte.type !== 'file') continue;
+        const lado = parte.fieldname === 'dorso' ? 'dorso' : 'frente';
+        const ext = TIPOS[parte.mimetype];
+        if (guardados[lado] || !ext || falla) {
+          if (!ext && !falla) falla = { code: 400, error: 'El certificado tiene que ser una foto (JPG o PNG) o un PDF' };
+          parte.file.resume();
+          continue;
+        }
+        const archivo = lado === 'frente' ? `${id}.${ext}` : `${id}_dorso.${ext}`;
+        const destino = path.join(CERT_DIR, archivo);
+        guardados[lado] = { archivo, destino, mimetype: parte.mimetype, filename: parte.filename ?? null };
+        await pipeline(parte.file, fs.createWriteStream(destino));
+        if (parte.file.truncated) falla = { code: 413, error: 'El archivo pesa más de 15 MB' };
+      }
     } catch {
-      await fsp.unlink(destino).catch(() => {});
-      return reply.status(500).send({ error: 'No se pudo guardar el archivo' });
+      falla = falla ?? { code: 500, error: 'No se pudo guardar el archivo' };
     }
-    if (data.file.truncated) {
-      await fsp.unlink(destino).catch(() => {});
-      return reply.status(413).send({ error: 'El archivo pesa más de 15 MB' });
+    if (!falla && !guardados.frente) falla = { code: 400, error: 'Falta el archivo del certificado' };
+    if (falla) {
+      await limpiar();
+      return reply.status(falla.code).send({ error: falla.error });
     }
+    const data = guardados.frente;
+    const dorso = guardados.dorso ?? null;
 
     const cliente = await db.connect();
     try {
       await cliente.query('BEGIN');
       await cliente.query(
-        `INSERT INTO certificados_medicos (id, employee_id, archivo, tipo_archivo, nombre_original, observaciones)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [id, employee_id, archivo, data.mimetype, data.filename ?? null, observaciones?.trim() || null]
+        `INSERT INTO certificados_medicos (id, employee_id, archivo, tipo_archivo, nombre_original, observaciones,
+                                           archivo_dorso, tipo_archivo_dorso, nombre_original_dorso)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [id, employee_id, data.archivo, data.mimetype, data.filename, observaciones?.trim() || null,
+         dorso?.archivo ?? null, dorso?.mimetype ?? null, dorso?.filename ?? null]
       );
       await cliente.query(
         `INSERT INTO certificado_medico_dias (certificado_id, employee_id, fecha)
@@ -144,7 +162,7 @@ export async function certificadoRoutes(app) {
       await cliente.query('COMMIT');
     } catch (err) {
       await cliente.query('ROLLBACK').catch(() => {});
-      await fsp.unlink(destino).catch(() => {});
+      await limpiar();
       // Dos cargas a la vez del mismo dia: el indice unico frena la segunda.
       if (err.code === '23505') {
         return reply.status(409).send({ error: 'Esos días ya tienen certificado', code: 'DIAS_CON_CERTIFICADO' });
@@ -155,7 +173,7 @@ export async function certificadoRoutes(app) {
       cliente.release();
     }
 
-    return reply.status(201).send({ id, employee_id, fechas, tipo_archivo: data.mimetype, nombre_original: data.filename ?? null });
+    return reply.status(201).send({ id, employee_id, fechas, tipo_archivo: data.mimetype, nombre_original: data.filename, tiene_dorso: !!dorso });
   });
 
   // GET /api/admin/certificados?sector_id=X&start_date=Y&end_date=Z   (vista previa y Excel)
@@ -183,19 +201,22 @@ export async function certificadoRoutes(app) {
     return reply.send({ certificados: r.rows });
   });
 
-  // GET /api/admin/certificados/:id/archivo — la foto o el PDF
+  // GET /api/admin/certificados/:id/archivo[?lado=dorso] — la foto o el PDF
   app.get('/api/admin/certificados/:id/archivo', { preHandler: verifyAdmin }, async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.status(404).send({ error: 'Certificado no encontrado' });
     // Uno borrado ya no se muestra en ningun lado: tampoco se baja.
     const r = await db.query(
-      'SELECT archivo, tipo_archivo, nombre_original FROM certificados_medicos WHERE id = $1 AND NOT is_deleted',
+      `SELECT archivo, tipo_archivo, archivo_dorso, tipo_archivo_dorso
+       FROM certificados_medicos WHERE id = $1 AND NOT is_deleted`,
       [req.params.id]
     );
     const c = r.rows[0];
     if (!c) return reply.status(404).send({ error: 'Certificado no encontrado' });
-    const ruta = path.join(CERT_DIR, c.archivo);
+    const dorso = req.query?.lado === 'dorso';
+    if (dorso && !c.archivo_dorso) return reply.status(404).send({ error: 'Este certificado no tiene dorso' });
+    const ruta = path.join(CERT_DIR, dorso ? c.archivo_dorso : c.archivo);
     if (!fs.existsSync(ruta)) return reply.status(404).send({ error: 'Archivo no encontrado' });
-    return reply.type(c.tipo_archivo).send(fs.createReadStream(ruta));
+    return reply.type(dorso ? c.tipo_archivo_dorso : c.tipo_archivo).send(fs.createReadStream(ruta));
   });
 
   // DELETE /api/admin/certificados/:id — borrado logico, como las tarjas: los

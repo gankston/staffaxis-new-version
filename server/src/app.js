@@ -111,6 +111,13 @@ async function runMigrations() {
     CREATE INDEX IF NOT EXISTS push_tokens_device ON push_tokens (device_id);
     CREATE INDEX IF NOT EXISTS push_tokens_sector ON push_tokens (sector_id);
   `);
+  // Certificados con frente y dorso (19/11/2026). El archivo de siempre es el
+  // frente; el dorso es opcional para no romper los que ya estan cargados.
+  await db.query(`
+    ALTER TABLE certificados_medicos ADD COLUMN IF NOT EXISTS archivo_dorso TEXT;
+    ALTER TABLE certificados_medicos ADD COLUMN IF NOT EXISTS tipo_archivo_dorso TEXT;
+    ALTER TABLE certificados_medicos ADD COLUMN IF NOT EXISTS nombre_original_dorso TEXT;
+  `);
   // Un dia de un empleado no puede quedar con dos certificados vivos.
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS certificado_dia_unico

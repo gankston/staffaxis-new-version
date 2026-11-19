@@ -508,7 +508,12 @@ export async function adminRoutes(app) {
     if (!emp.rows[0]) return reply.status(404).send({ error: 'Empleado no encontrado' });
     // Los certificados se van con el empleado (ON DELETE CASCADE) pero sus
     // archivos, y las fotos del DNI, quedaban sueltos en el volume para siempre.
-    const certs = await db.query('SELECT archivo FROM certificados_medicos WHERE employee_id = $1', [id]);
+    const certs = await db.query(
+      `SELECT archivo FROM certificados_medicos WHERE employee_id = $1
+       UNION ALL
+       SELECT archivo_dorso FROM certificados_medicos WHERE employee_id = $1 AND archivo_dorso IS NOT NULL`,
+      [id]
+    );
     const archivos = [
       ...certs.rows.map((c) => path.join(UPLOAD_DIR, 'certificados', path.basename(c.archivo))),
       ...[emp.rows[0].dni_foto_frente, emp.rows[0].dni_foto_dorso].filter(Boolean)
