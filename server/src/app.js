@@ -164,6 +164,17 @@ async function runMigrations() {
     );
     ALTER TABLE submissions ADD COLUMN IF NOT EXISTS fuera_termino_id UUID;
   `);
+  // Ingresos a StaffAdmin con Google (19/11/2026): quien entro y cuando.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS admin_ingresos (
+      id       BIGSERIAL PRIMARY KEY,
+      email    TEXT NOT NULL,
+      nombre   TEXT,
+      ip       TEXT,
+      entro_en TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS admin_ingresos_email ON admin_ingresos (email);
+  `);
   // Un dia de un empleado no puede quedar con dos certificados vivos.
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS certificado_dia_unico

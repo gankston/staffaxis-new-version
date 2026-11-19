@@ -104,6 +104,15 @@ export async function adminRoutes(app) {
   // Dispositivos
   // ──────────────────────────────────────────────────────────────────────────
 
+  // GET /api/admin/ingresos — los ultimos ingresos a StaffAdmin con Google
+  app.get('/api/admin/ingresos', { preHandler: verifyAdmin }, async (_req, reply) => {
+    const r = await db.query(
+      `SELECT email, MAX(nombre) AS nombre, COUNT(*)::int AS veces, MAX(entro_en) AS ultimo
+       FROM admin_ingresos GROUP BY email ORDER BY MAX(entro_en) DESC`
+    );
+    return reply.send({ ingresos: r.rows });
+  });
+
   // GET /api/admin/devices — lista todos los dispositivos
   app.get('/api/admin/devices', { preHandler: verifyAdmin }, async (_req, reply) => {
     const result = await db.query(
@@ -189,6 +198,13 @@ export async function adminRoutes(app) {
         });
       }
       intentosFallidos.delete(ipCliente(req));
+      // Queda anotado quien entro y cuando (19/11/2026): sin esto no habia forma
+      // de saber los mails de la gente de RRHH para habilitarlas. Si falla, se
+      // entra igual.
+      db.query(
+        'INSERT INTO admin_ingresos (email, nombre, ip) VALUES ($1, $2, $3)',
+        [String(payload.email).toLowerCase(), payload.name ?? null, ipCliente(req)]
+      ).catch((e) => req.log.error(e, 'admin_ingresos'));
       // usuario_token: dice QUIEN entro (el admin token es el mismo para todos).
       // Hace falta para lo que solo puede hacer una persona, como autorizar las
       // tarjas fuera de termino (RRHH). Vence a los 30 dias: se vuelve a entrar.
