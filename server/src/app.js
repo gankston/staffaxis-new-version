@@ -175,6 +175,15 @@ async function runMigrations() {
     );
     CREATE INDEX IF NOT EXISTS admin_ingresos_email ON admin_ingresos (email);
   `);
+  // Sectores extra por telefono (19/11/2026): a donde se puede cambiar un
+  // telefono puntual aunque el sector sea de otro encargado. Solo ese telefono.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS dispositivo_sectores_extra (
+      device_id TEXT NOT NULL,
+      sector_id UUID NOT NULL REFERENCES sectors(id) ON DELETE CASCADE,
+      PRIMARY KEY (device_id, sector_id)
+    );
+  `);
   // Un dia de un empleado no puede quedar con dos certificados vivos.
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS certificado_dia_unico

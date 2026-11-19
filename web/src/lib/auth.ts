@@ -42,8 +42,14 @@ export async function getSectoresPermitidos(): Promise<Sector[]> {
   const sectorActual = sesion.getSectorActivo();
   if (!sectorActual) throw new Error('Sin sector');
 
-  const r = await api.getSectores();
+  // Sectores extra de ESTE telefono (p. ej. Wilson en todos los SOLAZUTY). Si
+  // el pedido falla, sigue como siempre.
+  const [r, extra] = await Promise.all([
+    api.getSectores(),
+    api.getSectoresExtra().catch(() => ({ ids: [] as string[] })),
+  ]);
   const todos = (r.sectors ?? []).map(aSector);
+  const extras = new Set(extra.ids ?? []);
 
   // Dispositivo maestro: ve todos, sin la restriccion de encargado.
   if (sesion.esMaestro()) return [...todos].sort(porNombre);
@@ -61,7 +67,8 @@ export async function getSectoresPermitidos(): Promise<Sector[]> {
         s.id === actual.id ||
         (!!encargado && (s.encargado ?? '').trim().toLowerCase() === encargado) ||
         actual.vinculados.includes(s.id) ||
-        s.vinculados.includes(actual.id),
+        s.vinculados.includes(actual.id) ||
+        extras.has(s.id),
     )
     .sort(porNombre);
 }

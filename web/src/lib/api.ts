@@ -395,6 +395,8 @@ export const api = {
   // Auth / dispositivo
   getSectores: () => pedir<{ sectors: SectorDto[] }>('/api/sectors'),
 
+  getSectoresExtra: () => pedir<{ ids: string[] }>('/api/auth/device/sectores-extra'),
+
   getSectoresPermitidos: () =>
     pedir<{ ok: boolean; allowedSectors: SectorDto[] }>('/api/auth/device/allowed-sectors'),
 

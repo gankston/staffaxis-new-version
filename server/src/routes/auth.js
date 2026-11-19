@@ -72,6 +72,17 @@ export async function authRoutes(app) {
     return reply.send({ ok: true, is_master: r.rows[0]?.is_master === true });
   });
 
+  // GET /api/auth/device/sectores-extra — sectores a los que ESTE telefono se
+  // puede cambiar aunque sean de otro encargado (19/11/2026, Wilson en todos los
+  // SOLAZUTY). Es por telefono: a los demas encargados no les cambia nada.
+  app.get('/api/auth/device/sectores-extra', { preHandler: verifyDevice }, async (req, reply) => {
+    const r = await db.query(
+      'SELECT sector_id FROM dispositivo_sectores_extra WHERE device_id = $1',
+      [req.device.deviceId]
+    );
+    return reply.send({ ids: r.rows.map((x) => x.sector_id) });
+  });
+
   // GET /api/auth/device/allowed-sectors
   app.get('/api/auth/device/allowed-sectors', { preHandler: verifyDevice }, async (req, reply) => {
     const { sectorId } = req.device;
