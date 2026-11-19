@@ -10,6 +10,7 @@ import { Main } from './screens/Main';
 import { SupervisorEntry } from './screens/SupervisorEntry';
 import { Supervisor } from './screens/Supervisor';
 import { Autorizante } from './screens/Autorizante';
+import { CambiarPantalla, type Pantalla } from './components/CambiarPantalla';
 
 /** Espejo de Navigation.kt — mismas rutas y mismas transiciones. */
 export type Ruta = 'bienvenida' | 'main' | 'supervisor_entry' | 'supervisor_main' | 'autorizante';
@@ -162,6 +163,28 @@ export function App() {
       </div>
     );
 
+  const pantalla = renderRuta();
+  // Solo en el telefono de Gaston: pasar entre encargado, supervisor y
+  // autorizante sin cerrar sesiones ni borrar los datos de la app.
+  if (esMiTelefono && (ruta === 'main' || ruta === 'supervisor_main' || ruta === 'autorizante')) {
+    const opciones: Array<{ id: Pantalla; texto: string }> = [];
+    if (sesion.getDeviceToken() && sesion.getSectorActivo()) opciones.push({ id: 'main', texto: 'Encargado (tarja)' });
+    if (sesion.getSupervisorToken()) opciones.push({ id: 'supervisor_main', texto: 'Supervisor' });
+    if (autorizanteHabilitado) opciones.push({ id: 'autorizante', texto: 'Autorizante' });
+    return (
+      <>
+        {pantalla}
+        <CambiarPantalla
+          actual={ruta}
+          opciones={opciones}
+          onElegir={(p) => (p === 'autorizante' ? entrarComoAutorizante() : setRuta(p))}
+        />
+      </>
+    );
+  }
+  return pantalla;
+
+  function renderRuta() {
   switch (ruta) {
     case 'bienvenida':
       return (
@@ -197,5 +220,6 @@ export function App() {
           }
         />
       );
+  }
   }
 }
