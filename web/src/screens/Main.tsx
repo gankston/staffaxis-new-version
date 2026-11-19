@@ -18,16 +18,29 @@ export function Main({
   onRecargarMain,
   hasSupervisorSession,
   onCambiarASupervisor,
+  onAutorizar,
 }: {
   onCambiarSector: () => void;
   onRecargarMain: () => void;
   hasSupervisorSession: boolean;
   onCambiarASupervisor: () => void;
+  /** Modo autorizante de la Tarja Fuera de Término (solo telefonos habilitados). */
+  onAutorizar?: () => void;
 }) {
   const [solapa, setSolapa] = useState<Solapa>('empleados');
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--dark-background)' }}>
+      {onAutorizar && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 12px 0' }}>
+          <button
+            onClick={onAutorizar}
+            style={{ background: 'rgba(255,183,77,0.12)', border: '1px solid rgba(255,183,77,0.55)', color: '#ffcc80', borderRadius: 10, padding: '5px 12px', fontSize: 13, fontWeight: 600 }}
+          >
+            Autorizar fuera de término
+          </button>
+        </div>
+      )}
       {hasSupervisorSession && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 4px 0' }}>
           <button
@@ -45,7 +58,9 @@ export function Main({
           <Empleados onCambiarSector={onCambiarSector} onRecargarMain={onRecargarMain} />
         )}
         {solapa === 'ausencias' && <Ausencias />}
-        {solapa === 'tarja' && <Tarja onCambiarSector={onCambiarSector} onRecargarMain={onRecargarMain} />}
+        {solapa === 'tarja' && (
+          <Tarja onCambiarSector={onCambiarSector} onRecargarMain={onRecargarMain} onIrAEmpleados={() => setSolapa('empleados')} />
+        )}
       </div>
 
       <nav

@@ -4,6 +4,7 @@ import { Modal } from '../../components/Modal';
 import { Spinner } from '../../components/ui';
 import { Toast } from '../../components/Toast';
 import { Visualizador } from './Visualizador';
+import { FueraTermino } from './FueraTermino';
 import { api } from '../../lib/api';
 import { listarEmpleados, listarRegistros, type Empleado } from '../../lib/empleados';
 import { getSectoresPermitidos, guardarSectorActivo, solicitarAcceso, type Sector } from '../../lib/auth';
@@ -27,9 +28,11 @@ const fmtHorasMin = (h: number) => (h % 1 === 0 ? `${Math.trunc(h)}h` : `${h}h`)
 export function Tarja({
   onCambiarSector,
   onRecargarMain,
+  onIrAEmpleados,
 }: {
   onCambiarSector: () => void;
   onRecargarMain: () => void;
+  onIrAEmpleados: () => void;
 }) {
   const sector = sesion.getSectorActivo();
   const hoy = hoyISO();
@@ -343,6 +346,12 @@ export function Tarja({
             )}
           </button>
         </div>
+
+        <FueraTermino
+          sectorId={sector.id}
+          onIrACargar={onIrAEmpleados}
+          onMensaje={(texto, esError) => setMensaje({ texto, esError })}
+        />
 
         {cargando && <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}><Spinner /></div>}
       </div>

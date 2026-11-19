@@ -17,6 +17,7 @@ import { photoRoutes }      from './routes/photos.js';
 import { webAppRoutes, adminWebRoutes } from './routes/webApp.js';
 import { certificadoRoutes, limpiarCertificadosHuerfanos } from './routes/certificados.js';
 import { pushRoutes }       from './routes/push.js';
+import { fueraTerminoRoutes } from './routes/fueraTermino.js';
 
 // Espera a que la DB esté lista (la red interna de Railway puede tardar al arrancar).
 // Reintenta con paciencia en vez de crashear al primer timeout.
@@ -118,6 +119,51 @@ async function runMigrations() {
     ALTER TABLE certificados_medicos ADD COLUMN IF NOT EXISTS tipo_archivo_dorso TEXT;
     ALTER TABLE certificados_medicos ADD COLUMN IF NOT EXISTS nombre_original_dorso TEXT;
   `);
+  // Tarja Fuera de Termino (19/11/2026), ver routes/fueraTermino.js. Las horas
+  // quedan en fuera_termino_items (NO en submissions) hasta que RRHH autoriza.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS fuera_termino (
+      id             UUID PRIMARY KEY,
+      sector_id      UUID NOT NULL REFERENCES sectors(id),
+      device_id      TEXT,
+      encargado      TEXT,
+      motivo         TEXT NOT NULL,
+      fecha_desde    DATE NOT NULL,
+      fecha_hasta    DATE NOT NULL,
+      estado         TEXT NOT NULL DEFAULT 'borrador',
+      creado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      enviado_en     TIMESTAMPTZ,
+      verificado_por TEXT,
+      verificado_en  TIMESTAMPTZ,
+      rrhh_por       TEXT,
+      rrhh_en        TIMESTAMPTZ,
+      motivo_rechazo TEXT,
+      resultado      JSONB
+    );
+    CREATE INDEX IF NOT EXISTS fuera_termino_estado ON fuera_termino (estado);
+    CREATE INDEX IF NOT EXISTS fuera_termino_sector ON fuera_termino (sector_id);
+    CREATE TABLE IF NOT EXISTS fuera_termino_items (
+      id             UUID PRIMARY KEY,
+      pedido_id      UUID NOT NULL REFERENCES fuera_termino(id) ON DELETE CASCADE,
+      employee_id    UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      date           DATE NOT NULL,
+      horas          NUMERIC,
+      cuerpo         JSONB NOT NULL,
+      creado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (pedido_id, employee_id, date)
+    );
+    CREATE TABLE IF NOT EXISTS autorizantes (
+      id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      nombre    TEXT NOT NULL,
+      rol       TEXT NOT NULL,
+      device_id TEXT,
+      email     TEXT,
+      activo    BOOLEAN NOT NULL DEFAULT true,
+      creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    ALTER TABLE submissions ADD COLUMN IF NOT EXISTS fuera_termino_id UUID;
+  `);
   // Un dia de un empleado no puede quedar con dos certificados vivos.
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS certificado_dia_unico
@@ -144,6 +190,7 @@ const start = async () => {
   await app.register(adminWebRoutes);
   await app.register(certificadoRoutes);
   await app.register(pushRoutes);
+  await app.register(fueraTerminoRoutes);
 
   app.get('/health', async () => ({ ok: true }));
 

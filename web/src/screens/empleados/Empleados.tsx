@@ -5,6 +5,7 @@ import { DialogoHoras } from './DialogoHoras';
 import { DialogoEditarEmpleado } from './DialogoEditarEmpleado';
 import { DialogoNuevoEmpleado } from './DialogoNuevoEmpleado';
 import { DialogoMovimiento } from './DialogoMovimiento';
+import { BarraFueraTermino } from './BarraFueraTermino';
 import { Modal } from '../../components/Modal';
 import { Spinner, TextField } from '../../components/ui';
 import { Toast } from '../../components/Toast';
@@ -18,7 +19,8 @@ import {
   VALORES_CARGA_INICIAL,
   type ValoresCarga,
 } from './logica';
-import { api } from '../../lib/api';
+import { api, type ItemFueraTermino } from '../../lib/api';
+import { alCambiarPedido, fechasDelPedido, pedidoActivo, rangoPedido } from '../../lib/fueraTermino';
 import { getUbicacion, precalentarUbicacion } from '../../lib/bridge';
 import { listarEmpleadosCrudos, listarRegistros, type Empleado } from '../../lib/empleados';
 import { fetchSectoresPublicos, getSectoresPermitidos, guardarSectorActivo, solicitarAcceso, type Sector } from '../../lib/auth';
@@ -56,6 +58,15 @@ export function Empleados({
   const [paraEditar, setParaEditar] = useState<Empleado | null>(null);
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
   const [mensaje, setMensaje] = useState<{ texto: string; esError: boolean } | null>(null);
+
+  // Tarja Fuera de Término: mientras hay un pedido activo, lo que se carga va al
+  // pedido y solo se pueden elegir sus fechas.
+  const [pedidoFT, setPedidoFT] = useState(() => pedidoActivo());
+  const [recargaFT, setRecargaFT] = useState(0);
+  const [cargadosFT, setCargadosFT] = useState<Set<string>>(new Set());
+  useEffect(() => alCambiarPedido(setPedidoFT), []);
+  const fechasFT = useMemo(() => (pedidoFT ? fechasDelPedido(pedidoFT) : undefined), [pedidoFT]);
+  const alItemsFT = useCallback((items: ItemFueraTermino[]) => setCargadosFT(new Set(items.map((i) => i.employeeId))), []);
 
   const avisar = useCallback((texto: string, esError: boolean) => setMensaje({ texto, esError }), []);
 
@@ -114,7 +125,7 @@ export function Empleados({
     // apretar Guardar el dato ya esta y no hay que esperarlo.
     precalentarUbicacion();
     setParaHoras(e);
-    setFecha(hoyISO());
+    setFecha(fechasFT ? fechasFT[fechasFT.length - 1] : hoyISO());
     setValores({ ...VALORES_CARGA_INICIAL, porCosecha: sector?.tipoCarga === 'cosecha' });
     setObservaciones('');
   };
@@ -127,7 +138,7 @@ export function Empleados({
     const tip = buildTipados(valores);
     const ubicacion = await getUbicacion();
     try {
-      await api.crearSubmission({
+      const cuerpo = {
         employee_id: paraHoras.id,
         date: fecha,
         minutes_worked: buildMinutesWorked(valores),
@@ -140,10 +151,18 @@ export function Empleados({
         cajones: tip.cajones,
         abonada: tip.abonada,
         ...payloadTiposNuevos(t),
-      });
-      setConHorasHoy((s) => (fecha === hoyISO() ? new Set([...s, paraHoras.id]) : s));
-      setParaHoras(null);
-      avisar('Horas guardadas correctamente', false);
+      };
+      if (pedidoFT) {
+        await api.agregarItemFueraTermino(pedidoFT.id, cuerpo);
+        setRecargaFT((n) => n + 1);
+        setParaHoras(null);
+        avisar('Guardada en la tarja fuera de término', false);
+      } else {
+        await api.crearSubmission(cuerpo);
+        setConHorasHoy((s) => (fecha === hoyISO() ? new Set([...s, paraHoras.id]) : s));
+        setParaHoras(null);
+        avisar('Horas guardadas correctamente', false);
+      }
     } catch (e) {
       // El dialogo queda abierto con los datos puestos para poder reintentar.
       setErrorHoras(e instanceof Error ? e.message : 'No se pudo guardar');
@@ -169,6 +188,9 @@ export function Empleados({
   return (
     <div style={{ height: '100%', overflowY: 'auto', position: 'relative' }}>
       <div style={{ padding: '16px 16px 120px' }}>
+        {pedidoFT && (
+          <BarraFueraTermino pedido={pedidoFT} recarga={recargaFT} onItems={alItemsFT} onMensaje={avisar} />
+        )}
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => sectoresPermitidos.length > 1 && setVerSectores((v) => !v)}
@@ -278,7 +300,7 @@ export function Empleados({
             <EmpleadoCard
               key={e.id}
               empleado={e}
-              tieneHorasHoy={conHorasHoy.has(e.id)}
+              tieneHorasHoy={pedidoFT ? cargadosFT.has(e.id) : conHorasHoy.has(e.id)}
               estaAusenteHoy={ausentesHoy.has(e.id)}
               onRelojClick={() => abrirHoras(e)}
               onEditarClick={() => setParaEditar(e)}
@@ -357,6 +379,12 @@ export function Empleados({
             setParaHoras(null);
           }}
           onGuardar={guardarHoras}
+          fechasPermitidas={fechasFT}
+          aviso={
+            pedidoFT
+              ? `${pedidoFT.motivoTexto} · ${rangoPedido(pedidoFT)}. Va a la tarja fuera de término: no cuenta hasta que la autoricen.`
+              : undefined
+          }
         />
       )}
 

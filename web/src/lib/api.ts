@@ -51,7 +51,10 @@ interface OpcionesPedido {
 
 async function pedir<T>(ruta: string, opts: OpcionesPedido = {}): Promise<T> {
   const esSupervisor = ruta.startsWith('/api/supervisor');
-  const token = esSupervisor ? sesion.getSupervisorToken() : sesion.getDeviceToken();
+  const esAutorizante = ruta.startsWith('/api/autorizante');
+  const token = esAutorizante
+    ? sesion.getAutorizanteToken()
+    : esSupervisor ? sesion.getSupervisorToken() : sesion.getDeviceToken();
 
   let url = BASE + ruta;
   if (opts.query) {
@@ -345,6 +348,47 @@ export interface CrearSubmissionBody {
   cambio_bolsa?: number | null;
 }
 
+export type EstadoFueraTermino =
+  | 'borrador'
+  | 'esperando_verificacion'
+  | 'esperando_rrhh'
+  | 'autorizada'
+  | 'no_autorizada'
+  | 'descartado';
+
+export interface PedidoFueraTermino {
+  id: string;
+  sectorId: string;
+  sector: string;
+  encargado: string | null;
+  motivo: string;
+  motivoTexto: string;
+  fechaDesde: string;
+  fechaHasta: string;
+  estado: EstadoFueraTermino;
+  items: number;
+  horas: number;
+  creadoEn: string;
+  enviadoEn: string | null;
+  verificadoPor: string | null;
+  verificadoEn: string | null;
+  rrhhPor: string | null;
+  rrhhEn: string | null;
+  motivoRechazo: string | null;
+  resultado: { cargadas: number; salteadas: Array<{ empleado: string; date: string }> } | null;
+}
+
+export interface ItemFueraTermino {
+  id: string;
+  employeeId: string;
+  empleado: string;
+  dni: string | null;
+  date: string;
+  horas: number | null;
+  minutesWorked: string | null;
+  notes: string | null;
+}
+
 // ─── Endpoints ───────────────────────────────────────────────────────────────
 
 export const api = {
@@ -383,6 +427,35 @@ export const api = {
     pedir<{ ok: boolean }>('/api/push/token', { method: 'POST', body: { token, modelo } }),
   registrarPushTokenSupervisor: (token: string, modelo: string) =>
     pedir<{ ok: boolean }>('/api/supervisor/push-token', { method: 'POST', body: { token, modelo } }),
+  registrarPushTokenAutorizante: (token: string, modelo: string) =>
+    pedir<{ ok: boolean }>('/api/autorizante/push-token', { method: 'POST', body: { token, modelo } }),
+
+  // Tarja Fuera de Término — encargado
+  getFueraTermino: () => pedir<{ motivos: Record<string, string>; pedidos: PedidoFueraTermino[] }>('/api/fuera-termino'),
+  crearFueraTermino: (body: { motivo: string; fecha_desde: string; fecha_hasta: string }) =>
+    pedir<{ pedido: PedidoFueraTermino }>('/api/fuera-termino', { method: 'POST', body }),
+  getPedidoFueraTermino: (id: string) =>
+    pedir<{ pedido: PedidoFueraTermino; items: ItemFueraTermino[] }>(`/api/fuera-termino/${id}`),
+  agregarItemFueraTermino: (id: string, body: CrearSubmissionBody) =>
+    pedir<{ ok: boolean }>(`/api/fuera-termino/${id}/items`, { method: 'POST', body }),
+  quitarItemFueraTermino: (id: string, itemId: string) =>
+    pedir<{ ok: boolean }>(`/api/fuera-termino/${id}/items/${itemId}`, { method: 'DELETE' }),
+  enviarFueraTermino: (id: string) => pedir<{ ok: boolean }>(`/api/fuera-termino/${id}/enviar`, { method: 'POST', body: {} }),
+  descartarFueraTermino: (id: string) =>
+    pedir<{ ok: boolean }>(`/api/fuera-termino/${id}/descartar`, { method: 'POST', body: {} }),
+
+  // Tarja Fuera de Término — autorizante (el que verifica los cortes)
+  autorizanteHabilitado: (deviceId: string) =>
+    pedir<{ habilitado: boolean }>('/api/autorizante/habilitado', { query: { device_id: deviceId } }),
+  entrarComoAutorizante: (deviceId: string) =>
+    pedir<{ token: string; nombre: string }>('/api/autorizante/entrar', { method: 'POST', body: { device_id: deviceId } }),
+  getPedidosAutorizante: () =>
+    pedir<{ nombre: string; pendientes: Array<PedidoFueraTermino & { detalle: ItemFueraTermino[] }>; resueltos: PedidoFueraTermino[] }>(
+      '/api/autorizante/pedidos',
+    ),
+  confirmarCorte: (id: string) => pedir<{ ok: boolean }>(`/api/autorizante/pedidos/${id}/confirmar`, { method: 'POST', body: {} }),
+  rechazarCorte: (id: string, motivo: string) =>
+    pedir<{ ok: boolean }>(`/api/autorizante/pedidos/${id}/rechazar`, { method: 'POST', body: { motivo } }),
 
   // Empleados
   getEmpleados: (sectorId: string) =>

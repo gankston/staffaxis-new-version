@@ -19,6 +19,8 @@ const K = {
   supervisorToken: 'supervisor_token',
   supervisorId: 'supervisor_id',
   supervisorName: 'supervisor_name',
+  autorizanteToken: 'autorizante_token',
+  autorizanteNombre: 'autorizante_nombre',
 } as const;
 
 function leer(clave: string): string | null {
@@ -49,6 +51,8 @@ export interface SectorActivo {
 export const sesion = {
   getDeviceToken: (): string | null => leer(K.deviceToken),
   getSupervisorToken: (): string | null => leer(K.supervisorToken),
+  getAutorizanteToken: (): string | null => leer(K.autorizanteToken),
+  getAutorizanteNombre: (): string | null => leer(K.autorizanteNombre),
   getFullName: (): string | null => leer(K.fullName),
   esMaestro: (): boolean => leer(K.isMaster) === 'true',
 
@@ -116,6 +120,16 @@ export const sesion = {
     escribir(K.activeSectorTipos, null);
     escribir(K.activeSectorEncargado, null);
     escribir(K.isMaster, null);
+  },
+
+  guardarAutorizante(token: string, nombre: string): void {
+    escribir(K.autorizanteToken, token);
+    escribir(K.autorizanteNombre, nombre);
+  },
+
+  cerrarSesionAutorizante(): void {
+    escribir(K.autorizanteToken, null);
+    escribir(K.autorizanteNombre, null);
   },
 
   cerrarSesionSupervisor(): void {

@@ -9,9 +9,10 @@ import { Bienvenida } from './screens/Bienvenida';
 import { Main } from './screens/Main';
 import { SupervisorEntry } from './screens/SupervisorEntry';
 import { Supervisor } from './screens/Supervisor';
+import { Autorizante } from './screens/Autorizante';
 
 /** Espejo de Navigation.kt — mismas rutas y mismas transiciones. */
-export type Ruta = 'bienvenida' | 'main' | 'supervisor_entry' | 'supervisor_main';
+export type Ruta = 'bienvenida' | 'main' | 'supervisor_entry' | 'supervisor_main' | 'autorizante';
 
 // El boton para saltar entre modo tarja y modo supervisor existe SOLO en el
 // telefono de Gaston (mismo device_id fijo que en SessionViewModel.kt).
@@ -29,16 +30,18 @@ async function registrarNotificaciones() {
   if (!token || enviandoPush) return;
   const deviceToken = sesion.getDeviceToken();
   const supervisorToken = sesion.getSupervisorToken();
-  if (!deviceToken && !supervisorToken) return;
+  const autorizanteToken = sesion.getAutorizanteToken();
+  if (!deviceToken && !supervisorToken && !autorizanteToken) return;
   let previo: { token?: string; en?: number; quien?: string } = {};
   try { previo = JSON.parse(localStorage.getItem(CLAVE_PUSH) ?? '{}'); } catch { /* vacio */ }
-  const quien = deviceToken ? 'dispositivo' : 'supervisor';
+  const quien = deviceToken ? 'dispositivo' : supervisorToken ? 'supervisor' : 'autorizante';
   const unDia = 24 * 60 * 60 * 1000;
   if (previo.token === token && previo.quien === quien && Date.now() - (previo.en ?? 0) < unDia) return;
   enviandoPush = true;
   try {
     if (deviceToken) await api.registrarPushToken(token, getPhoneModel());
-    else await api.registrarPushTokenSupervisor(token, getPhoneModel());
+    else if (supervisorToken) await api.registrarPushTokenSupervisor(token, getPhoneModel());
+    else await api.registrarPushTokenAutorizante(token, getPhoneModel());
     try { localStorage.setItem(CLAVE_PUSH, JSON.stringify({ token, en: Date.now(), quien })); } catch { /* sin storage */ }
   } catch {
     /* sin conexion: se reintenta en el proximo latido */
@@ -52,6 +55,7 @@ function destinoInicial(): Ruta {
   const sector = sesion.getSectorActivo();
   if (token && sector) return 'main';
   if (sesion.getSupervisorToken()) return 'supervisor_main';
+  if (sesion.getAutorizanteToken()) return 'autorizante';
   return 'bienvenida';
 }
 
@@ -120,6 +124,34 @@ export function App() {
 
   const recargarMain = useCallback(() => setRecargas((n) => n + 1), []);
 
+  // Modo autorizante (Tarja Fuera de Término): solo se muestra la entrada en los
+  // telefonos habilitados en el servidor (hoy, el de quien verifica los cortes).
+  const [autorizanteHabilitado, setAutorizanteHabilitado] = useState(() => !!sesion.getAutorizanteToken());
+  const [errorAutorizante, setErrorAutorizante] = useState<string | null>(null);
+  useEffect(() => {
+    api.autorizanteHabilitado(getDeviceId())
+      .then((r) => setAutorizanteHabilitado(r.habilitado))
+      .catch(() => {});
+  }, []);
+  const entrarComoAutorizante = useCallback(async () => {
+    setErrorAutorizante(null);
+    if (!sesion.getAutorizanteToken()) {
+      try {
+        const r = await api.entrarComoAutorizante(getDeviceId());
+        sesion.guardarAutorizante(r.token, r.nombre);
+      } catch (e) {
+        setErrorAutorizante(e instanceof Error ? e.message : 'No se pudo entrar');
+        return;
+      }
+    }
+    setRuta('autorizante');
+  }, []);
+  const salirDeAutorizante = useCallback(() => {
+    if (sesion.getDeviceToken() && sesion.getSectorActivo()) setRuta('main');
+    else if (sesion.getSupervisorToken()) setRuta('supervisor_main');
+    else setRuta('bienvenida');
+  }, []);
+
   if (sinConexion) return <SinConexion onReintentar={() => setSinConexion(!navigator.onLine)} />;
   // Mientras se pregunta si el telefono ya tenia sesion. Dura lo que tarda un
   // pedido; sin esto se veria la bienvenida un instante y despues saltaria solo.
@@ -136,6 +168,8 @@ export function App() {
         <Bienvenida
           onNavegar={() => setRuta('main')}
           onEntrarComoSupervisor={() => setRuta('supervisor_entry')}
+          onEntrarComoAutorizante={autorizanteHabilitado ? entrarComoAutorizante : undefined}
+          errorAutorizante={errorAutorizante}
         />
       );
     case 'main':
@@ -146,8 +180,11 @@ export function App() {
           onRecargarMain={recargarMain}
           hasSupervisorSession={!!sesion.getSupervisorToken() && esMiTelefono}
           onCambiarASupervisor={() => setRuta('supervisor_main')}
+          onAutorizar={autorizanteHabilitado ? entrarComoAutorizante : undefined}
         />
       );
+    case 'autorizante':
+      return <Autorizante onVolver={salirDeAutorizante} />;
     case 'supervisor_entry':
       return <SupervisorEntry onNavegar={() => setRuta('supervisor_main')} />;
     case 'supervisor_main':

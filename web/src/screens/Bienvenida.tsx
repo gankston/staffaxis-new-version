@@ -28,9 +28,14 @@ const IconoSector = () => (
 export function Bienvenida({
   onNavegar,
   onEntrarComoSupervisor,
+  onEntrarComoAutorizante,
+  errorAutorizante,
 }: {
   onNavegar: () => void;
   onEntrarComoSupervisor: () => void;
+  /** Solo en los telefonos habilitados para autorizar Tarjas Fuera de Término. */
+  onEntrarComoAutorizante?: () => void;
+  errorAutorizante?: string | null;
 }) {
   const [chequeando, setChequeando] = useState(true);
   const [cargando, setCargando] = useState(false);
@@ -309,6 +314,17 @@ export function Bienvenida({
           >
             Entrar como supervisor
           </button>
+          {onEntrarComoAutorizante && (
+            <button
+              onClick={onEntrarComoAutorizante}
+              style={{ background: 'none', border: 'none', color: 'var(--texto-tenue)', fontSize: 14, marginTop: 14 }}
+            >
+              Entrar como autorizante
+            </button>
+          )}
+          {errorAutorizante && (
+            <div style={{ color: 'var(--error)', fontSize: 13, textAlign: 'center', marginTop: 8 }}>{errorAutorizante}</div>
+          )}
         </>
       )}
     </div>

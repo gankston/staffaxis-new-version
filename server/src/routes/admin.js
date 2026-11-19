@@ -189,10 +189,21 @@ export async function adminRoutes(app) {
         });
       }
       intentosFallidos.delete(ipCliente(req));
+      // usuario_token: dice QUIEN entro (el admin token es el mismo para todos).
+      // Hace falta para lo que solo puede hacer una persona, como autorizar las
+      // tarjas fuera de termino (RRHH). Vence a los 30 dias: se vuelve a entrar.
+      const usuarioToken = jwt.sign(
+        { tipo: 'admin_usuario', email: String(payload.email).toLowerCase(), nombre: payload.name ?? null },
+        process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+      );
       return reply.send({
         success: true,
         token: process.env.ADMIN_TOKEN,
-        user: { email: payload.email, name: payload.name, picture: payload.picture },
+        usuario_token: usuarioToken,
+        // Tambien adentro de `user`: el programa de escritorio ya instalado pasa
+        // `user` tal cual y descarta lo demas, asi llega sin sacar un .exe nuevo.
+        user: { email: payload.email, name: payload.name, picture: payload.picture, usuario_token: usuarioToken },
       });
     } catch (err) {
       req.log.error(err, 'google-auth');

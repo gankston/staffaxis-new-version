@@ -45,6 +45,8 @@ export function DialogoHoras({
   error,
   onCerrar,
   onGuardar,
+  fechasPermitidas,
+  aviso,
 }: {
   empleado: Empleado;
   fecha: string;
@@ -60,18 +62,23 @@ export function DialogoHoras({
   error?: string | null;
   onCerrar: () => void;
   onGuardar: () => void;
+  /** Tarja Fuera de Término: las fechas del pedido, en vez de hoy/ayer. */
+  fechasPermitidas?: string[];
+  /** Cartel arriba del formulario (lo usa la Tarja Fuera de Término). */
+  aviso?: string;
 }) {
   const hoy = hoyISO();
   // Las fechas que puede elegir este sector (OTITO tres dias para atras, el resto
   // hasta ayer), de hoy para atras.
-  const opciones = fechasCargables(hoy, sectorId).reverse();
+  const opciones = fechasPermitidas ?? fechasCargables(hoy, sectorId).reverse();
+  const esElegible = (f: string) => (fechasPermitidas ? fechasPermitidas.includes(f) : esFechaCargable(f, hoy, sectorId));
   const [eligiendoFecha, setEligiendoFecha] = useState(false);
   const faltaDni = !empleado.dni?.trim();
   const habilitado = !faltaDni && puedeGuardar(valores) && !guardando;
 
   return (
     <Modal
-      titulo="Registrar Horas"
+      titulo={aviso ? 'Tarja Fuera de Término' : 'Registrar Horas'}
       onCerrar={onCerrar}
       acciones={[
         { texto: 'Cancelar', onClick: onCerrar, tipo: 'texto' },
@@ -106,6 +113,22 @@ export function DialogoHoras({
               No se perdió nada: los datos siguen cargados. Fijate la señal y dale Reintentar.
             </div>
           </div>
+        </div>
+      )}
+      {aviso && (
+        <div
+          style={{
+            background: 'rgba(255,183,77,0.14)',
+            border: '1px solid rgba(255,183,77,0.5)',
+            borderRadius: 12,
+            padding: '10px 14px',
+            marginBottom: 12,
+            fontSize: 13,
+            color: '#ffcc80',
+            lineHeight: 1.4,
+          }}
+        >
+          {aviso}
         </div>
       )}
       {/* Tarjeta con el empleado, igual que la app: nombre grande y el DNI abajo */}
@@ -187,7 +210,7 @@ export function DialogoHoras({
                   role="option"
                   aria-selected={elegida}
                   onClick={() => {
-                    if (esFechaCargable(f, hoy, sectorId)) onFecha(f);
+                    if (esElegible(f)) onFecha(f);
                     setEligiendoFecha(false);
                   }}
                   style={{

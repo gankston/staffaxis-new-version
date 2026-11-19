@@ -53,6 +53,7 @@ export async function pushRoutes(app) {
   };
   app.post('/api/push/token', registrar);
   app.post('/api/supervisor/push-token', registrar);
+  app.post('/api/autorizante/push-token', registrar);
 
   // GET /api/admin/push/telefonos — quienes tienen notificaciones activas
   app.get('/api/admin/push/telefonos', { preHandler: verifyAdmin }, async (_req, reply) => {
