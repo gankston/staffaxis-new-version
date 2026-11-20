@@ -18,8 +18,8 @@ android {
         targetSdk = 35
         // Siempre mayor que el publicado (5.0.0 = 66), si no Android lo rechaza
         // como si fuera una version vieja. 5.1.0: notificaciones. 5.1.1: icono "S" en la barra.
-        versionCode = 68
-        versionName = "5.1.1"
+        versionCode = 69
+        versionName = "5.1.2"
 
         buildConfigField("String", "WEB_URL", "\"https://staffaxis-new-version-production.up.railway.app/app\"")
     }

@@ -163,11 +163,49 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        setContentView(web)
+        setContentView(conMargenes(web))
         web.loadUrl(BuildConfig.WEB_URL)
 
         buscarActualizacion()
         prepararNotificaciones()
+    }
+
+    /**
+     * Desde Android 15 (la app apunta a SDK 35) el sistema dibuja la app por
+     * DEBAJO de la barra de arriba (hora, bateria) y de la de gestos de abajo:
+     * en un S25 Ultra el titulo quedaba tapado por la hora. En Android 14 o
+     * menos no pasaba, por eso en algunos telefonos se veia bien.
+     *
+     * Se hace igual en todas las versiones: la app ocupa toda la pantalla y el
+     * WebView va adentro de un contenedor con margen arriba (barra de estado),
+     * abajo (barra de gestos o teclado, el que sea mas alto) y a los costados.
+     * El fondo del contenedor es el mismo color oscuro de la app.
+     */
+    private fun conMargenes(contenido: WebView): android.view.View {
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        androidx.core.view.WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
+        val caja = android.widget.FrameLayout(this).apply {
+            setBackgroundColor(android.graphics.Color.parseColor("#1E1E2E"))
+            addView(
+                contenido,
+                android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(caja) { v, insets ->
+            val tipo = androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                androidx.core.view.WindowInsetsCompat.Type.displayCutout()
+            val barras = insets.getInsets(tipo)
+            val teclado = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())
+            v.setPadding(barras.left, barras.top, barras.right, maxOf(barras.bottom, teclado.bottom))
+            androidx.core.view.WindowInsetsCompat.CONSUMED
+        }
+        return caja
     }
 
     private fun prepararNotificaciones() {
