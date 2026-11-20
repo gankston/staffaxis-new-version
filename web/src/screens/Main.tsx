@@ -1,17 +1,24 @@
-/** MainScreen de Navigation.kt: las 3 solapas con la barra inferior. */
-import { useState } from 'react';
-import { IconoAusencias, IconoCambiarSector, IconoGrupo, IconoLista } from '../components/iconos';
+/**
+ * MainScreen de Navigation.kt: las 3 solapas con la barra inferior. Los
+ * telefonos de los jefes de la cadena de la planilla (Orellana, Marce) tienen
+ * una cuarta, "Autorizante" (la decide el servidor: /api/cadena/habilitado).
+ */
+import { useEffect, useState } from 'react';
+import { IconoAusencias, IconoCambiarSector, IconoCheckCirculo, IconoGrupo, IconoLista } from '../components/iconos';
+import { api } from '../lib/api';
 import { Empleados } from './empleados/Empleados';
 import { Ausencias } from './ausencias/Ausencias';
 import { Tarja } from './tarja/Tarja';
+import { AutorizanteCadena } from './AutorizanteCadena';
 
-type Solapa = 'empleados' | 'ausencias' | 'tarja';
+type Solapa = 'empleados' | 'ausencias' | 'tarja' | 'autorizante';
 
 const SOLAPAS: Array<{ id: Solapa; label: string; Icono: (p: { size?: number; color?: string }) => JSX.Element }> = [
   { id: 'empleados', label: 'Empleados', Icono: IconoGrupo },
   { id: 'ausencias', label: 'Ausencias', Icono: IconoAusencias },
   { id: 'tarja', label: 'Tarja', Icono: IconoLista },
 ];
+const SOLAPA_AUTORIZANTE = { id: 'autorizante' as const, label: 'Autorizante', Icono: IconoCheckCirculo };
 
 export function Main({
   onCambiarSector,
@@ -28,6 +35,21 @@ export function Main({
   onAutorizar?: () => void;
 }) {
   const [solapa, setSolapa] = useState<Solapa>('empleados');
+  // Solapa "Autorizante": solo si el servidor dice que este telefono es de la
+  // cadena. Se vuelve a preguntar cada minuto para el numerito de pendientes.
+  const [cadena, setCadena] = useState({ habilitado: false, pendientes: 0 });
+  useEffect(() => {
+    let vivo = true;
+    const ver = () =>
+      api.cadena
+        .habilitado()
+        .then((r) => { if (vivo) setCadena(r); })
+        .catch(() => { /* sin conexion: queda como estaba */ });
+    ver();
+    const id = setInterval(ver, 60_000);
+    return () => { vivo = false; clearInterval(id); };
+  }, []);
+  const solapas = cadena.habilitado ? [...SOLAPAS, SOLAPA_AUTORIZANTE] : SOLAPAS;
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--dark-background)' }}>
@@ -61,6 +83,9 @@ export function Main({
         {solapa === 'tarja' && (
           <Tarja onCambiarSector={onCambiarSector} onRecargarMain={onRecargarMain} onIrAEmpleados={() => setSolapa('empleados')} />
         )}
+        {solapa === 'autorizante' && cadena.habilitado && (
+          <AutorizanteCadena onCantidad={(n) => setCadena((c) => ({ ...c, pendientes: n }))} />
+        )}
       </div>
 
       <nav
@@ -71,8 +96,9 @@ export function Main({
           flexShrink: 0,
         }}
       >
-        {SOLAPAS.map((s) => {
+        {solapas.map((s) => {
           const activa = solapa === s.id;
+          const pendientes = s.id === 'autorizante' ? cadena.pendientes : 0;
           return (
             <button
               key={s.id}
@@ -99,9 +125,31 @@ export function Main({
                   padding: '2px 20px',
                   borderRadius: 12,
                   background: activa ? 'rgba(156,39,176,0.2)' : 'transparent',
+                  position: 'relative',
                 }}
               >
                 <s.Icono size={24} />
+                {pendientes > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      right: 10,
+                      minWidth: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      padding: '0 5px',
+                      background: 'var(--error)',
+                      color: 'white',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      lineHeight: '18px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {pendientes}
+                  </span>
+                )}
               </span>
               {s.label}
             </button>

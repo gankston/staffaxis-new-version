@@ -7,31 +7,38 @@
  * fuera_termino_items: NO estan en submissions, asi que no aparecen en el Excel
  * ni en la liquidacion hasta que se autoricen.
  *
- * Recorrido (no es la aprobacion de supervisores, va por otro lado):
- *   borrador ──enviar──> esperando_verificacion ──Facundo confirma──> esperando_rrhh
- *                                     │                                   │
- *                                     └─no confirma─> no_autorizada        ├─RRHH autoriza─> autorizada
- *                                                                          └─RRHH no──────> no_autorizada
+ * Recorrido (no es la aprobacion de supervisores, va por otro lado). Lo decide
+ * el MOTIVO y, para "Incumplimiento de carga", tambien el SECTOR:
  *
- * Motivos: "Sin internet" y "Sin luz" los verifica primero el responsable de
- * los cortes (Facundo Zingone) desde StaffAxis; despues dan el OK final RRHH
- * (Karina o Carolina) en StaffAdmin. "Incumplimiento de carga" queda para
- * despues (falta definir su recorrido).
+ *   Sin internet / Sin luz (todos los sectores):
+ *     esperando_verificacion ─Facundo confirma─> esperando_rrhh ─RRHH─> autorizada
+ *
+ *   Incumplimiento de carga, sector que NO esta en la planilla:
+ *     esperando_rrhh ─RRHH─> autorizada
+ *
+ *   Incumplimiento de carga, sector de la planilla de Hortalizas y Banana:
+ *     esperando_jefe ─jefe del sector─> esperando_jefe_zona ─Poelstra─> autorizada
+ *     (sin RRHH; si el sector no tiene jefe cargado arranca en esperando_jefe_zona)
+ *
+ *   En cualquier paso, el que no lo aprueba lo pasa a no_autorizada y al
+ *   encargado le llega "Tarja fuera de término no aprobada".
  *
  * Quien verifica y quien autoriza esta en la tabla `autorizantes` (rol
  * 'verificador' con device_id del telefono, rol 'rrhh' con el mail de Google con
- * el que entra a StaffAdmin). Cambiar a la persona es cambiar la tabla.
+ * el que entra a StaffAdmin, roles 'jefe' y 'jefe_zona' con sus sectores; ver
+ * "Cadena de la planilla" mas abajo). Cambiar a la persona es cambiar la tabla.
  */
 import jwt from 'jsonwebtoken';
 import { v4 as uuid } from 'uuid';
 import { db } from '../db.js';
-import { verifyAdmin, verifyDevice } from '../middleware/auth.js';
+import { verifyAdmin, verifyDevice, verifySupervisor } from '../middleware/auth.js';
 import { mandarPush } from '../lib/push.js';
 import { filaDeTarja, limpiarCuerpo } from '../lib/tarjaDesdeCuerpo.js';
 
 export const MOTIVOS = {
   sin_internet: 'Sin internet',
   sin_luz: 'Sin luz',
+  incumplimiento: 'Incumplimiento de carga',
 };
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,6 +55,65 @@ const rango = (p) => (p.fecha_desde === p.fecha_hasta ? fmt(p.fecha_desde) : `${
 // Lo mas viejo que se puede pedir: un mes y medio para atras.
 const DIAS_MAXIMO_ATRAS = 45;
 
+// ── Cadena de la planilla (Incumplimiento de carga) ─────────────────────────
+//
+// En los sectores de la planilla de Hortalizas y Banana que paso Gaston
+// (20/11/2026) el "Incumplimiento de carga" NO va a RRHH: lo aprueba primero el
+// jefe de ese sector (rol 'jefe': Carlos Orellana para Zanja/Carletto/Cremer,
+// Fabian Marce para San Agustin, ...) y despues el de arriba de todo (rol
+// 'jefe_zona': Javier Poelstra). Con el OK del jefe de zona la tarja se carga
+// sola, sin RRHH.
+//
+// Los dos estan en `autorizantes` con los sectores que cubren (`sectores`, por
+// comienzo de nombre: "SOLAZUTY" cubre SOLAZUTY OVIEDO, SOLAZUTY EMPAQUE, etc.).
+// Se los reconoce por el telefono de encargado (device_id: les aparece la solapa
+// "Autorizante") o por la cuenta de supervisor (supervisor_id: les aparece la
+// seccion "Autorizante" abajo en el modo supervisor).
+//
+// Si el sector no tiene jefe cargado (todavia faltan varios), va directo al jefe
+// de zona. Si tampoco tiene jefe de zona, no es de la planilla: va a RRHH.
+
+const sinAcentos = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toUpperCase().trim();
+
+/** Si alguno de esos comienzos de nombre cubre al sector. */
+export function cubre(sectores, sectorName) {
+  const n = sinAcentos(sectorName);
+  return (sectores ?? []).some((p) => {
+    const q = sinAcentos(p);
+    return q && (n === q || n.startsWith(q + ' '));
+  });
+}
+
+const ROL_DEL_ESTADO = { esperando_jefe: 'jefe', esperando_jefe_zona: 'jefe_zona' };
+
+async function cadenaDelSector(sectorName) {
+  const r = await db.query(
+    `SELECT id, nombre, rol, sectores, device_id, supervisor_id FROM autorizantes
+     WHERE activo AND rol IN ('jefe', 'jefe_zona')`
+  );
+  const del = (rol) => r.rows.filter((a) => a.rol === rol && cubre(a.sectores, sectorName));
+  return { jefes: del('jefe'), zona: del('jefe_zona') };
+}
+
+/** Las filas de la cadena que son de este telefono o de esta cuenta de supervisor. */
+async function miembrosCadena({ deviceId = null, supervisorId = null }) {
+  const r = await db.query(
+    `SELECT id, nombre, rol, sectores FROM autorizantes
+     WHERE activo AND rol IN ('jefe', 'jefe_zona')
+       AND ((device_id IS NOT NULL AND device_id = $1::text)
+         OR (supervisor_id IS NOT NULL AND supervisor_id = $2::uuid))`,
+    [deviceId, supervisorId]
+  );
+  return r.rows;
+}
+
+/** El de la cadena que tiene que resolver ese pedido ahora, o null. */
+function quienResuelve(miembros, p) {
+  const rol = ROL_DEL_ESTADO[p.estado];
+  if (!rol) return null;
+  return miembros.find((m) => m.rol === rol && cubre(m.sectores, p.sector_name)) ?? null;
+}
+
 // ── Avisos ──────────────────────────────────────────────────────────────────
 
 async function tokensVerificadores() {
@@ -55,6 +121,18 @@ async function tokensVerificadores() {
     `SELECT pt.token FROM autorizantes a
      JOIN push_tokens pt ON pt.device_id = a.device_id
      WHERE a.rol = 'verificador' AND a.activo`
+  );
+  return r.rows.map((x) => x.token);
+}
+
+/** A los telefonos de los de la cadena: por su telefono de encargado o su cuenta de supervisor. */
+async function tokensDeAutorizantes(lista) {
+  const devs = lista.map((a) => a.device_id).filter(Boolean);
+  const sups = lista.map((a) => a.supervisor_id).filter(Boolean);
+  if (!devs.length && !sups.length) return [];
+  const r = await db.query(
+    'SELECT token FROM push_tokens WHERE device_id = ANY($1::text[]) OR supervisor_id = ANY($2::uuid[])',
+    [devs, sups]
   );
   return r.rows.map((x) => x.token);
 }
@@ -145,6 +223,10 @@ function pedidoDto(p) {
     verificadoEn: p.verificado_en,
     rrhhPor: p.rrhh_por,
     rrhhEn: p.rrhh_en,
+    jefePor: p.jefe_por ?? null,
+    jefeEn: p.jefe_en ?? null,
+    jefeZonaPor: p.jefe_zona_por ?? null,
+    jefeZonaEn: p.jefe_zona_en ?? null,
     motivoRechazo: p.motivo_rechazo,
     resultado: p.resultado,
   };
@@ -174,6 +256,42 @@ async function pedidoPorId(id) {
   const r = await db.query(`${SELECT_PEDIDO} WHERE p.id = $1`, [id]);
   return r.rows[0] ?? null;
 }
+
+/**
+ * El OK final: pasa las horas del pedido a submissions (ya aprobadas). Se corre
+ * adentro de la transaccion del que autoriza (RRHH o el jefe de zona).
+ */
+async function cargarTarjas(cliente, p) {
+  const items = await cliente.query(
+    `SELECT i.employee_id, i.date, i.cuerpo, e.first_name, e.last_name
+     FROM fuera_termino_items i JOIN employees e ON e.id = i.employee_id WHERE i.pedido_id = $1`,
+    [p.id]
+  );
+  const cargadas = [];
+  const salteadas = [];
+  for (const it of items.rows) {
+    const { cols, vals } = filaDeTarja(it.cuerpo ?? {});
+    const base = ['id', 'employee_id', 'sector_id', 'date', 'status', 'fuera_termino_id'];
+    const todos = [...base, ...cols];
+    const valores = [uuid(), it.employee_id, p.sector_id, iso(it.date), 'approved', p.id, ...vals];
+    // DO NOTHING: si ese dia ya tiene una tarja viva (cargada por otro lado
+    // mientras tanto) no se pisa, se avisa en el resultado.
+    const ins = await cliente.query(
+      `INSERT INTO submissions (${todos.join(', ')})
+       VALUES (${todos.map((_, i) => '$' + (i + 1)).join(', ')})
+       ON CONFLICT (employee_id, date) WHERE NOT is_deleted DO NOTHING
+       RETURNING id`,
+      valores
+    );
+    const quien = { empleado: `${it.last_name} ${it.first_name}`.trim(), date: iso(it.date) };
+    if (ins.rowCount) cargadas.push(quien);
+    else salteadas.push(quien);
+  }
+  return { cargadas: cargadas.length, salteadas };
+}
+
+const textoAutorizada = (p, resultado) =>
+  `${MOTIVOS[p.motivo]} (${rango({ fecha_desde: iso(p.fecha_desde), fecha_hasta: iso(p.fecha_hasta) })}): ya quedaron cargadas ${resultado.cargadas} tarja${resultado.cargadas === 1 ? '' : 's'}.`;
 
 export async function fueraTerminoRoutes(app) {
 
@@ -277,6 +395,26 @@ export async function fueraTerminoRoutes(app) {
     const p = await borradorPropio(req, reply);
     if (!p) return;
     if (!p.items) return reply.status(400).send({ error: 'Cargá las horas de al menos un empleado antes de mandar' });
+    // Incumplimiento de carga no tiene corte que verificar. En los sectores de la
+    // planilla va por su cadena (jefe del sector -> Poelstra); en el resto,
+    // directo a RRHH, y el aviso le salta en StaffAdmin (contador en vivo).
+    // Luz e internet siguen yendo a Facundo.
+    if (p.motivo === 'incumplimiento') {
+      const { jefes, zona } = await cadenaDelSector(p.sector_name);
+      if (zona.length) {
+        const estado = jefes.length ? 'esperando_jefe' : 'esperando_jefe_zona';
+        await db.query(`UPDATE fuera_termino SET estado = $2, enviado_en = NOW() WHERE id = $1`, [p.id, estado]);
+        await avisar(
+          await tokensDeAutorizantes(jefes.length ? jefes : zona),
+          `Tarja fuera de término: ${MOTIVOS.incumplimiento}`,
+          `${p.sector_name} pide cargar ${p.items} tarja${p.items === 1 ? '' : 's'} del ${rango({ fecha_desde: iso(p.fecha_desde), fecha_hasta: iso(p.fecha_hasta) })}. Revisala en Autorizante.`,
+          { tipo: 'fuera_termino', pedido: p.id }
+        );
+        return reply.send({ ok: true, estado });
+      }
+      await db.query(`UPDATE fuera_termino SET estado = 'esperando_rrhh', enviado_en = NOW() WHERE id = $1`, [p.id]);
+      return reply.send({ ok: true, estado: 'esperando_rrhh' });
+    }
     await db.query(`UPDATE fuera_termino SET estado = 'esperando_verificacion', enviado_en = NOW() WHERE id = $1`, [p.id]);
     await avisar(
       await tokensVerificadores(),
@@ -284,7 +422,7 @@ export async function fueraTerminoRoutes(app) {
       `${p.sector_name} pide cargar ${p.items} tarja${p.items === 1 ? '' : 's'} del ${rango({ fecha_desde: iso(p.fecha_desde), fecha_hasta: iso(p.fecha_hasta) })}. Confirmá si hubo corte.`,
       { tipo: 'fuera_termino', pedido: p.id }
     );
-    return reply.send({ ok: true });
+    return reply.send({ ok: true, estado: 'esperando_verificacion' });
   });
 
   // ════════════════ Verificador de cortes (Facundo, StaffAxis) ════════════════
@@ -376,7 +514,7 @@ export async function fueraTerminoRoutes(app) {
   // GET /api/admin/fuera-termino/contador — para el aviso en vivo de StaffAdmin
   app.get('/api/admin/fuera-termino/contador', { preHandler: verifyAdmin }, async (_req, reply) => {
     const r = await db.query(
-      `SELECT COUNT(*)::int AS n, MAX(verificado_en) AS ultimo FROM fuera_termino WHERE estado = 'esperando_rrhh'`
+      `SELECT COUNT(*)::int AS n, MAX(COALESCE(verificado_en, enviado_en)) AS ultimo FROM fuera_termino WHERE estado = 'esperando_rrhh'`
     );
     return reply.send({ esperando: r.rows[0].n, ultimo: r.rows[0].ultimo });
   });
@@ -405,32 +543,7 @@ export async function fueraTerminoRoutes(app) {
         await cliente.query('ROLLBACK');
         return reply.status(409).send({ error: 'Ese pedido ya no está esperando autorización' });
       }
-      const items = await cliente.query(
-        `SELECT i.employee_id, i.date, i.cuerpo, e.first_name, e.last_name
-         FROM fuera_termino_items i JOIN employees e ON e.id = i.employee_id WHERE i.pedido_id = $1`,
-        [p.id]
-      );
-      const cargadas = [];
-      const salteadas = [];
-      for (const it of items.rows) {
-        const { cols, vals } = filaDeTarja(it.cuerpo ?? {});
-        const base = ['id', 'employee_id', 'sector_id', 'date', 'status', 'fuera_termino_id'];
-        const todos = [...base, ...cols];
-        const valores = [uuid(), it.employee_id, p.sector_id, iso(it.date), 'approved', p.id, ...vals];
-        // DO NOTHING: si ese dia ya tiene una tarja viva (cargada por otro lado
-        // mientras tanto) no se pisa, se avisa en el resultado.
-        const ins = await cliente.query(
-          `INSERT INTO submissions (${todos.join(', ')})
-           VALUES (${todos.map((_, i) => '$' + (i + 1)).join(', ')})
-           ON CONFLICT (employee_id, date) WHERE NOT is_deleted DO NOTHING
-           RETURNING id`,
-          valores
-        );
-        const quien = { empleado: `${it.last_name} ${it.first_name}`.trim(), date: iso(it.date) };
-        if (ins.rowCount) cargadas.push(quien);
-        else salteadas.push(quien);
-      }
-      resultado = { cargadas: cargadas.length, salteadas };
+      resultado = await cargarTarjas(cliente, p);
       await cliente.query(
         `UPDATE fuera_termino SET estado = 'autorizada', rrhh_por = $2, rrhh_en = NOW(), resultado = $3 WHERE id = $1`,
         [p.id, req.rrhh.nombre, resultado]
@@ -447,7 +560,7 @@ export async function fueraTerminoRoutes(app) {
     await avisar(
       await tokensEncargado(completo),
       'Tarja fuera de término autorizada',
-      `${MOTIVOS[completo.motivo]} (${rango({ fecha_desde: iso(completo.fecha_desde), fecha_hasta: iso(completo.fecha_hasta) })}): ya quedaron cargadas ${resultado.cargadas} tarja${resultado.cargadas === 1 ? '' : 's'}.`,
+      textoAutorizada(completo, resultado),
       { tipo: 'fuera_termino', pedido: p.id }
     );
     return reply.send({ ok: true, ...resultado });
@@ -471,6 +584,152 @@ export async function fueraTerminoRoutes(app) {
     );
     return reply.send({ ok: true });
   });
+
+  // ════════════════ Cadena de la planilla (Incumplimiento de carga) ════════════════
+  //
+  // Los mismos endpoints con dos entradas: el telefono de encargado (Orellana,
+  // Marce: solapa "Autorizante") y la cuenta de supervisor (Poelstra: seccion
+  // "Autorizante" abajo en el modo supervisor).
+  const entradas = [
+    { base: '/api/cadena', preHandler: verifyDevice, quien: (req) => ({ deviceId: req.device.deviceId }) },
+    { base: '/api/supervisor/cadena', preHandler: verifySupervisor, quien: (req) => ({ supervisorId: req.supervisor.supervisorId }) },
+  ];
+
+  async function pendientesDe(miembros) {
+    const r = await db.query(
+      `${SELECT_PEDIDO} WHERE p.estado IN ('esperando_jefe', 'esperando_jefe_zona') ORDER BY p.enviado_en`
+    );
+    return r.rows.filter((p) => quienResuelve(miembros, p));
+  }
+
+  for (const { base, preHandler, quien } of entradas) {
+    // GET {base}/habilitado — si mostrar la solapa / seccion, y cuantas esperan
+    app.get(`${base}/habilitado`, { preHandler }, async (req, reply) => {
+      const miembros = await miembrosCadena(quien(req));
+      if (!miembros.length) return reply.send({ habilitado: false, pendientes: 0 });
+      return reply.send({ habilitado: true, pendientes: (await pendientesDe(miembros)).length });
+    });
+
+    // GET {base}/pedidos — lo que espera su OK, y lo ultimo que resolvio
+    app.get(`${base}/pedidos`, { preHandler }, async (req, reply) => {
+      const miembros = await miembrosCadena(quien(req));
+      if (!miembros.length) return reply.status(403).send({ error: 'No estás habilitado para autorizar' });
+      const pendientes = [];
+      for (const p of await pendientesDe(miembros)) pendientes.push({ ...pedidoDto(p), detalle: await itemsDe(p.id) });
+      const ids = miembros.map((m) => m.id);
+      const hechos = await db.query(
+        `${SELECT_PEDIDO}
+         WHERE (p.jefe_id = ANY($1::uuid[]) OR p.jefe_zona_id = ANY($1::uuid[]))
+           AND GREATEST(p.jefe_en, p.jefe_zona_en) > NOW() - INTERVAL '15 days'
+         ORDER BY GREATEST(p.jefe_en, p.jefe_zona_en) DESC LIMIT 30`,
+        [ids]
+      );
+      return reply.send({ nombre: miembros[0].nombre, pendientes, resueltos: hechos.rows.map(pedidoDto) });
+    });
+
+    // POST {base}/pedidos/:id/aprobar — el jefe lo pasa al jefe de zona; el jefe
+    // de zona da el OK final y se cargan las tarjas (sin RRHH).
+    app.post(`${base}/pedidos/:id/aprobar`, { preHandler }, async (req, reply) => {
+      const miembros = await miembrosCadena(quien(req));
+      const cliente = await db.connect();
+      let p;
+      let yo;
+      let resultado = null;
+      let siguientes = [];
+      try {
+        await cliente.query('BEGIN');
+        const lock = await cliente.query(
+          `SELECT f.*, s.name AS sector_name FROM fuera_termino f JOIN sectors s ON s.id = f.sector_id
+           WHERE f.id = $1 FOR UPDATE OF f`,
+          [req.params.id]
+        );
+        p = lock.rows[0];
+        yo = p ? quienResuelve(miembros, p) : null;
+        if (!yo) {
+          await cliente.query('ROLLBACK');
+          return reply.status(409).send({ error: 'Ese pedido ya no está esperando tu autorización' });
+        }
+        if (p.estado === 'esperando_jefe') {
+          siguientes = (await cadenaDelSector(p.sector_name)).zona;
+          // Sin jefe de zona (lo sacaron mientras tanto): que no quede colgado, a RRHH.
+          const estado = siguientes.length ? 'esperando_jefe_zona' : 'esperando_rrhh';
+          await cliente.query(
+            `UPDATE fuera_termino SET estado = $2, jefe_id = $3, jefe_por = $4, jefe_en = NOW() WHERE id = $1`,
+            [p.id, estado, yo.id, yo.nombre]
+          );
+        } else {
+          resultado = await cargarTarjas(cliente, p);
+          await cliente.query(
+            `UPDATE fuera_termino SET estado = 'autorizada', jefe_zona_id = $2, jefe_zona_por = $3, jefe_zona_en = NOW(), resultado = $4
+             WHERE id = $1`,
+            [p.id, yo.id, yo.nombre, resultado]
+          );
+        }
+        await cliente.query('COMMIT');
+      } catch (err) {
+        await cliente.query('ROLLBACK').catch(() => {});
+        req.log.error(err, 'fuera-termino cadena aprobar');
+        return reply.status(500).send({ error: 'No se pudo autorizar: ' + err.message });
+      } finally {
+        cliente.release();
+      }
+
+      const completo = await pedidoPorId(p.id);
+      const r = rango({ fecha_desde: iso(completo.fecha_desde), fecha_hasta: iso(completo.fecha_hasta) });
+      if (!resultado) {
+        if (siguientes.length) {
+          await avisar(
+            await tokensDeAutorizantes(siguientes),
+            `Tarja fuera de término: ${MOTIVOS[completo.motivo]}`,
+            `${completo.sector_name}: ${yo.nombre} aprobó ${completo.items} tarja${completo.items === 1 ? '' : 's'} del ${r}. Falta tu autorización.`,
+            { tipo: 'fuera_termino', pedido: p.id }
+          );
+        }
+        return reply.send({
+          ok: true,
+          mensaje: siguientes.length ? `Aprobada. Ahora la autoriza ${siguientes[0].nombre}.` : 'Aprobada. Pasa a RRHH.',
+        });
+      }
+      await avisar(
+        await tokensEncargado(completo),
+        'Tarja fuera de término autorizada',
+        textoAutorizada(completo, resultado),
+        { tipo: 'fuera_termino', pedido: p.id }
+      );
+      const n = resultado.salteadas.length;
+      return reply.send({
+        ok: true,
+        ...resultado,
+        mensaje:
+          `Autorizada: se cargaron ${resultado.cargadas} tarja${resultado.cargadas === 1 ? '' : 's'}.` +
+          (n ? ` ${n} ya tenía${n === 1 ? '' : 'n'} tarja ese día y no se pisaron.` : ''),
+      });
+    });
+
+    // POST {base}/pedidos/:id/rechazar   body: { motivo }
+    app.post(`${base}/pedidos/:id/rechazar`, { preHandler }, async (req, reply) => {
+      const miembros = await miembrosCadena(quien(req));
+      const p0 = await pedidoPorId(req.params.id);
+      const yo = p0 ? quienResuelve(miembros, p0) : null;
+      if (!yo) return reply.status(409).send({ error: 'Ese pedido ya no está esperando tu autorización' });
+      const motivo = String(req.body?.motivo ?? '').trim() || 'No autorizada';
+      const [colId, colPor, colEn] =
+        p0.estado === 'esperando_jefe' ? ['jefe_id', 'jefe_por', 'jefe_en'] : ['jefe_zona_id', 'jefe_zona_por', 'jefe_zona_en'];
+      const r = await db.query(
+        `UPDATE fuera_termino SET estado = 'no_autorizada', ${colId} = $3, ${colPor} = $4, ${colEn} = NOW(), motivo_rechazo = $5
+         WHERE id = $1 AND estado = $2 RETURNING id`,
+        [p0.id, p0.estado, yo.id, yo.nombre, motivo]
+      );
+      if (!r.rowCount) return reply.status(409).send({ error: 'Ese pedido ya no está esperando tu autorización' });
+      await avisar(
+        await tokensEncargado(p0),
+        'Tarja fuera de término no aprobada',
+        `${MOTIVOS[p0.motivo]} (${rango({ fecha_desde: iso(p0.fecha_desde), fecha_hasta: iso(p0.fecha_hasta) })}): ${motivo}`,
+        { tipo: 'fuera_termino', pedido: p0.id }
+      );
+      return reply.send({ ok: true });
+    });
+  }
 }
 
 /** Las DATE de pg llegan como Date a medianoche local; se pasan a yyyy-mm-dd. */

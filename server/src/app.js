@@ -164,6 +164,19 @@ async function runMigrations() {
     );
     ALTER TABLE submissions ADD COLUMN IF NOT EXISTS fuera_termino_id UUID;
   `);
+  // Cadena de la planilla de Hortalizas y Banana (20/11/2026): el
+  // "Incumplimiento de carga" de esos sectores lo aprueban el jefe del sector y
+  // despues el jefe de zona, sin RRHH. Ver routes/fueraTermino.js.
+  await db.query(`
+    ALTER TABLE autorizantes ADD COLUMN IF NOT EXISTS supervisor_id UUID;
+    ALTER TABLE autorizantes ADD COLUMN IF NOT EXISTS sectores TEXT[];
+    ALTER TABLE fuera_termino ADD COLUMN IF NOT EXISTS jefe_id UUID;
+    ALTER TABLE fuera_termino ADD COLUMN IF NOT EXISTS jefe_por TEXT;
+    ALTER TABLE fuera_termino ADD COLUMN IF NOT EXISTS jefe_en TIMESTAMPTZ;
+    ALTER TABLE fuera_termino ADD COLUMN IF NOT EXISTS jefe_zona_id UUID;
+    ALTER TABLE fuera_termino ADD COLUMN IF NOT EXISTS jefe_zona_por TEXT;
+    ALTER TABLE fuera_termino ADD COLUMN IF NOT EXISTS jefe_zona_en TIMESTAMPTZ;
+  `);
   // Ingresos a StaffAdmin con Google (19/11/2026): quien entro y cuando.
   await db.query(`
     CREATE TABLE IF NOT EXISTS admin_ingresos (

@@ -52,6 +52,8 @@ export const ESTADOS: Record<string, { texto: string; color: string }> = {
   borrador: { texto: 'Sin mandar', color: '#b0b0b0' },
   esperando_verificacion: { texto: 'Esperando verificación', color: '#ffb74d' },
   esperando_rrhh: { texto: 'Esperando RRHH', color: '#ffb74d' },
+  esperando_jefe: { texto: 'Esperando autorización', color: '#ffb74d' },
+  esperando_jefe_zona: { texto: 'Esperando autorización', color: '#ffb74d' },
   autorizada: { texto: 'Autorizada', color: '#81c784' },
   no_autorizada: { texto: 'No aprobada', color: '#ff8a80' },
 };

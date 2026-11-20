@@ -3,8 +3,9 @@
  *
  * Para los dias que ya no entran por la carga normal. El encargado elige el
  * motivo y las fechas, carga las horas en Empleados como siempre, y lo manda.
- * Las horas no cuentan hasta que lo autorizan (primero se verifica el corte,
- * despues RRHH da el OK final y recien ahi se suben).
+ * Las horas no cuentan hasta que lo autorizan (si es sin luz o sin internet,
+ * primero se verifica el corte; despues RRHH da el OK final y recien ahi se
+ * suben). Los motivos que ve cada sector los decide el servidor.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal } from '../../components/Modal';

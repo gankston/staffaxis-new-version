@@ -352,6 +352,8 @@ export type EstadoFueraTermino =
   | 'borrador'
   | 'esperando_verificacion'
   | 'esperando_rrhh'
+  | 'esperando_jefe'
+  | 'esperando_jefe_zona'
   | 'autorizada'
   | 'no_autorizada'
   | 'descartado';
@@ -374,6 +376,11 @@ export interface PedidoFueraTermino {
   verificadoEn: string | null;
   rrhhPor: string | null;
   rrhhEn: string | null;
+  /** Cadena de la planilla (incumplimiento de carga): el jefe del sector y el jefe de zona. */
+  jefePor?: string | null;
+  jefeEn?: string | null;
+  jefeZonaPor?: string | null;
+  jefeZonaEn?: string | null;
   motivoRechazo: string | null;
   resultado: { cargadas: number; salteadas: Array<{ empleado: string; date: string }> } | null;
 }
@@ -389,9 +396,30 @@ export interface ItemFueraTermino {
   notes: string | null;
 }
 
+export type PendienteFueraTermino = PedidoFueraTermino & { detalle: ItemFueraTermino[] };
+
+/**
+ * Cadena de la planilla (incumplimiento de carga). Mismos endpoints con dos
+ * entradas: '/api/cadena' va con el token del telefono de encargado (solapa
+ * "Autorizante"), '/api/supervisor/cadena' con el de supervisor.
+ */
+const cadenaApi = (base: '/api/cadena' | '/api/supervisor/cadena') => ({
+  habilitado: () => pedir<{ habilitado: boolean; pendientes: number }>(`${base}/habilitado`),
+  pedidos: () =>
+    pedir<{ nombre: string; pendientes: PendienteFueraTermino[]; resueltos: PedidoFueraTermino[] }>(`${base}/pedidos`),
+  aprobar: (id: string) =>
+    pedir<{ ok: boolean; mensaje?: string }>(`${base}/pedidos/${id}/aprobar`, { method: 'POST', body: {} }),
+  rechazar: (id: string, motivo: string) =>
+    pedir<{ ok: boolean }>(`${base}/pedidos/${id}/rechazar`, { method: 'POST', body: { motivo } }),
+});
+
 // ─── Endpoints ───────────────────────────────────────────────────────────────
 
 export const api = {
+  // Tarja Fuera de Término — cadena de la planilla (jefe del sector y jefe de zona)
+  cadena: cadenaApi('/api/cadena'),
+  cadenaSupervisor: cadenaApi('/api/supervisor/cadena'),
+
   // Auth / dispositivo
   getSectores: () => pedir<{ sectors: SectorDto[] }>('/api/sectors'),
 

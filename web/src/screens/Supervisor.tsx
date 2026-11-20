@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal } from '../components/Modal';
+import { PanelAutorizar } from '../components/PanelAutorizar';
 import { Spinner, TextField } from '../components/ui';
 import { Toast } from '../components/Toast';
 import {
@@ -61,6 +62,16 @@ export function Supervisor({
   const [verResumen, setVerResumen] = useState(false);
 
   const periodo = useMemo(() => calcularPeriodo(hoyISO(), periodoOffset), [periodoOffset]);
+
+  // Seccion "Autorizante" abajo: solo para el jefe de zona de la cadena de la
+  // planilla (Javier Poelstra). Lo decide el servidor.
+  const [esDeLaCadena, setEsDeLaCadena] = useState(false);
+  useEffect(() => {
+    api.cadenaSupervisor
+      .habilitado()
+      .then((r) => setEsDeLaCadena(r.habilitado))
+      .catch(() => { /* sin conexion: no se muestra */ });
+  }, []);
 
   const cargarPendientes = useCallback(async () => {
     try {
@@ -354,6 +365,24 @@ export function Supervisor({
                 {resumenCargando ? 'Cargando...' : `Mostrar horas cargadas (${resumen.length})`}
               </button>
             </div>
+
+            {esDeLaCadena && (
+              <>
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 8, paddingTop: 16 }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'white' }}>Autorizante</div>
+                  <div style={{ fontSize: 13, color: 'var(--texto-tenue)', marginTop: 4, lineHeight: 1.4 }}>
+                    Tarjas fuera de término por incumplimiento de carga. Con tu OK se cargan solas.
+                  </div>
+                </div>
+                <PanelAutorizar
+                  cargar={api.cadenaSupervisor.pedidos}
+                  aprobar={api.cadenaSupervisor.aprobar}
+                  rechazar={api.cadenaSupervisor.rechazar}
+                  textoAprobada="Autorizada."
+                  textoRechazoVacio="No autorizada"
+                />
+              </>
+            )}
           </>
         )}
       </div>
